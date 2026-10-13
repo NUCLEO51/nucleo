@@ -796,12 +796,46 @@ const Supa={
     COLS.forEach(c=>{S.raw[c]=out[c];});
     partition();this.persist();
   },
+  /* alarmes no servidor: o servidor manda o aviso na hora, mesmo com o app fechado */
+  alarmBusy:false,alarmRetry:0,
+  desiredAlarms(){
+    const out=[],now=Date.now();
+    S.reminders.forEach(r=>{
+      if(r.done||!r.date||!r.time)return;
+      const m=this.map[r.id];if(!m||!m.v)return;
+      (r.alarms||[]).forEach(a=>{
+        const f=alarmFireDate(r,a);if(!f)return;const t=f.getTime();
+        if(t<now-300e3||t>now+90*864e5)return;
+        const msg=r.title+' · '+(a.min>0?minLabel(a.min)+': ':'')+DOW3[f.getDay()]+', '+pad(f.getDate())+'/'+pad(f.getMonth()+1)+' às '+pad(f.getHours())+':'+pad(f.getMinutes())+(a.msg?' · '+a.msg:'');
+        let hh=0;for(let i=0;i<msg.length;i++)hh=(hh*31+msg.charCodeAt(i))|0;
+        out.push({key:m.rid+'|'+a.id+'|'+f.toISOString()+'|'+(hh>>>0).toString(36),item_id:m.rid,fire_at:f.toISOString(),message:msg});
+      });
+    });
+    return out;
+  },
+  async syncAlarms(){
+    if(this.alarmBusy||Date.now()<this.alarmRetry||!this.sess)return;
+    const want=this.desiredAlarms(),h=JSON.stringify(want.map(x=>x.key).sort());
+    if(h===lsGet('nucleo-alarmhash'))return;
+    this.alarmBusy=true;
+    try{
+      const r=await this.rest('alarms?select=id,key&fired_at=is.null&key=not.is.null');
+      if(!r.ok)throw new Error('alarmes '+r.status);
+      const have=await r.json(),hk=new Set(have.map(x=>x.key)),wk=new Set(want.map(x=>x.key));
+      const stale=have.filter(x=>!wk.has(x.key)&&String(x.key).indexOf('teste|')!==0).map(x=>x.id);
+      if(stale.length){const d=await this.rest('alarms?id=in.('+stale.join(',')+')',{method:'DELETE'});if(!d.ok)throw new Error('alarmes del '+d.status);}
+      const add=want.filter(x=>!hk.has(x.key));
+      if(add.length){const q=await this.rest('alarms?on_conflict=key',{method:'POST',headers:{Prefer:'resolution=ignore-duplicates,return=minimal'},body:JSON.stringify(add)});if(!q.ok)throw new Error('alarmes add '+q.status);}
+      lsSet('nucleo-alarmhash',h);this.alarmErr='';
+    }catch(e){this.alarmRetry=Date.now()+600e3;this.alarmErr=String(e.message||e);}
+    this.alarmBusy=false;
+  },
   async sync(){
     if(this.busy||!this.sess)return;
     this.busy=true;
     try{
       const ok=await this.flush();
-      if(ok){await this.pull();this.lastOk=Date.now();this.lastErr='';this.lastHard=false;S.sync=this.dead.length?'fail':'cloud';S.ready=true;}
+      if(ok){await this.pull();this.lastOk=Date.now();this.lastErr='';this.lastHard=false;S.sync=this.dead.length?'fail':'cloud';S.ready=true;this.syncAlarms();if(!this.pushChecked){this.pushChecked=true;refreshPush();}}
       else S.sync=this.lastHard?'retry':(this.q.length?'pend':'error');
     }catch(e){
       if(e.status===401){this.busy=false;this.loginScreen('Entre de novo.');return;}
@@ -1409,6 +1443,46 @@ function render(){
 }
 function renderRemBody(){const b=$('remBody');if(!b)return;const ws=S.weekStart;b.innerHTML=remHomeBody(smart(),lmap(),isoDate(new Date()),ws,isoDate(ws)===isoDate(mondayOf(new Date())));}
 function go(fn){fn();render();$('main').scrollTop=0;}
+/* ---------- avisos no iPhone (Web Push) ---------- */
+const VAPID_PUB='BHdjmEGFLzLyhrn7Dl3pOPmKswBkp0ZeJT6Fxf_Iq_klyjwMHA-t9X8v4GYZG4In0s1jt-dr7QGFxQNG36FaTgI';
+const b64u=t=>{const r=atob((t+'='.repeat((4-t.length%4)%4)).replace(/-/g,'+').replace(/_/g,'/'));const a=new Uint8Array(r.length);for(let i=0;i<r.length;i++)a[i]=r.charCodeAt(i);return a;};
+function pushSupported(){return ('serviceWorker' in navigator)&&('PushManager' in window)&&!!window.Notification;}
+function pushStatus(){
+  if(Store.mode!=='supa')return {t:'Só funciona conectado à sua conta.',on:false};
+  if(!pushSupported())return {t:'Este aparelho ainda não pode receber avisos aqui. No iPhone: abra o Núcleo pelo ícone da Tela de Início (Compartilhar › Adicionar à Tela de Início).',on:false,bad:true};
+  if(Notification.permission==='denied')return {t:'Os avisos foram bloqueados. Abra Ajustes do iPhone › Notificações › Núcleo e permita.',on:false,bad:true};
+  if(Notification.permission==='granted'&&lsGet('nucleo-push')==='1')return {t:'Ligados neste aparelho.',on:true};
+  return {t:'Desligados neste aparelho.',on:false};
+}
+async function savePushSub(){
+  const reg=await navigator.serviceWorker.ready;
+  let sub=await reg.pushManager.getSubscription();
+  if(!sub)sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64u(VAPID_PUB)});
+  const j=sub.toJSON();
+  const r=await Supa.rest('push_subscriptions?on_conflict=endpoint',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify({endpoint:j.endpoint,keys:j.keys})});
+  if(!r.ok)throw new Error('aparelho '+r.status);
+  lsSet('nucleo-push','1');
+}
+async function enablePush(){
+  if(!pushSupported()){toast('Abra o Núcleo pelo ícone da Tela de Início para ligar os avisos.');return;}
+  try{
+    const perm=await Notification.requestPermission();
+    if(perm!=='granted'){toast('Sem permissão, os avisos não chegam.');renderSheet();return;}
+    await savePushSub();toast('Avisos ligados neste aparelho.');
+  }catch(e){toast('Não consegui ligar os avisos: '+String(e.message||e).slice(0,80));}
+  Supa.alarmRetry=0;lsSet('nucleo-alarmhash','');Supa.syncAlarms();
+  if(S.sheet&&S.sheet.type==='set')renderSheet();
+}
+async function refreshPush(){try{if(pushSupported()&&Notification.permission==='granted'&&lsGet('nucleo-push')==='1')await savePushSub();}catch(e){}}
+async function testPush(){
+  const st=pushStatus();if(!st.on){toast('Ligue os avisos primeiro.');return;}
+  try{
+    const when=new Date(Date.now()+45000).toISOString();
+    const r=await Supa.rest('alarms',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify({key:'teste|'+Date.now(),fire_at:when,message:'Teste do Núcleo: o aviso chegou com o app fechado ✓'})});
+    if(!r.ok)throw new Error('erro '+r.status);
+    toast('Feche o Núcleo agora. O aviso chega em até 1 minuto.');
+  }catch(e){toast('Não consegui agendar o teste ('+String(e.message||e).slice(0,60)+'). Falta o passo do servidor?');}
+}
 /* Itens que chegam da Siri caem na Caixa de entrada; aqui viram lembrete ou nota sozinhos */
 const siriBusy={};
 async function processSiri(){
@@ -1951,7 +2025,10 @@ function sheetSet(){
     h+='<div class="block"><span class="block-t">Envio para a nuvem</span><div class="note-s">Última vez que tudo foi salvo na nuvem: <b>'+hm(Supa.lastOk)+'</b><br>Esperando internet: <b>'+Supa.q.length+'</b><br>Com erro: <b>'+Supa.dead.length+'</b>'+(Supa.lastErr?'<br>Último problema: '+esc(Supa.lastErr):'')+Supa.dead.map(x=>'<br>• '+esc(String((x.data&&(x.data.title||x.data.name||x.data.text))||'item apagado').slice(0,50))+(x.err?' — '+esc(x.err):'')).join('')+'</div>'
       +'<button class="btn wide" data-act="sync-now">Enviar agora</button>'+(Supa.dead.length?'<button class="btn wide" data-act="retry-dead">Tentar de novo os itens com erro</button>':'')+'</div>';
   }
-  h+='<div class="block"><span class="block-t">Alarmes</span><div class="note-s">Os alarmes tocam enquanto este sistema está aberto. Com ele fechado, o aviso depende da versão instalada no iPhone, que é a próxima etapa.</div></div>';
+  if(Store.mode==='supa'){
+    const ps=pushStatus();
+    h+='<div class="block"><span class="block-t">Avisos de alarme (com o app fechado)</span><div class="note-s"'+(ps.bad?' style="color:var(--danger);font-weight:700"':'')+'>'+esc(ps.t)+'</div>'+(ps.on?'':'<button class="btn primary wide" data-act="push-on">Ligar avisos neste aparelho</button>')+(ps.on?'<button class="btn wide" data-act="push-test">Testar aviso (feche o app e espere 1 minuto)</button>':'')+(Supa.alarmErr?'<div class="note-s">Servidor de alarmes: '+esc(Supa.alarmErr)+'</div>':'')+'</div>';
+  }else h+='<div class="block"><span class="block-t">Alarmes</span><div class="note-s">Os alarmes tocam enquanto este sistema está aberto.</div></div>';
   if(S.dlOk||Store.mode==='supa')h+='<button class="btn wide" data-act="export">Exportar backup (arquivo)</button>';
   if(Store.mode==='supa'){h+='<button class="btn wide" data-act="import">Importar backup (arquivo)</button><input type="file" id="impFile" accept=".json,application/json" hidden>';h+='<button class="btn wide danger" data-act="logout">Sair da conta</button>';}
   if(ex)h+='<button class="btn wide danger" data-act="rm-examples">Remover os '+ex+' exemplos</button>';
@@ -2277,6 +2354,8 @@ const A={
   'ring-open':d=>{const r=S.rings[+d.i];S.rings.splice(+d.i,1);renderRings();const rem=S.reminders.find(x=>x.id===r.rid);if(rem)openRem(rem);},
   'ring-close':d=>{S.rings.splice(+d.i,1);renderRings();},
   export:()=>exportAll(),
+  'push-on':()=>enablePush(),
+  'push-test':()=>testPush(),
   'sync-now':async()=>{await Supa.sync();renderSheet();toast(S.sync==='cloud'?'Tudo salvo na nuvem':'Ainda não consegui enviar. Confira a internet.');},
   'retry-dead':()=>{Supa.retryDead();renderSheet();},
   import:()=>{const i=document.getElementById('impFile');if(i)i.click();},
