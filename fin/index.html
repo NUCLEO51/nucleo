@@ -57,7 +57,7 @@ h2{font-size:1.25rem;margin:1.2rem 1rem .4rem}
 .item{width:100%;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:1rem;padding:.9rem 1rem;margin:.5rem 0;min-height:3.6rem;cursor:pointer;display:block}
 .item .t{font-weight:800;font-size:1.1rem}
 nav.tabs{position:fixed;left:0;right:0;bottom:0;display:flex;background:var(--surface);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px);z-index:20}
-nav.tabs button{flex:1;border:0;background:none;min-height:4.2rem;font-weight:700;font-size:.85rem;color:var(--muted);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.1rem;cursor:pointer}
+nav.tabs button{flex:1;border:0;background:none;min-height:4.2rem;font-weight:700;font-size:.75rem;color:var(--muted);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.1rem;cursor:pointer}
 nav.tabs button .e{font-size:1.5rem}
 nav.tabs button.on{color:var(--accent)}
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:50;display:flex;align-items:flex-end;justify-content:center}
@@ -297,9 +297,110 @@ const bestDay=c=>c.closeDay>=dim(todayIso().slice(0,7))?1:c.closeDay+1;
 /* ---------- telas ---------- */
 function header(t,extra){return '<header class="hd"><h1>'+esc(t)+'</h1><div>'+(extra||'')+'</div></header>';}
 function tabs(){
-  const T=[['home','🏠','Início'],['bills','🧾','Contas'],['cards','💳','Cartões'],['debts','📉','Dívidas']];
+  const T=[['home','🏠','Início'],['bills','🧾','Contas'],['cards','💳','Cartões'],['debts','📉','Dívidas'],['plan','🎯','Quitar']];
   return '<nav class="tabs">'+T.map(t=>'<button data-act="tab" data-v="'+t[0]+'" class="'+(S.tab===t[0]?'on':'')+'"><span class="e">'+t[1]+'</span>'+t[2]+'</button>').join('')+'</nav>';
 }
+
+/* ---------- plano de quitação (simulação, não é promessa) ---------- */
+function simulate(debts,capC,order){
+  const ds=debts.map(d=>({id:d.id,name:d.data.creditor,bal:d.data.balanceC,min:d.data.installC||0,rate:(d.data.rateBp==null?0:d.data.rateBp/10000),unk:d.data.rateBp==null,paidMonth:null}));
+  const prio=(a,b)=>order==='snow'?(a.bal-b.bal):((b.rate-a.rate)||(a.bal-b.bal));
+  let total=0,interest=0,month=0,deficit=false;
+  while(ds.some(x=>x.bal>0)&&month<600){
+    month++;
+    ds.forEach(x=>{if(x.bal>0){const i=Math.round(x.bal*x.rate);x.bal+=i;interest+=i;}});
+    let budget=capC;const act=ds.filter(x=>x.bal>0).sort(prio);
+    for(const x of act){const want=Math.min(x.min,x.bal),p=Math.min(want,budget);x.bal-=p;budget-=p;total+=p;if(p<want)deficit=true;}
+    for(const x of act){if(budget<=0)break;const p=Math.min(x.bal,budget);if(p>0){x.bal-=p;budget-=p;total+=p;}}
+    ds.forEach(x=>{if(x.bal<=0&&x.paidMonth==null)x.paidMonth=month;});
+  }
+  return {months:month,done:!ds.some(x=>x.bal>0),total,interest,deficit,ds,anyUnk:ds.some(x=>x.unk)};
+}
+const cfgRec=()=>byKind('proposal').find(r=>r.data&&r.data.cfg==='capacity');
+const monthsTxt=n=>{const a=Math.floor(n/12),m=n%12;return (a?a+(a>1?' anos':' ano'):'')+(a&&m?' e ':'')+(m?m+(m>1?' meses':' mês'):(a?'':'0 mês'));};
+function vPlan(){
+  const ds=byKind('debt').filter(d=>d.data.status!=='PAGA'&&mine(d.data));
+  const ok=ds.filter(d=>d.data.balanceC!=null&&d.data.balanceC>0),semSaldo=ds.filter(d=>d.data.balanceC==null);
+  const cfg=cfgRec(),cap=cfg?cfg.data.capacityC:null;
+  let h=header('Plano de quitação')+'<p class="sub">Simulação. Não é promessa e não negocia nada.</p>'+whoBar()+'<div class="wrap">';
+  h+='<div class="card"><div class="row"><span class="mut">Quanto dá para pagar por mês</span><b>'+money(cap)+'</b></div><div class="mut">Valor que você consegue separar para as dívidas todo mês.</div></div>';
+  h+='<button class="btn" data-act="cap-set">'+(cap==null?'Informar quanto dá para pagar por mês':'Mudar o valor por mês')+'</button>';
+  if(!ok.length){h+='<div class="card mut">Nenhuma dívida com saldo cadastrado '+(S.who!=='ALL'?'para '+esc(pname(S.who)):'')+'. Cadastre em Dívidas.</div>';return h+'</div>';}
+  const mins=ok.reduce((a,d)=>a+(d.data.installC||0),0),tot=ok.reduce((a,d)=>a+d.data.balanceC,0);
+  h+='<div class="card"><div class="row"><span class="mut">Dívidas com saldo</span><b>'+ok.length+'</b></div><div class="row"><span class="mut">Total devido (saldos)</span><b>'+money(tot)+'</b></div><div class="row"><span class="mut">Soma das parcelas por mês</span><b>'+money(mins)+'</b></div></div>';
+  if(semSaldo.length)h+='<div class="note">'+semSaldo.length+' dívida(s) sem saldo informado ficaram fora da conta: '+esc(semSaldo.map(d=>d.data.creditor).join(', '))+'.</div>';
+  if(cap==null){h+='<div class="note">Informe quanto dá para pagar por mês para ver os cenários.</div>';return h+'</div>';}
+  if(cap<mins)h+='<div class="note" style="background:var(--danger-soft);color:var(--danger)"><b>Falta dinheiro:</b> as parcelas somam '+money(mins)+' e você separou '+money(cap)+'. Faltam '+money(mins-cap)+' por mês. Algumas parcelas ficam sem pagar e os juros crescem.</div>';
+  const unk=ok.filter(d=>d.data.rateBp==null).length;
+  if(unk)h+='<div class="note">Faltam os juros de '+unk+' dívida(s). Elas entram na conta sem juros, então o tempo e o custo reais podem ser maiores. O custo total fica “Não informado”.</div>';
+  [['snow','Menor saldo primeiro','Quita as pequenas rápido, uma por uma.'],['aval','Maior juros primeiro','Costuma custar menos quando os juros são conhecidos.']].forEach(sc=>{
+    const r=simulate(ok,cap,sc[0]);
+    h+='<h2 style="margin-left:0">'+esc(sc[1])+'</h2><div class="card"><div class="mut">'+esc(sc[2])+'</div>';
+    if(!r.done)h+='<div class="err" style="margin-top:.5rem">Com '+money(cap)+' por mês não quita em 50 anos: o valor mal cobre os juros.</div>';
+    else{
+      h+='<div class="row" style="margin-top:.4rem"><span class="mut">Tudo quitado em</span><b>'+monthsTxt(r.months)+'</b></div><div class="row"><span class="mut">Por volta de</span><b>'+esc(ymLabel(addMonths(ymOf(todayIso()),r.months)))+'</b></div>'
+        +'<div class="row"><span class="mut">Total pago (estimado)</span><b>'+money(r.total)+'</b></div>'
+        +'<div class="row"><span class="mut">Juros no caminho</span><b>'+(r.anyUnk?'Não informado':money(r.interest))+'</b></div>';
+      h+='<div class="mut" style="margin-top:.5rem">Ordem em que cada dívida some:</div>';
+      r.ds.slice().sort((a,b)=>a.paidMonth-b.paidMonth).forEach((x,i)=>{h+='<div class="row"><span>'+(i+1)+'. '+esc(x.name)+'</span><span class="mut">mês '+x.paidMonth+'</span></div>';});
+    }
+    h+='</div>';
+  });
+  h+='<div class="note">Isto é só conta. Não inclui desconto de negociação nem multa. Antes de pagar ou renegociar, confira com o banco. O FIN não paga nada.</div>';
+  return h+'</div>';
+}
+
+/* ---------- pendentes vindos do Núcleo ---------- */
+const pendList=()=>byKind('proposal').filter(r=>r.data&&r.data.text&&r.data.status==='pendente');
+function parseText(t){
+  const norm=t.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+  let work=t;
+  const nm=norm.match(/(\d{1,2})\s*x\b/)||norm.match(/(\d{1,2})\s*parcelas?/);
+  const dm=norm.match(/(?:dia|vence(?:\s+dia)?)\s+(\d{1,2})\b/);
+  work=work.replace(/\b\d{1,2}\s*x\b/gi,' ').replace(/\b\d{1,2}\s*parcelas?\b/gi,' ').replace(/(?:dia|vence(?:\s+dia)?)\s+\d{1,2}\b/gi,' ');
+  const mm=work.match(/(?:R\$\s*)?(\d{1,3}(?:\.\d{3})+(?:,\d{2})?|\d+(?:,\d{2})?)/);
+  let amountC=null;if(mm){const v=parseMoney(mm[1]);if(!Number.isNaN(v))amountC=v;}
+  let type='';
+  if(/divida|devo\b|emprestimo|consignad/.test(norm))type='debt';
+  else if(/cartao|\bx\b|\d\s*x\b|parcel|fatura/.test(norm))type='charge';
+  else if(/conta|vence|boleto|\bluz\b|agua|\bgas\b|internet|aluguel|telefone/.test(norm))type='bill';
+  const nz=x=>String(x).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  const STOP=new Set(['cartao','do','da','de','no','na']);
+  const wordsOf=x=>nz(x).split(/[^a-z0-9]+/).filter(w=>w&&!STOP.has(w));
+  const tw=new Set(wordsOf(t));
+  let card=null,best=0,matched=[];
+  byKind('card').forEach(c=>{const ws=wordsOf(c.data.name),hit=ws.filter(w=>tw.has(w));if(hit.length>best){best=hit.length;card=c;matched=hit;}});
+  if(!card&&byKind('card').length===1)card=byKind('card')[0];
+  let date=todayIso();
+  if(/ontem/.test(norm))date=isoDate(new Date(Date.now()-864e5));
+  const dd=norm.match(/(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?/);
+  if(dd){const y=dd[3]?(dd[3].length===2?'20'+dd[3]:dd[3]):String(new Date().getFullYear());date=y+'-'+pad(+dd[2])+'-'+pad(+dd[1]);}
+  let desc=t.replace(/\b\d{1,2}\s*x\b/gi,' ').replace(/(?:R\$\s*)?(\d{1,3}(?:\.\d{3})+(?:,\d{2})?|\d+(?:,\d{2})?)/g,' ').replace(/\b\d{1,2}\s*x\b/gi,' ').replace(/\b(no|na|do|da|de|cart[aã]o|cartao|parcelado|parcelas?|vence|dia|ontem|hoje)\b/gi,' ').replace(/\s+/g,' ').trim();
+  matched.forEach(w=>{desc=desc.split(/\s+/).filter(x=>nz(x).replace(/[^a-z0-9]/g,'')!==w).join(' ');});
+  desc=desc.replace(/\b(d[ií]vida|conta|devo)\b/gi,' ').replace(/[^\p{L}\p{N}\s()+-]/gu,' ').replace(/\s+/g,' ').trim()||t.slice(0,40);
+  return {type,amountC,n:nm?+nm[1]:1,dueDay:dm?+dm[1]:null,card,date,desc};
+}
+async function markProp(rec,status){try{await Api.update(rec,Object.assign({},rec.data,{status}));}catch(e){S.msg=e.message;}render();}
+async function reviewProp(rec){
+  const pr=parseText(rec.data.text),tx=rec.data.text;
+  const sug=pr.type;
+  const m=modal('<h3>Veio do Núcleo</h3><div class="card sum">'+esc(tx)+'</div><p class="mut">O que é isso?'+(sug?' Sugestão marcada.':' Escolha.')+'</p>'
+    +'<button class="btn'+(sug==='charge'?'':' sec')+'" id="p-ch">💳 Compra no cartão</button>'
+    +'<button class="btn'+(sug==='bill'?'':' sec')+'" id="p-bi">🧾 Conta do mês</button>'
+    +'<button class="btn'+(sug==='debt'?'':' sec')+'" id="p-de">📉 Dívida</button>'
+    +'<button class="btn bad" id="p-ig">Ignorar</button><button class="btn sec" id="p-no">Voltar</button>');
+  m.querySelector('#p-no').onclick=()=>m.remove();
+  m.querySelector('#p-ig').onclick=async()=>{m.remove();if(await confirmBox('Ignorar este item?',[tx,'Ele sai da lista de pendentes.'],'Sim, ignorar',true))markProp(rec,'ignorado');};
+  m.querySelector('#p-ch').onclick=async()=>{m.remove();
+    const cards=byKind('card');
+    if(!cards.length){await info('Falta o cartão','Cadastre o cartão primeiro, em Cartões. Depois volte neste item.');return;}
+    const card=pr.card||cards[0];
+    const out=await chargeForm(card,null,{date:pr.date,desc:pr.desc,totalC:pr.amountC,n:pr.n});
+    if(out)markProp(rec,'feito');};
+  m.querySelector('#p-bi').onclick=async()=>{m.remove();const out=await billForm(null,{name:pr.desc,dueDay:pr.dueDay,amountC:pr.amountC,variable:pr.amountC==null,recurring:true});if(out)markProp(rec,'feito');};
+  m.querySelector('#p-de').onclick=async()=>{m.remove();const out=await debtForm(null,{creditor:pr.desc,balanceC:pr.amountC,status:'ATIVA',dueDay:pr.dueDay});if(out)markProp(rec,'feito');};
+}
+
 function upcoming(){
   const td=todayIso(),lim=isoDate(new Date(Date.now()+30*864e5)),out=[];
   monthRows(ymOf(td)).filter(x=>!x.r.data.paidAt&&mine(x.bill.data)).forEach(x=>{const dt=billDue(x);if(dt<=lim)out.push({dt,kind:'Conta',name:x.bill.data.name,c:x.r.data.amountC,late:dt<td});});
@@ -327,8 +428,16 @@ async function loadDemo(){
   await ensureMonth();
   const alu=monthRows(ym).find(x=>x.bill.data.name==='Aluguel (teste)');
   if(alu)await Api.update(alu.r,Object.assign({},alu.r.data,{paidAt:todayIso()}));
-  await Api.create('debt',{creditor:'João (teste)',balanceC:80000,installC:20000,dueDay:20,status:'ATIVA',kindD:'Empréstimo',holder:'MARCELO',payer:'MARCELO',note:'Empréstimo de teste',demo:true});
-  await Api.create('debt',{creditor:'Banco Y consignado (teste)',balanceC:450000,installC:90000,dueDay:3,status:'ATIVA',kindD:'Consignado',holder:'MARLENE',payer:'MARLENE',account:'Santander da Marlene',note:'',demo:true});
+  const D=(creditor,balanceC,installC,rateBp,dueDay,status,kindD,holder,payer,account,note)=>Api.create('debt',{creditor,balanceC,installC,rateBp,dueDay,status,kindD,holder,payer,account:account||'',note:note||'',demo:true});
+  await D('Consignado A (teste)',1200000,48000,180,5,'ATIVA','Consignado','MARLENE','MARLENE','Santander da Marlene');
+  await D('Consignado B (teste)',850000,35000,165,5,'ATIVA','Consignado','MARLENE','MARLENE','Santander da Marlene');
+  await D('Consignado C (teste)',520000,21000,195,5,'ATIVA','Consignado','MARLENE','MARLENE','Santander da Marlene');
+  await D('Itaú (teste)',1600000,80000,350,15,'ATRASADA','Empréstimo','MARCELO','MARLENE','Santander da Marlene','Dívida fictícia de teste');
+  await D('Cartão Santander da mãe (teste)',430000,30000,1200,17,'ATRASADA','Cartão','MARLENE','MARLENE','Santander da Marlene');
+  await D('Cartão Bradesco antigo (teste)',680000,25000,950,10,'ATRASADA','Cartão','MARCELO','MARCELO','');
+  await Api.create('debt',{creditor:'Dívida sem juros informados (teste)',balanceC:150000,installC:15000,rateBp:null,dueDay:22,status:'ATIVA',kindD:'Outro',holder:'MARCELO',payer:'MARCELO',account:'',note:'Para testar o aviso de juros desconhecidos',demo:true});
+  await Api.create('proposal',{cfg:'capacity',capacityC:350000,demo:true});
+  for(const t of ['Mercado 230,50 no cartão Teste A ontem','conta de luz vence dia 10','dívida Itaú 16000','tênis 6x 349,99 cartão Teste B'])await Api.create('proposal',{text:t,source:'demo',status:'pendente',demo:true});
 }
 async function clearDemo(){
   const ids=new Set(S.recs.filter(r=>r.data&&r.data.demo).map(r=>r.id));
@@ -341,6 +450,11 @@ function vHome(){
   const sem=open.filter(x=>x.r.data.amountC==null).length;
   const late=open.filter(x=>billDue(x)<todayIso()).length;
   let h=header('FIN')+'<p class="sub">'+esc(ymLabel(ym))+(S.who!=='ALL'?' · '+esc(pname(S.who)):'')+'</p>'+whoBar()+'<div class="wrap">';
+  const pend=pendList();
+  if(pend.length){
+    h+='<div class="card" style="border:2px solid var(--accent)"><div class="t" style="font-weight:800;font-size:1.15rem">📥 '+pend.length+' pendente(s) do Núcleo</div><div class="mut">Toque para conferir e cadastrar.</div></div>';
+    pend.slice(0,20).forEach(r=>{h+='<button class="item" data-act="prop" data-id="'+r.id+'"><div class="t">'+esc(r.data.text)+'</div><div class="mut">Toque para revisar</div></button>';});
+  }
   h+='<div class="card"><div class="mut">Contas do mês ainda a pagar (valores conhecidos)</div><div class="big">'+money(known)+'</div>'
     +(sem?'<div style="margin-top:.4rem"><span class="tag warn">'+sem+' sem valor</span> <span class="mut">preencha em Contas</span></div>':'')
     +(late?'<div style="margin-top:.4rem"><span class="tag bad">'+late+' em atraso</span></div>':'')
@@ -465,22 +579,22 @@ function vDebts(){
   const ds=byKind('debt').filter(d=>mine(d.data));
   let h=header('Dívidas')+whoBar()+'<div class="wrap"><button class="btn" data-act="debt-new">+ Nova dívida</button>';
   if(!ds.length)h+='<div class="card mut">Nenhuma dívida cadastrada.</div>';
-  ds.forEach(d=>{const x=d.data;h+='<button class="item" data-act="debt-edit" data-id="'+d.id+'"><div class="row"><span class="t">'+esc(x.creditor)+'</span><span class="tag '+(x.status==='PAGA'?'ok':(x.status==='ATRASADA'?'bad':''))+'">'+esc(x.status)+'</span></div><div class="row"><span class="mut">Saldo</span><b>'+money(x.balanceC)+'</b></div><div class="row"><span class="mut">Parcela</span><b>'+money(x.installC)+'</b></div><div class="mut">Devedor no contrato: '+esc(pname(x.holder))+(x.payer?' · paga hoje: '+esc(pname(x.payer)):'')+(x.kindD?' · '+esc(x.kindD):'')+(x.account?' · conta '+esc(x.account):'')+'</div>'+(x.dueDay?'<div class="mut">Vence dia '+x.dueDay+'</div>':'')+'</button>';});
+  ds.forEach(d=>{const x=d.data;h+='<button class="item" data-act="debt-edit" data-id="'+d.id+'"><div class="row"><span class="t">'+esc(x.creditor)+'</span><span class="tag '+(x.status==='PAGA'?'ok':(x.status==='ATRASADA'?'bad':''))+'">'+esc(x.status)+'</span></div><div class="row"><span class="mut">Saldo</span><b>'+money(x.balanceC)+'</b></div><div class="row"><span class="mut">Parcela</span><b>'+money(x.installC)+'</b></div><div class="mut">Devedor no contrato: '+esc(pname(x.holder))+(x.payer?' · paga hoje: '+esc(pname(x.payer)):'')+(x.kindD?' · '+esc(x.kindD):'')+(x.rateBp!=null?' · juros '+(x.rateBp/100).toFixed(2).replace('.',',')+'% ao mês':'')+(x.account?' · conta '+esc(x.account):'')+'</div>'+(x.dueDay?'<div class="mut">Vence dia '+x.dueDay+'</div>':'')+'</button>';});
   return h+'</div>';
 }
 function render(){
   const a=$('app');
   if(!S.sess||!S.ready){return;}
   let body;
-  if(S.tab==='home')body=vHome();else if(S.tab==='bills')body=vBills();else if(S.tab==='cards')body=S.cardId?vCard():vCards();else if(S.tab==='debts')body=vDebts();else body=vHome();
+  if(S.tab==='home')body=vHome();else if(S.tab==='bills')body=vBills();else if(S.tab==='cards')body=S.cardId?vCard():vCards();else if(S.tab==='debts')body=vDebts();else if(S.tab==='plan')body=vPlan();else body=vHome();
   a.innerHTML=body+(S.msg?'<div class="wrap"><div class="err">'+esc(S.msg)+'</div></div>':'')+tabs();
 }
 
 /* ---------- ações ---------- */
 const DAY={type:'int',min:1,max:31};
-async function billForm(rec){
-  const d=rec?rec.data:{recurring:true,variable:false};
-  await form(rec?'Editar conta':'Nova conta',[
+async function billForm(rec,preset){
+  const d=rec?rec.data:Object.assign({recurring:true,variable:false},preset||{});
+  return form(rec?'Editar conta':'Nova conta',[
     {k:'name',label:'Nome (ex.: Luz)',type:'text',req:true},
     {k:'dueDay',label:'Vence todo dia',type:'int',min:1,max:31,req:true},
     {k:'variable',label:'O valor muda todo mês',type:'check'},
@@ -539,9 +653,9 @@ async function cardForm(rec){
         try{for(const x of S.recs.filter(r=>(r.kind==='charge'||r.kind==='invpay')&&r.data.cardId===rec.id))await Api.remove(x);await Api.remove(rec);S.cardId=null;S.tab='cards';}catch(e){S.msg=e.message;}render();}}:null
   });
 }
-async function chargeForm(card,rec){
-  const d=rec?Object.assign({},rec.data,{estorno:rec.data.totalC<0,totalC:Math.abs(rec.data.totalC)}):{date:todayIso(),n:1,estorno:false};
-  await form(rec?'Editar lançamento':'Novo lançamento',[
+async function chargeForm(card,rec,preset){
+  const d=rec?Object.assign({},rec.data,{estorno:rec.data.totalC<0,totalC:Math.abs(rec.data.totalC)}):Object.assign({date:todayIso(),n:1,estorno:false},preset||{});
+  return form(rec?'Editar lançamento':'Novo lançamento',[
     {k:'date',label:'Data da compra',type:'date',req:true},
     {k:'desc',label:'Descrição',type:'text',req:true},
     {k:'totalC',label:'Valor total da compra',type:'money',req:true},
@@ -561,12 +675,13 @@ async function chargeForm(card,rec){
       if(await confirmBox('Apagar este lançamento?',[d.desc,money(rec.data.totalC)],'Sim, apagar',true)){try{await Api.remove(rec);}catch(e){S.msg=e.message;}render();}}:null
   });
 }
-async function debtForm(rec){
-  const d=rec?rec.data:{status:'ATIVA'};
-  await form(rec?'Editar dívida':'Nova dívida',[
+async function debtForm(rec,preset){
+  const d=rec?rec.data:Object.assign({status:'ATIVA'},preset||{});
+  return form(rec?'Editar dívida':'Nova dívida',[
     {k:'creditor',label:'Quem você deve',type:'text',req:true},
     {k:'balanceC',label:'Saldo devedor',type:'money',hint:'Vazio = Não informado.'},
     {k:'installC',label:'Valor da parcela',type:'money'},
+    {k:'rateBp',label:'Juros ao mês, em % (se souber)',type:'money',hint:'Ex.: 1,99. Vazio = Não informado (não vira zero).'},
     {k:'dueDay',label:'Vence todo dia',type:'int',min:1,max:31},
     {k:'status',label:'Situação',type:'select',opts:[['ATIVA','Ativa'],['ATRASADA','Atrasada'],['PAGA','Paga'],['DESCONHECIDA','Não sei']]},
     {k:'kindD',label:'Tipo',type:'select',opts:[['','Não definido'],['Consignado','Consignado'],['Empréstimo','Empréstimo'],['Cartão','Cartão'],['Loja/carnê','Loja/carnê'],['Outro','Outro']]},
@@ -575,7 +690,7 @@ async function debtForm(rec){
     {k:'account',label:'Conta de onde sai o pagamento (opcional)',type:'text'},
     {k:'note',label:'Observação',type:'text'}
   ],Object.assign({holder:defHolder()},d),{
-    summary:o=>['Dívida: '+o.creditor,'Saldo: '+money(o.balanceC),'Parcela: '+money(o.installC),'Situação: '+o.status,'Tipo: '+(o.kindD||'Não definido'),'Devedor no contrato: '+pname(o.holder),'Quem paga hoje: '+pname(o.payer)],
+    summary:o=>['Dívida: '+o.creditor,'Saldo: '+money(o.balanceC),'Parcela: '+money(o.installC),'Juros ao mês: '+(o.rateBp==null?'Não informado':(o.rateBp/100).toFixed(2).replace('.',',')+'%'),'Situação: '+o.status,'Tipo: '+(o.kindD||'Não definido'),'Devedor no contrato: '+pname(o.holder),'Quem paga hoje: '+pname(o.payer)],
     save:async o=>{if(rec)await Api.update(rec,o);else await Api.create('debt',o);},
     onDelete:rec?async()=>{if(await confirmBox('Apagar esta dívida?',[d.creditor],'Sim, apagar',true)){try{await Api.remove(rec);}catch(e){S.msg=e.message;}render();}}:null
   });
@@ -597,6 +712,8 @@ document.addEventListener('click',async ev=>{
       b.disabled=true;b.textContent='Apagando…';
       try{await clearDemo();S.msg='';}catch(e){S.msg='Não consegui apagar tudo: '+e.message;try{await Api.load();}catch(x){}}render();}}
   else if(act==='who'){S.who=b.dataset.v;render();}
+  else if(act==='prop')reviewProp(get(id));
+  else if(act==='cap-set'){const c=cfgRec();form('Quanto dá para pagar por mês',[{k:'capacityC',label:'Valor por mês para as dívidas',type:'money',req:true,hint:'Só o que sobra de verdade. Exemplo: 1.800,00'}],{capacityC:c?c.data.capacityC:null},{summary:o=>['Por mês: '+money(o.capacityC)],save:async o=>{if(c)await Api.update(c,Object.assign({},c.data,{capacityC:o.capacityC}));else await Api.create('proposal',{cfg:'capacity',capacityC:o.capacityC});}});}
   else if(act==='bill-new')billForm(null);
   else if(act==='bill-edit')billForm(get(id));
   else if(act==='bill-open'){const r=get(id);billMonthForm({r,bill:get(r.data.billId)});}
