@@ -50,7 +50,7 @@
 html{font-size:20px}
 *{box-sizing:border-box}
 [hidden]{display:none!important}
-html,body{height:100%}
+html,body{height:100%;overflow-x:hidden;overscroll-behavior-x:none}
 body{margin:0;background:var(--bg);color:var(--fg);font:1rem/1.35 var(--font);-webkit-text-size-adjust:100%}
 button{font:inherit;color:inherit;cursor:pointer}
 input,textarea,select{font:inherit;font-size:1rem;color:var(--fg)}
@@ -174,11 +174,11 @@ input,textarea,select{font:inherit;font-size:1rem;color:var(--fg)}
 .li.note{--inset:4.15rem}
 
 /* folhas de edição */
-.sheet{position:fixed;inset:0;z-index:40;background:var(--bg);display:flex;flex-direction:column;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+.sheet{position:fixed;inset:0;overflow-x:hidden;touch-action:pan-y;z-index:40;background:var(--bg);display:flex;flex-direction:column;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 .sheet-in{width:100%;max-width:680px;margin-inline:auto;flex:1;min-height:0;display:flex;flex-direction:column}
 .sheet-hd{display:flex;align-items:center;justify-content:space-between;gap:.4rem;padding:.3rem .6rem;border-bottom:1px solid var(--line);background:var(--surface);min-height:3.2rem}
 .sheet-hd h2{margin:0;font-size:1.05rem;font-weight:800;text-align:center;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.sheet-body{flex:1;min-height:0;overflow-y:auto;padding:1rem;display:flex;flex-direction:column;gap:1.1rem}
+.sheet-body{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;touch-action:pan-y;width:100%;box-sizing:border-box;padding:1rem;display:flex;flex-direction:column;gap:1.1rem}
 .sheet-ft{display:flex;gap:.6rem;padding:.7rem 1rem;border-top:1px solid var(--line);background:var(--surface)}
 .lbl{display:block;font-size:.85rem;font-weight:700;color:var(--muted);margin:0 0 .35rem .2rem}
 .inp{width:100%;min-height:2.9rem;border:0;border-radius:.8rem;background:var(--surface);padding:.55rem .8rem}
@@ -255,6 +255,9 @@ textarea.inp{min-height:5.5rem;resize:vertical;line-height:1.45}
 .ask .btn.cancel{background:var(--surface);color:var(--fg)}
 .ask.arming .btn{pointer-events:none;opacity:.6}
 @media (prefers-reduced-motion: no-preference){.ask{animation:up .16s ease-out}}
+.inp{box-sizing:border-box}
+input[type=date].inp,input[type=time].inp{display:block;width:100%;max-width:100%;min-width:0;box-sizing:border-box;-webkit-appearance:none;appearance:none;text-align:center}
+.sheet-body>*{min-width:0;max-width:100%}
 </style>
 
 <div id="app">
@@ -633,12 +636,12 @@ const Supa={
   },
   async flush(){
     while(this.q.length){
-      const op=this.q[0];
+      const op=this.q[0];op.sent=true;
       let res;
       try{res=await this.sendOne(op);}
-      catch(e){if(e.status===401)throw e;this.persist();return false;}
+      catch(e){op.sent=false;if(e.status===401)throw e;this.persist();return false;}
       if(res==='conflict')await this.resolveConflict(op);
-      this.q.shift();this.persist();
+      this.q=this.q.filter(x=>x!==op);this.persist();
     }
     return true;
   },
@@ -952,9 +955,9 @@ function viewHoje(){
   let h=hdr(DOWF[now.getDay()]+', '+now.getDate()+' de '+MESES[now.getMonth()],'Hoje',speakBtn('speak-day','Ouvir meu dia'));
   if(!S.ready)return h+'<div class="empty">Carregando…</div>';
   h+='<div class="tiles">'+
-    tile('jump','sec-today','today','t-blue',todayR.filter(r=>!r.done).length,'Lembretes hoje')+
-    tile('jump','sec-agenda','cal','t-green',ag.length,'Agenda hoje')+
-    tile('jump','sec-late','alert','t-red',overdue.length,'Atrasados')+
+    tile('go-rem','s:hoje','today','t-blue',todayR.filter(r=>!r.done).length,'Lembretes hoje')+
+    tile('go-agenda','hoje','cal','t-green',ag.length,'Agenda hoje')+
+    tile('go-rem','s:prog','alert','t-red',overdue.length,'Atrasados')+
     tile('jump','sec-inbox','inbox','t-amber',S.inbox.length,'Caixa de entrada')+'</div>';
   h+=secH('Lembretes de hoje','<button class="txtbtn" data-act="new-rem" data-date="'+today+'">'+ic('plus',1,2.4)+'Novo</button>','sec-today');
   h+='<div class="group">'+(todayR.length?todayR.map(r=>remRow(r,false)).join(''):emptyRow('Nada para hoje.','Toque no + azul para anotar.'))+'</div>';
@@ -1387,7 +1390,12 @@ function sheetList(){
   return h;
 }
 const CAPL={rem:'Lembrete',ev:'Compromisso',note:'Nota',inbox:'Caixa de entrada'};
-function capMode(d){const p=parseCapture(d.text);return d.mode==='auto'?(p.when?'rem':'inbox'):d.mode;}
+function capMode(d){
+  if(d.mode!=='auto')return d.mode;
+  const p=parseCapture(d.text),t=d.text.trim();
+  if(p.when)return 'rem';
+  return (t.indexOf('\n')<0&&t.length<=80)?'rem':'note';
+}
 function capSummary(d){
   const p=parseCapture(d.text),m=capMode(d),today=isoDate(new Date());
   let when='';
@@ -1602,6 +1610,8 @@ function findTrash(c,id){const t=S.trash.find(x=>x.c===c&&x.x.id===id);return t?
 
 const A={
   tab:d=>go(()=>{if(S.tab===d.tab){if(d.tab==='notas'){S.folder=null;S.q='';}if(d.tab==='lembretes'){S.rview=null;S.rq='';}}S.tab=d.tab;}),
+  'go-rem':d=>go(()=>{S.tab='lembretes';S.rview=d.v;S.rq='';}),
+  'go-agenda':()=>go(()=>{S.tab='agenda';S.selDay=isoDate(new Date());}),
   jump:d=>{const el=$(d.to);if(el&&el.offsetHeight)el.scrollIntoView({behavior:'smooth',block:'start'});else toast('Nada aqui por enquanto.');},
   rview:d=>go(()=>{S.rview=d.v;S.rq='';}),
   'rview-back':()=>go(()=>{S.rview=null;}),
