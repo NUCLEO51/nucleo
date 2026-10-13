@@ -46,7 +46,7 @@ create table public.push_subscriptions (
 );
 
 -- Conflito: só grava se a versão enviada for a versão atual; senão rejeita.
-create or replace function public.items_guard() returns trigger language plpgsql as $$
+create or replace function public.items_guard() returns trigger language plpgsql security definer set search_path = public as $$
 begin
   if new.version <> old.version then
     raise exception 'conflict: item % mudou (versão atual %, enviada %)', old.id, old.version, new.version

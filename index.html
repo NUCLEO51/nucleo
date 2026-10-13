@@ -67,7 +67,7 @@ input,textarea,select{font:inherit;font-size:1rem;color:var(--fg)}
 .eyebrow::first-letter{text-transform:uppercase}
 .eyebrow .st{color:var(--alarm)}
 .eyebrow .st.bad{color:var(--danger)}
-.eyebrow .st.warn{color:var(--alarm)}
+.eyebrow .st.stw{color:var(--alarm);font-weight:700}
 .eyebrow .st.ok{color:var(--ok)}
 .hd-r{display:flex;align-items:center;gap:.4rem;flex:none}
 .iconbtn{width:2.6rem;height:2.6rem;border-radius:50%;border:0;background:var(--surface);display:inline-flex;align-items:center;justify-content:center;padding:0;flex:none;color:var(--accent)}
@@ -128,7 +128,8 @@ input,textarea,select{font:inherit;font-size:1rem;color:var(--fg)}
 .chip.on{background:var(--accent);color:var(--accent-fg)}
 .chip[disabled]{opacity:.45;cursor:default}
 .chips{display:flex;flex-wrap:wrap;gap:.5rem}
-.actbar{display:flex;gap:.6rem;margin-top:1.2rem}
+.actbar{display:flex;flex-wrap:wrap;gap:.6rem;margin-top:1.2rem}
+.actbar .btn{flex:1 1 9rem;min-width:0;white-space:nowrap}
 
 /* barra de abas */
 .tabs{flex:none;display:flex;align-items:flex-end;justify-content:space-around;background:var(--surface);border-top:1px solid var(--line);padding:.3rem .4rem calc(.4rem + env(safe-area-inset-bottom,0px))}
@@ -288,6 +289,7 @@ input[type=date].inp,input[type=time].inp{display:block;width:100%;max-width:100
 .dw-b.on{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
 .vbig{display:block;width:100%;padding:0;border:1px solid var(--line);border-radius:.9rem;overflow:hidden;background:#fff}
 .vbig img{display:block;width:100%;height:auto}
+#main{overflow-x:hidden}
 </style>
 
 <div id="app">
@@ -623,6 +625,7 @@ const Supa={
     if(raw){try{const o=JSON.parse(raw);COLS.forEach(c=>{S.raw[c]=o[c]||[];});}catch(e){}}
     partition();
     if(!this.sess){this.loginScreen();return;}
+    if(this.dead.length){this.dead.forEach(x=>{x.tries=0;x.sent=false;});this.q=this.q.concat(this.dead);this.dead=[];this.persist();}
     S.ready=true;S.assetsOk=true;S.sync=this.q.length?'pend':(this.dead.length?'fail':'cloud');onData();
     this.sync();
     if(!this.timer){
@@ -713,7 +716,7 @@ const Supa={
         op.sent=false;
         if(e.status===401)throw e;
         this.lastErr=(e.status?'Erro '+e.status+': ':'Sem conexão: ')+String(e.message||'').slice(0,140);
-        const hard=e.status>=400&&e.status<500&&e.status!==408&&e.status!==429;
+        const hard=e.status>=400&&e.status<500&&e.status!==408&&e.status!==429;this.lastHard=hard;
         if(hard&&(op.tries=(op.tries||0)+1)>=3){
           // não deixa um item com problema travar a fila inteira
           op.err=this.lastErr;this.q=this.q.filter(x=>x!==op);this.dead.push(op);this.persist();
@@ -757,8 +760,8 @@ const Supa={
     this.busy=true;
     try{
       const ok=await this.flush();
-      if(ok){await this.pull();this.lastOk=Date.now();this.lastErr='';S.sync=this.dead.length?'fail':'cloud';S.ready=true;}
-      else S.sync=this.q.length?'pend':'error';
+      if(ok){await this.pull();this.lastOk=Date.now();this.lastErr='';this.lastHard=false;S.sync=this.dead.length?'fail':'cloud';S.ready=true;}
+      else S.sync=this.lastHard?'retry':(this.q.length?'pend':'error');
     }catch(e){
       if(e.status===401){this.busy=false;this.loginScreen('Entre de novo.');return;}
       if(!this.lastErr)this.lastErr='Sem conexão com o servidor.';
@@ -991,7 +994,7 @@ function allTags(){const c={};S.notes.forEach(n=>tagsOf(n).forEach(t=>{c[t]=(c[t
 /* ---------- peças visuais ---------- */
 function syncNote(){
   const nq=(typeof Supa!=='undefined'&&Supa.q)?Supa.q.length:0;
-  const m={local:['só neste aparelho',''],saving:['salvando…',''],boot:['conectando…',''],cloud:['salvo ✓','ok'],error:['sem internet · guardado no aparelho','warn'],pend:[(nq>1?nq+' alterações esperando internet':'1 alteração esperando internet'),'warn'],fail:['erro ao enviar · veja Ajustes','bad']}[S.sync];
+  const m={local:['só neste aparelho',''],saving:['salvando…',''],boot:['conectando…',''],cloud:['salvo ✓','ok'],error:['sem internet · guardado no aparelho','stw'],pend:[(nq>1?nq+' alterações esperando internet':'1 alteração esperando internet'),'stw'],retry:['não consegui enviar · tentando de novo','bad'],fail:['erro ao enviar · veja Ajustes','bad']}[S.sync];
   return m?' · <span class="st '+m[1]+'">'+m[0]+'</span>':'';
 }
 function hdr(eyebrow,title,extra,small){
@@ -1667,7 +1670,7 @@ function sheetCap(){
 }
 function sheetSet(){
   const ex=COLS.reduce((n,c)=>n+S[c].filter(x=>x.example).length,0);
-  const where={cloud:'Seus dados ficam salvos na nuvem e aparecem em qualquer aparelho que abrir este sistema.',local:'Sem sincronização: os dados ficam só neste navegador e podem sumir se você limpar o histórico.',saving:'Salvando…',boot:'Conectando…',error:'Sem internet agora. O que você salvar fica neste aparelho e vai para a nuvem quando a conexão voltar.',pend:'Há alterações guardadas neste aparelho esperando internet. Elas vão sozinhas quando a conexão voltar.',fail:'Alguns itens não foram aceitos pela nuvem. Eles continuam neste aparelho. Use “Tentar de novo” abaixo.'}[S.sync];
+  const where={cloud:'Seus dados ficam salvos na nuvem e aparecem em qualquer aparelho que abrir este sistema.',local:'Sem sincronização: os dados ficam só neste navegador e podem sumir se você limpar o histórico.',saving:'Salvando…',boot:'Conectando…',error:'Sem internet agora. O que você salvar fica neste aparelho e vai para a nuvem quando a conexão voltar.',pend:'Há alterações guardadas neste aparelho esperando internet. Elas vão sozinhas quando a conexão voltar.',retry:'A nuvem recusou uma alteração. O app vai tentar de novo; o motivo aparece abaixo.',fail:'Alguns itens não foram aceitos pela nuvem. Eles continuam neste aparelho. Use “Tentar de novo” abaixo.'}[S.sync];
   const seg=(act,cur,opts)=>'<div class="seg" role="group">'+opts.map(o=>'<button class="'+(String(cur)===String(o[0])?'on':'')+'" data-act="'+act+'" data-v="'+o[0]+'" aria-pressed="'+(String(cur)===String(o[0]))+'">'+o[1]+'</button>').join('')+'</div>';
   let h='<div class="sheet"><div class="sheet-in">'+head('Ajustes')+'<div class="sheet-body" id="sheetBody">';
   h+='<div class="block"><span class="block-t">Tamanho do texto</span>'+seg('set-fs',S.fs,[[18,'Normal'],[20,'Grande'],[23,'Maior'],[26,'Máximo']])+'<div class="note-s">Fica guardado neste aparelho.</div></div>';
