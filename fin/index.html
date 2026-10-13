@@ -245,7 +245,7 @@ async function ensureMonth(){
     const want=d.recurring?(ym>=d.startYm):(ym===d.startYm);
     if(!want)continue;
     if(byKind('billmonth').some(x=>x.data.billId===b.id&&x.data.ym===ym))continue;
-    try{await Api.create('billmonth',{billId:b.id,ym,amountC:d.variable?null:(d.amountC==null?null:d.amountC),paidAt:null});}catch(e){}
+    try{await Api.create('billmonth',{billId:b.id,ym,amountC:d.variable?null:(d.amountC==null?null:d.amountC),paidAt:null,demo:!!d.demo});}catch(e){}
   }
 }
 const billDue=(row)=>dateOf(row.r.data.ym,row.bill.data.dueDay);
@@ -291,6 +291,40 @@ function tabs(){
   const T=[['home','🏠','Início'],['bills','🧾','Contas'],['cards','💳','Cartões'],['debts','📉','Dívidas']];
   return '<nav class="tabs">'+T.map(t=>'<button data-act="tab" data-v="'+t[0]+'" class="'+(S.tab===t[0]?'on':'')+'"><span class="e">'+t[1]+'</span>'+t[2]+'</button>').join('')+'</nav>';
 }
+function upcoming(){
+  const td=todayIso(),lim=isoDate(new Date(Date.now()+30*864e5)),out=[];
+  monthRows(ymOf(td)).filter(x=>!x.r.data.paidAt).forEach(x=>{const dt=billDue(x);if(dt<=lim)out.push({dt,kind:'Conta',name:x.bill.data.name,c:x.r.data.amountC,late:dt<td});});
+  byKind('card').forEach(cr=>{const k=cardCalc(cr);Object.values(k.inv).filter(v=>!v.paid&&v.ym<=k.openYm&&v.totalC>0).forEach(v=>{const dt=dueDateFor(cr.data,v.ym);if(dt<=lim)out.push({dt,kind:'Fatura',name:cr.data.name+' · '+ymShort(v.ym),c:v.totalC,late:dt<td});});});
+  byKind('debt').filter(d=>d.data.status!=='PAGA'&&d.data.dueDay).forEach(d=>{let ym=ymOf(td),dt=dateOf(ym,d.data.dueDay);if(dt<td&&d.data.status!=='ATRASADA'){dt=dateOf(addMonths(ym,1),d.data.dueDay);}if(dt<=lim)out.push({dt,kind:'Dívida',name:d.data.creditor,c:d.data.installC,late:dt<td||d.data.status==='ATRASADA'});});
+  return out.sort((a,b)=>a.dt<b.dt?-1:1);
+}
+const hasDemo=()=>S.recs.some(r=>r.data&&r.data.demo);
+async function loadDemo(){
+  const t=new Date(),dAgo=n=>isoDate(new Date(t.getTime()-n*864e5));
+  const A=await Api.create('card',{name:'Cartão Teste A',last4:'1111',limitC:300000,closeDay:10,dueDay:17,demo:true});
+  const B=await Api.create('card',{name:'Cartão Teste B',last4:'2222',limitC:150000,closeDay:25,dueDay:5,demo:true});
+  const ch=(c,date,desc,totalC,n,firstC,by)=>Api.create('charge',{cardId:c.id,date,desc,totalC,n,firstC:firstC==null?null:firstC,by:by||'',demo:true});
+  await ch(A,dAgo(25),'Tênis (teste)',34999,6,5499,'');
+  await ch(A,dAgo(5),'Mercado (teste)',23050,1,null,'');
+  await ch(A,dAgo(3),'Estorno loja (teste)',-5000,1,null,'');
+  await ch(A,dAgo(40),'Passagem (teste)',60000,3,null,'Eliza');
+  await ch(B,dAgo(12),'Celular (teste)',120000,10,null,'');
+  await ch(B,dAgo(2),'Farmácia (teste)',8990,1,null,'');
+  const ym=ymOf(todayIso());
+  await Api.create('bill',{name:'Luz (teste)',dueDay:10,variable:true,amountC:null,recurring:true,startYm:ym,demo:true});
+  await Api.create('bill',{name:'Água (teste)',dueDay:25,variable:true,amountC:null,recurring:true,startYm:ym,demo:true});
+  await Api.create('bill',{name:'Aluguel (teste)',dueDay:5,variable:false,amountC:120000,recurring:true,startYm:ym,demo:true});
+  await Api.create('bill',{name:'Internet (teste)',dueDay:28,variable:false,amountC:9990,recurring:true,startYm:ym,demo:true});
+  await ensureMonth();
+  const alu=monthRows(ym).find(x=>x.bill.data.name==='Aluguel (teste)');
+  if(alu)await Api.update(alu.r,Object.assign({},alu.r.data,{paidAt:todayIso()}));
+  await Api.create('debt',{creditor:'João (teste)',balanceC:80000,installC:20000,dueDay:20,status:'ATIVA',note:'Empréstimo de teste',demo:true});
+  await Api.create('debt',{creditor:'Loja X (teste)',balanceC:45000,installC:9000,dueDay:3,status:'ATRASADA',note:'',demo:true});
+}
+async function clearDemo(){
+  const ids=new Set(S.recs.filter(r=>r.data&&r.data.demo).map(r=>r.id));
+  for(const r of S.recs.slice()){if(ids.has(r.id)||(r.kind==='billmonth'&&ids.has(r.data.billId))||(r.kind==='invpay'&&ids.has(r.data.cardId)))await Api.remove(r);}
+}
 function vHome(){
   const ym=ymOf(todayIso()),rows=monthRows(ym);
   const open=rows.filter(x=>!x.r.data.paidAt);
@@ -302,6 +336,11 @@ function vHome(){
     +(sem?'<div style="margin-top:.4rem"><span class="tag warn">'+sem+' sem valor</span> <span class="mut">preencha em Contas</span></div>':'')
     +(late?'<div style="margin-top:.4rem"><span class="tag bad">'+late+' em atraso</span></div>':'')
     +(!rows.length?'<div class="mut" style="margin-top:.4rem">Nenhuma conta cadastrada ainda.</div>':'')+'</div>';
+  const up=upcoming();
+  if(up.length){
+    h+='<h2>Próximos vencimentos (30 dias)</h2>';
+    up.forEach(u=>{h+='<div class="card"><div class="row"><span class="t" style="font-weight:800">'+esc(u.name)+'</span><b>'+money(u.c)+'</b></div><div class="row"><span class="mut">'+u.kind+' · '+brDate(u.dt)+'</span>'+(u.late?'<span class="tag bad">Em atraso</span>':'')+'</div></div>';});
+  }
   const cards=byKind('card');
   if(cards.length){
     h+='<h2>Cartões</h2>';
@@ -325,6 +364,7 @@ function vHome(){
     h+='<h2>Dívidas</h2><div class="card"><div class="row"><span class="mut">Saldo conhecido ('+debts.length+')</span><b>'+money(sum)+'</b></div>'+(miss?'<div class="mut">Algum saldo está “Não informado”.</div>':'')+'</div>';
   }
   h+='<div class="note">Projeção parcial não é dinheiro disponível. O FIN só organiza e lembra: quem paga é você.</div>';
+  h+=hasDemo()?'<button class="btn sec" data-act="demo-off">Apagar os exemplos de teste</button>':'<button class="btn sec" data-act="demo-on">Carregar exemplos de teste</button>';
   h+='<button class="btn sec" data-act="refresh">Atualizar</button><button class="btn sec" data-act="logout">Sair</button>';
   h+='<p class="hint" style="text-align:center"><a class="lnk" href="../">Abrir o Núcleo</a></p></div>';
   return h;
@@ -516,6 +556,14 @@ document.addEventListener('click',async ev=>{
   if(act==='tab'){S.tab=b.dataset.v;if(S.tab!=='cards')S.cardId=null;if(S.tab==='cards'&&b.dataset.v==='cards')S.cardId=null;render();window.scrollTo(0,0);}
   else if(act==='refresh'){try{await Api.load();await ensureMonth();}catch(e){S.msg='Sem internet.';}render();}
   else if(act==='logout'){if(await confirmBox('Sair do FIN?',['Você terá que entrar de novo.'],'Sim, sair')){Api.saveSess(null);lsSet('fin-cache','');location.reload();}}
+  else if(act==='demo-on'){
+    if(await confirmBox('Carregar exemplos de teste?',['Cria 2 cartões, 6 compras, 4 contas e 2 dívidas FALSOS.','Todos têm “(teste)” no nome.','Dá para apagar tudo de uma vez depois.'],'Sim, carregar')){
+      b.disabled=true;b.textContent='Carregando…';
+      try{await loadDemo();S.msg='';}catch(e){S.msg='Não consegui carregar tudo: '+e.message;try{await Api.load();}catch(x){}}render();}}
+  else if(act==='demo-off'){
+    if(await confirmBox('Apagar os exemplos de teste?',['Só some o que tem “(teste)”.','Seus dados de verdade não são mexidos.'],'Sim, apagar',true)){
+      b.disabled=true;b.textContent='Apagando…';
+      try{await clearDemo();S.msg='';}catch(e){S.msg='Não consegui apagar tudo: '+e.message;try{await Api.load();}catch(x){}}render();}}
   else if(act==='bill-new')billForm(null);
   else if(act==='bill-edit')billForm(get(id));
   else if(act==='bill-open'){const r=get(id);billMonthForm({r,bill:get(r.data.billId)});}
