@@ -1412,7 +1412,8 @@ function sheetSet(){
   h+='<div class="block"><span class="block-t">Aparência</span>'+seg('set-theme',S.theme,[['auto','Automático'],['light','Claro'],['dark','Escuro']])+'</div>';
   h+='<div class="block"><span class="block-t">Onde ficam os dados</span><div class="note-s">'+esc(where)+'</div></div>';
   h+='<div class="block"><span class="block-t">Alarmes</span><div class="note-s">Os alarmes tocam enquanto este sistema está aberto. Com ele fechado, o aviso depende da versão instalada no iPhone, que é a próxima etapa.</div></div>';
-  if(S.dlOk)h+='<button class="btn wide" data-act="export">Exportar backup (arquivo)</button>';
+  if(S.dlOk||Store.mode==='supa')h+='<button class="btn wide" data-act="export">Exportar backup (arquivo)</button>';
+  if(Store.mode==='supa'){h+='<button class="btn wide" data-act="import">Importar backup (arquivo)</button><input type="file" id="impFile" accept=".json,application/json" hidden>';h+='<button class="btn wide danger" data-act="logout">Sair da conta</button>';}
   if(ex)h+='<button class="btn wide danger" data-act="rm-examples">Remover os '+ex+' exemplos</button>';
   h+='</div></div></div>';
   return h;
@@ -1558,11 +1559,29 @@ async function onFiles(inp){
   }
 }
 async function exportAll(){
-  const dl=await getDl();if(!dl)return;
+  const dl=await getDl();
   const data=JSON.stringify({exportadoEm:new Date().toISOString(),lembretes:S.raw.reminders||[],listas:S.lists,notas:S.raw.notes||[],pastas:S.folders,compromissos:S.raw.events||[],caixaDeEntrada:S.inbox},null,2);
+  if(!dl){try{const u=URL.createObjectURL(new Blob([data],{type:'application/json'})),l=document.createElement('a');l.href=u;l.download='nucleo-backup-'+isoDate(new Date())+'.json';document.body.appendChild(l);l.click();l.remove();setTimeout(()=>URL.revokeObjectURL(u),4000);toast('Backup pronto');}catch(e){toast('Não foi possível salvar o backup.');}return;}
   try{await dl.save({filename:'meu-sistema-backup-'+isoDate(new Date())+'.json',data});toast('Backup pronto');}
   catch(e){if(!e||e.code!=='declined')toast('Não foi possível salvar o backup.');}
 }
+async function importBackup(file){
+  let o;
+  try{o=JSON.parse(await file.text());}catch(e){toast('Esse arquivo não é um backup válido.');return;}
+  const map={reminders:'reminders',lembretes:'reminders',notes:'notes',notas:'notes',events:'events',compromissos:'events',inbox:'inbox',caixaDeEntrada:'inbox',folders:'folders',pastas:'folders',lists:'lists',listas:'lists'};
+  const todo=[];
+  Object.keys(map).forEach(k=>{
+    const v=o[k];if(!v)return;
+    const arr=Array.isArray(v)?v:Object.keys(v).map(id=>Object.assign({id},v[id]));
+    arr.forEach(x=>{if(x&&x.id&&!(S.raw[map[k]]||[]).some(y=>y.id===x.id)&&!todo.some(t=>t.c===map[k]&&t.x.id===x.id))todo.push({c:map[k],x});});
+  });
+  if(!todo.length){toast('Nada novo para importar.');return;}
+  const fotos=todo.reduce((n,t)=>n+((t.x.images||[]).length),0);
+  if(!(await ask({title:'Importar '+todo.length+' itens?',msg:'Os itens do arquivo entram no Núcleo. O que já existe não é mexido.'+(fotos?' As '+fotos+' foto(s) do arquivo ainda não vêm junto: ficam para a etapa das fotos.':''),ok:'Importar'})))return;
+  for(const t of todo){const d=Object.assign({},t.x);if(d.images&&d.images.length){d.images=[];d.body=(d.body?d.body+'\n':'')+'(foto do scan será trazida na etapa das fotos)';}await Store.put(t.c,d);}
+  toast(todo.length+' itens importados');
+}
+document.addEventListener('change',e=>{if(e.target&&e.target.id==='impFile'&&e.target.files[0]){const f=e.target.files[0];e.target.value='';importBackup(f);}});
 async function removeExamples(){
   if(!(await ask({title:'Remover os exemplos?',msg:'Só os itens de exemplo são apagados. O que você criou fica.',ok:'Remover exemplos',danger:true})))return;
   for(const c of COLS){
@@ -1647,6 +1666,8 @@ const A={
   'ring-open':d=>{const r=S.rings[+d.i];S.rings.splice(+d.i,1);renderRings();const rem=S.reminders.find(x=>x.id===r.rid);if(rem)openRem(rem);},
   'ring-close':d=>{S.rings.splice(+d.i,1);renderRings();},
   export:()=>exportAll(),
+  import:()=>{const i=document.getElementById('impFile');if(i)i.click();},
+  logout:async()=>{if(await ask({title:'Sair da conta?',msg:'Os dados continuam salvos na nuvem. Alterações ainda não enviadas podem se perder.',ok:'Sair',danger:true}))Supa.logout();},
   'rm-examples':()=>removeExamples()
 };
 document.addEventListener('click',e=>{
