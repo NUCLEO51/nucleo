@@ -107,7 +107,12 @@ input,textarea,select{font:inherit;font-size:1rem;color:var(--fg)}
 .tile{border:0;background:var(--surface);border-radius:1rem;padding:.75rem .9rem .8rem;display:flex;flex-direction:column;gap:.35rem;text-align:left;min-height:5.2rem}
 .tile-top{display:flex;align-items:center;justify-content:space-between}
 .tile-ic{width:2.1rem;height:2.1rem;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--surface-2);color:var(--link)}
-.tile.t-red .tile-n{color:var(--danger)}
+.tile.t-late .tile-n{color:var(--danger)}
+/* quadros de Hoje e Lembretes: cores fortes, como no app Lembretes */
+.tile .tile-ic{width:2.4rem;height:2.4rem;color:#fff;background:var(--tc);box-shadow:0 0 14px -2px var(--tc)}
+.tile .tile-ic svg{stroke-width:2.6}
+.t-blue{--tc:#0A84FF}.t-red{--tc:#FF3B30}.t-green{--tc:#30D158}.t-orange{--tc:#FF9F0A}.t-pink{--tc:#FF2D55}.t-cyan{--tc:#32ADE6}.t-purple{--tc:#BF5AF2}.t-gray{--tc:#8E8E93}
+.t-orange .tile-ic,.t-green .tile-ic,.t-cyan .tile-ic{color:#111}
 .tile-n{font-size:1.8rem;font-weight:700;line-height:1}
 .tile-l{font-size:.85rem;font-weight:700;color:var(--muted)}
 
@@ -304,6 +309,14 @@ input[type=date].inp,input[type=time].inp{display:block;width:100%;max-width:100
 .vbig{display:block;width:100%;padding:0;border:1px solid var(--line);border-radius:.9rem;overflow:hidden;background:#fff}
 .vbig img{display:block;width:100%;height:auto}
 #main{overflow-x:hidden}
+.rd{position:fixed;inset:0;z-index:85;background:rgba(0,0,0,.5);display:flex;align-items:flex-end;justify-content:center;padding:1rem 1rem calc(1rem + env(safe-area-inset-bottom,0px))}
+.rd-in{width:100%;max-width:560px;max-height:85vh;background:var(--surface);border-radius:1.2rem;padding:1rem;display:flex;flex-direction:column;gap:.8rem}
+.rd-h{display:flex;align-items:center;gap:.6rem;font-size:1.05rem}
+.rd-ic{width:2.4rem;height:2.4rem;border-radius:50%;background:var(--accent);color:var(--accent-fg);display:flex;align-items:center;justify-content:center;flex:none}
+.rd-t{font-size:1.15rem;line-height:1.5;overflow-y:auto;min-height:3rem;background:var(--surface-2);border-radius:.9rem;padding:.8rem;-webkit-user-select:text;user-select:text}
+.rd-help{background:var(--alarm-soft);color:var(--fg);border-radius:.9rem;padding:.7rem .9rem;font-size:.95rem;line-height:1.4}
+.rd-help ol{margin:.4rem 0 0;padding-left:1.2rem}.rd-help li{margin:.3rem 0}
+.rd-b{display:flex;gap:.6rem;flex-wrap:wrap}
 .flist{display:flex;flex-direction:column}
 .frow{display:flex;align-items:center;gap:.3rem;border-bottom:1px solid var(--line)}
 .frow:last-child{border-bottom:0}
@@ -891,35 +904,63 @@ function speakChunks(text){
   if(cur.trim())out.push(cur);
   return out;
 }
-function speak(text){
-  if(!SY||!window.SpeechSynthesisUtterance){toast('Este aparelho não consegue ler em voz alta aqui.');return;}
-  if(speakState.on){speakStop();toast('Leitura parada');return;}
+/* som curtinho e mudo: no iPhone, tocar um áudio "liga" o canal de mídia, que não obedece ao botão de silêncio */
+let _silentUrl='';
+function silentUrl(){
+  if(_silentUrl)return _silentUrl;
+  const n=1600,buf=new ArrayBuffer(44+n),v=new DataView(buf),w=(o,t)=>{for(let i=0;i<t.length;i++)v.setUint8(o+i,t.charCodeAt(i));};
+  w(0,'RIFF');v.setUint32(4,36+n,true);w(8,'WAVE');w(12,'fmt ');v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);v.setUint32(24,8000,true);v.setUint32(28,8000,true);v.setUint16(32,1,true);v.setUint16(34,8,true);w(36,'data');v.setUint32(40,n,true);
+  for(let i=0;i<n;i++)v.setUint8(44+i,128);
+  return _silentUrl=URL.createObjectURL(new Blob([buf],{type:'audio/wav'}));
+}
+function unlockAudio(){
+  try{if(navigator.audioSession)navigator.audioSession.type='playback';}catch(e){}
+  try{const au=new Audio(silentUrl());au.setAttribute('playsinline','');au.volume=0.01;const pr=au.play();if(pr&&pr.catch)pr.catch(()=>{});}catch(e){}
+}
+function readPanel(text){
+  let el=document.getElementById('rd');if(el)el.remove();
+  el=document.createElement('div');el.id='rd';el.className='rd';el.setAttribute('role','dialog');el.setAttribute('aria-label','Leitura em voz alta');
+  el.innerHTML='<div class="rd-in"><div class="rd-h"><span class="rd-ic">'+ic('speaker',1.2,2.2)+'</span><b id="rd-st">Lendo em voz alta…</b></div><div class="rd-t" id="rd-t">'+esc(text)+'</div><div id="rd-help"></div><div class="rd-b"><button class="btn" data-rd="again">Ler de novo</button><button class="btn primary grow" data-rd="close">Parar e fechar</button></div></div>';
+  document.body.appendChild(el);
+  el.addEventListener('click',e=>{const b=e.target.closest('[data-rd]');if(!b)return;e.stopPropagation();
+    if(b.dataset.rd==='close'){speakStop();el.remove();}
+    else{speakStop();speakRun(text);}});
+  return el;
+}
+const RD_HELP='<div class="rd-help"><b>Não saiu som?</b><ol><li>Aumente o volume do iPhone (botões da lateral).</li><li>Se o botão de silêncio estiver ligado, desligue e toque em <b>Ler de novo</b>.</li><li>Se ainda não falar: abra <b>Ajustes › Acessibilidade › Conteúdo Falado</b> e ligue <b>Falar Tela</b>. Depois, com este texto na tela, deslize <b>dois dedos de cima para baixo</b> e o iPhone lê tudo.</li></ol></div>';
+function speakRun(text){
+  const st=document.getElementById('rd-st'),hp=document.getElementById('rd-help');
+  if(hp)hp.innerHTML='';
+  if(!SY||!window.SpeechSynthesisUtterance){if(st)st.textContent='Este aparelho não lê em voz alta aqui.';if(hp)hp.innerHTML=RD_HELP;return;}
+  unlockAudio();
   const chunks=speakChunks(text||'');
-  if(!chunks.length){toast('Não tem nada para ler.');return;}
   const gen=++speakState.gen;speakState.on=true;
   try{SY.cancel();}catch(e){}
   const v=ptVoice();
   let started=false,i=0;
+  const setSt=t=>{const x=document.getElementById('rd-st');if(x&&gen===speakState.gen)x.textContent=t;};
   const next=()=>{
     if(gen!==speakState.gen)return;
-    if(i>=chunks.length){speakState.on=false;return;}
+    if(i>=chunks.length){speakState.on=false;setSt('Terminou de ler.');return;}
     const u=new SpeechSynthesisUtterance(chunks[i++]);
     u.lang=v?v.lang:'pt-BR';u.rate=0.95;u.volume=1;if(v)u.voice=v;
-    u.onstart=()=>{started=true;};
+    u.onstart=()=>{started=true;setSt('Lendo em voz alta…');};
     u.onend=()=>{next();};
     u.onerror=ev=>{
       if(gen!==speakState.gen)return;
-      const er=ev&&ev.error;
-      if(er==='interrupted'||er==='canceled'){return;}
-      speakState.on=false;
-      toast(er==='not-allowed'?'O aparelho bloqueou o som. Toque em Ouvir de novo.':'Não consegui ler em voz alta agora.');
+      const er=ev&&ev.error;if(er==='interrupted'||er==='canceled')return;
+      speakState.on=false;setSt('Não consegui ler em voz alta.');const h=document.getElementById('rd-help');if(h)h.innerHTML=RD_HELP;
     };
-    try{SY.speak(u);if(SY.paused)SY.resume();}catch(e){speakState.on=false;toast('Não consegui ler em voz alta agora.');}
+    try{SY.speak(u);if(SY.paused)SY.resume();}catch(e){speakState.on=false;setSt('Não consegui ler em voz alta.');}
   };
   next();
-  toast(v?'Lendo… toque de novo para parar':'Lendo… (sem voz em português neste aparelho, pode soar estranho)');
-  /* se em 2,5 s nada começou, avisa o motivo mais comum */
-  setTimeout(()=>{if(gen===speakState.gen&&speakState.on&&!started&&!SY.speaking){speakState.on=false;toast('Não saiu som. Confira o volume e o botão lateral de silêncio do iPhone.');}},2500);
+  setTimeout(()=>{if(gen===speakState.gen&&!started&&!SY.speaking){const h=document.getElementById('rd-help');if(h)h.innerHTML=RD_HELP;setSt('Não começou a falar.');}},3000);
+}
+function speak(text){
+  if(document.getElementById('rd')&&speakState.on){speakStop();document.getElementById('rd').remove();return;}
+  const t=(text||'').replace(/#/g,'').trim();
+  if(!t){toast('Não tem nada para ler.');return;}
+  readPanel(t);speakRun(t);
 }
 function remSpeech(r){
   const today=isoDate(new Date());let t=(r.title||'Lembrete sem título')+'.';
@@ -1110,10 +1151,10 @@ function viewHoje(){
   let h=hdr(DOWF[now.getDay()]+', '+now.getDate()+' de '+MESES[now.getMonth()],'Hoje',speakBtn('speak-day','Ouvir meu dia'));
   if(!S.ready)return h+'<div class="empty">Carregando…</div>';
   h+='<div class="tiles">'+
-    tile('go-rem','s:hoje','today','t-gray',todayR.filter(r=>!r.done).length,'Lembretes hoje')+
-    tile('go-agenda','hoje','cal','t-gray',ag.length,'Agenda hoje')+
-    tile('go-rem','s:prog','alert',overdue.length?'t-red':'t-gray',overdue.length,'Atrasados')+
-    tile('jump','sec-inbox','inbox','t-gray',S.inbox.length,'Caixa de entrada')+'</div>';
+    tile('go-rem','s:hoje','today','t-blue',todayR.filter(r=>!r.done).length,'Lembretes hoje')+
+    tile('go-agenda','hoje','cal','t-green',ag.length,'Agenda hoje')+
+    tile('go-rem','s:prog','alert',overdue.length?'t-red t-late':'t-red',overdue.length,'Atrasados')+
+    tile('jump','sec-inbox','inbox','t-orange',S.inbox.length,'Caixa de entrada')+'</div>';
   h+=secH('Lembretes de hoje','<button class="txtbtn" data-act="new-rem" data-date="'+today+'">'+ic('plus',1,2.4)+'Novo</button>','sec-today');
   h+='<div class="group">'+(todayR.length?todayR.map(r=>remRow(r,false)).join(''):emptyRow('Nada para hoje.','Toque no + azul para anotar.'))+'</div>';
   h+=secH('Agenda de hoje','<span class="hint">só consulta</span>','sec-agenda');
@@ -1156,12 +1197,12 @@ function remHomeBody(sm,lm,today,ws,cur){
     return secH('Resultados <span class="pill">'+list.length+'</span>')+'<div class="group">'+(list.length?list.map(r=>remRow(r,true)).join(''):emptyRow('Nada encontrado.','Tente outra palavra.'))+'</div>';
   }
   let h='<div class="tiles six">'+
-    tile('rview','s:todos','inbox','t-gray',sm.todos.length,'Todos')+
-    tile('rview','s:hoje','cal','t-gray',sm.hoje.length,'Hoje')+
-    tile('rview','s:prog','calgrid','t-gray',sm.prog.length,'Programados')+
-    tile('rview','s:flag','flag','t-gray',sm.flag.length,'Sinalizados')+
-    tile('rview','s:urg','alert','t-gray',sm.urg.length,'Urgentes')+
-    tile('rview','s:done','check','t-gray',sm.done.length,'Concluídos')+'</div>';
+    tile('rview','s:todos','inbox','t-cyan',sm.todos.length,'Todos')+
+    tile('rview','s:hoje','cal','t-blue',sm.hoje.length,'Hoje')+
+    tile('rview','s:prog','calgrid','t-red',sm.prog.length,'Programados')+
+    tile('rview','s:flag','flag','t-orange',sm.flag.length,'Sinalizados')+
+    tile('rview','s:urg','alert','t-pink',sm.urg.length,'Urgentes')+
+    tile('rview','s:done','check','t-purple',sm.done.length,'Concluídos')+'</div>';
   h+=secH('Minhas listas','<button class="txtbtn" data-act="new-list">'+ic('plus',1,2.4)+'Nova lista</button>');
   h+='<div class="group"><div class="li ic plan-h"><span class="li-ic" style="color:var(--muted)">'+ic('stack',1.3,2)+'</span><div class="li-main"><div class="li-t">PLANNER</div><div class="li-s">'+esc(weekTitle(ws))+'</div></div><button class="mini" data-act="week-prev" aria-label="Semana anterior">'+ic('left',1,2.6)+'</button><button class="mini" data-act="week-next" aria-label="Próxima semana">'+ic('right',1,2.6)+'</button></div>';
   if(!cur)h+=addRow('week-today','Voltar para esta semana');
@@ -1429,7 +1470,7 @@ async function cancelSheet(){
   closeSheet();
 }
 function closeSheet(){
-  try{if(speakState.on)speakStop();}catch(e){}
+  try{if(speakState.on)speakStop();const rd=document.getElementById('rd');if(rd)rd.remove();}catch(e){}
   const sh=S.sheet;S.sheet=null;$('sheetRoot').innerHTML='';
   if(sh&&sh.added&&sh.added.length)getAssets().then(a=>{if(a)sh.added.forEach(id=>a.delete(id).catch(()=>{}));});
   if(sh&&sh.back){const c=sh.back==='remv'?'reminders':'notes',it=(S[c]||[]).find(x=>x.id===sh.draft.id);if(it)openSheet(sh.back,clone(it));}
