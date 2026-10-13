@@ -67,6 +67,8 @@ input,textarea,select{font:inherit;font-size:1rem;color:var(--fg)}
 .eyebrow::first-letter{text-transform:uppercase}
 .eyebrow .st{color:var(--alarm)}
 .eyebrow .st.bad{color:var(--danger)}
+.eyebrow .st.warn{color:var(--alarm)}
+.eyebrow .st.ok{color:var(--ok)}
 .hd-r{display:flex;align-items:center;gap:.4rem;flex:none}
 .iconbtn{width:2.6rem;height:2.6rem;border-radius:50%;border:0;background:var(--surface);display:inline-flex;align-items:center;justify-content:center;padding:0;flex:none;color:var(--accent)}
 .back{display:inline-flex;align-items:center;gap:.15rem;min-height:2.6rem;padding:0 .4rem 0 0;margin-top:.6rem;border:0;background:none;color:var(--accent);font-size:1rem;font-weight:600}
@@ -378,26 +380,42 @@ function relDay(iso,today){
   return DOW3[d.getDay()]+', '+pad(d.getDate())+'/'+pad(d.getMonth()+1);
 }
 function weekdayDate(target,now){let delta=(target-now.getDay()+7)%7;if(delta===0)delta=7;return isoDate(addDays(now,delta));}
+const MESN={janeiro:1,jan:1,fevereiro:2,fev:2,marco:3,mar:3,abril:4,abr:4,maio:5,mai:5,junho:6,jun:6,julho:7,jul:7,agosto:8,ago:8,setembro:9,set:9,outubro:10,out:10,novembro:11,nov:11,dezembro:12,dez:12};
+const NUMW={um:1,uma:1,dois:2,duas:2,tres:3,quatro:4,cinco:5,seis:6,sete:7,oito:8,nove:9,dez:10,doze:12,quinze:15,vinte:20,trinta:30};
+const DOWRE='(segunda|terca|quarta|quinta|sexta|sabado|domingo)(?:-?\\s?feiras?)?';
 function parseCapture(text,now){
   now=now||new Date();
   let orig=String(text||'').trim(),n=norm(orig);
   if(n.length!==orig.length)orig=n;
   const cut=re=>{const m=re.exec(n);if(!m)return null;const a=m.index,b=a+m[0].length;orig=orig.slice(0,a)+' '+orig.slice(b);n=n.slice(0,a)+' '+n.slice(b);return m;};
   const today=isoDate(now);
-  let date='',time='',repeat='none',repN=0,repU='',m;
-  if((m=cut(/\ba cada (\d+) (horas?|dias?|semanas?|meses|mes|anos?)\b/))){repeat='custom';repN=+m[1];const u=m[2];repU=/^hora/.test(u)?'hour':/^dia/.test(u)?'day':/^sem/.test(u)?'week':/^mes/.test(u)?'month':'year';}
+  const num=s=>/^\d+$/.test(s)?+s:(NUMW[s]||0);
+  const NUM='(\\d+|um|uma|dois|duas|tres|quatro|cinco|seis|sete|oito|nove|dez|doze|quinze|vinte|trinta)';
+  const nextDay=(d)=>{let t=new Date(now.getFullYear(),now.getMonth(),d);if(isoDate(t)<today)t=new Date(now.getFullYear(),now.getMonth()+1,d);return isoDate(t);};
+  let date='',time='',repeat='none',repN=0,repU='',repDays=[],weekPick=null,m;
+  /* repetições */
+  if((m=cut(new RegExp('\\ba cada '+NUM+' (horas?|dias?|semanas?|meses|mes|anos?)\\b')))){repeat='custom';repN=num(m[1]);const u=m[2];repU=/^hora/.test(u)?'hour':/^dia/.test(u)?'day':/^sem/.test(u)?'week':/^mes/.test(u)?'month':'year';}
   else if(cut(/\b(?:dias uteis|de segunda a sexta)\b/))repeat='weekdays';
-  else if(cut(/\b(?:todo ano|anualmente)\b/))repeat='yearly';
-  else if((m=cut(/\btod[ao]s? (?:as |os )?(segunda|terca|quarta|quinta|sexta|sabado|domingo)(?:-?feiras?)?s?\b/))){repeat='weekly';date=weekdayDate(WD[m[1]],now);}
+  else if(cut(/\b(?:todo ano|todos os anos|anualmente)\b/))repeat='yearly';
+  else if((m=cut(/\btodo (?:santo )?dia (\d{1,2})\b/))){repeat='monthly';date=nextDay(+m[1]);}
+  else if((m=cut(new RegExp('\\btod[ao]s? (?:as |os )?'+DOWRE+'((?:\\s*(?:,|e)\\s*(?:as |os )?'+DOWRE+')*)\\b')))){
+    const names=(m[0].match(/segunda|terca|quarta|quinta|sexta|sabado|domingo/g)||[]);
+    repDays=names.map(x=>WD[x]).filter((x,i,a)=>a.indexOf(x)===i).sort();
+    if(repDays.length>1){repeat='custom';repN=1;repU='week';}else repeat='weekly';
+    weekPick=repDays;
+  }
   else if(cut(/\b(?:todos os dias|todo dia|diariamente)\b/))repeat='daily';
-  else if(cut(/\b(?:toda semana|semanalmente)\b/))repeat='weekly';
-  else if(cut(/\b(?:todo mes|mensalmente)\b/))repeat='monthly';
-  if((m=cut(/\bdaqui a (\d+) (minutos?|min|horas?|h|dias?|semanas?)\b/))){
-    const v=+m[1],u=m[2];let t;
+  else if(cut(/\b(?:toda semana|todas as semanas|semanalmente)\b/))repeat='weekly';
+  else if(cut(/\b(?:todo mes|todos os meses|mensalmente)\b/))repeat='monthly';
+  /* prazos relativos */
+  if((m=cut(new RegExp('\\b(?:daqui(?: a)?|em|dentro de)\\s+'+NUM+'\\s+(minutos?|min|horas?|h|dias?|semanas?|meses|mes|anos?)\\b')))){
+    const v=num(m[1]),u=m[2];let t;
     if(/^min/.test(u))t=new Date(now.getTime()+v*60000);
     else if(/^h/.test(u))t=new Date(now.getTime()+v*3600000);
     else if(/^dia/.test(u))t=addDays(now,v);
-    else t=addDays(now,v*7);
+    else if(/^sem/.test(u))t=addDays(now,v*7);
+    else if(/^mes/.test(u))t=new Date(now.getFullYear(),now.getMonth()+v,now.getDate());
+    else t=new Date(now.getFullYear()+v,now.getMonth(),now.getDate());
     date=isoDate(t);
     if(/^(min|h)/.test(u))time=pad(t.getHours())+':'+pad(t.getMinutes());
   }
@@ -405,39 +423,62 @@ function parseCapture(text,now){
     if(cut(/\bdepois de amanha\b/))date=isoDate(addDays(now,2));
     else if(cut(/\bamanha\b/))date=isoDate(addDays(now,1));
     else if(cut(/\bhoje\b/))date=today;
+    else if(cut(/\bmais tarde\b/))date=today;
+    else if(cut(/\b(?:(?:na |da )?semana que vem|(?:na |da )?proxima semana)\b/))date=isoDate(addDays(mondayOf(now),7));
+    else if(cut(/\b(?:(?:no |do )?mes que vem|(?:no |do )?proximo mes)\b/))date=isoDate(new Date(now.getFullYear(),now.getMonth()+1,now.getDate()));
+    else if(cut(/\b(?:(?:no |do )?ano que vem|(?:no |do )?proximo ano)\b/))date=isoDate(new Date(now.getFullYear()+1,now.getMonth(),now.getDate()));
+    else if(cut(/\b(?:(?:no |neste |nesse |este |esse )?(?:fim|final) de semana)\b/))date=now.getDay()===6||now.getDay()===0?today:weekdayDate(6,now);
   }
-  if(!date&&(m=cut(/\b(?:(?:na|no|nesta|neste|proxima|proximo)\s+)?(segunda|terca|quarta|quinta|sexta|sabado|domingo)(?:-?\s?feira)?(?:\s+(?:que vem|proxima|proximo))?\b/))){date=weekdayDate(WD[m[1]],now);}
+  /* datas escritas */
   if(!date){
-    if((m=cut(/\b(?:dia\s+)?(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b/))){
+    if((m=cut(/\b(?:dia\s+)?(\d{1,2})(?:º|°|o)?\s+de\s+(janeiro|fevereiro|marco|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro|jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)\b(?:\s+de\s+(\d{4}))?/))){
+      const d=+m[1],mo=MESN[m[2]];let y=m[3]?+m[3]:now.getFullYear();
+      if(d>=1&&d<=31){let t=new Date(y,mo-1,d);if(!m[3]&&isoDate(t)<today)t=new Date(y+1,mo-1,d);date=isoDate(t);}
+    }else if((m=cut(/\b(?:dia\s+)?(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b/))){
       const d=+m[1],mo=+m[2];let y=m[3]?+m[3]:now.getFullYear();if(y<100)y+=2000;
       if(mo>=1&&mo<=12&&d>=1&&d<=31){let t=new Date(y,mo-1,d);if(!m[3]&&isoDate(t)<today)t=new Date(y+1,mo-1,d);date=isoDate(t);}
-    }else if((m=cut(/\bdia\s+(\d{1,2})\b/))){
-      const d=+m[1];
-      if(d>=1&&d<=31){let t=new Date(now.getFullYear(),now.getMonth(),d);if(isoDate(t)<today)t=new Date(now.getFullYear(),now.getMonth()+1,d);date=isoDate(t);}
+    }else if((m=cut(/\bdia\s+(\d{1,2})(?:º|°)?\b/))){
+      const d=+m[1];if(d>=1&&d<=31)date=nextDay(d);
     }
   }
+  /* dia da semana (se já havia data escrita, só remove a palavra) */
+  if((m=cut(new RegExp('\\b(?:(?:na|no|nesta|neste|nessa|nesse|esta|este|proxima|proximo)\\s+)?'+DOWRE+'(?:\\s+(?:que vem|proxima|proximo))?\\b')))){
+    if(!date&&!weekPick)weekPick=[WD[m[1]]];
+  }
+  /* horário */
   const setT=(h,mi)=>{if(h>=0&&h<=23&&mi>=0&&mi<=59)time=pad(h)+':'+pad(mi);};
+  const per=(h,p)=>((p==='tarde'||p==='noite')&&h<12)?h+12:(p==='manha'&&h===12?0:h);
   if(!time){
-    if(cut(/\bmeio[- ]dia\b/))time='12:00';
-    else if(cut(/\bmeia[- ]noite\b/))time='00:00';
+    if((m=cut(/\b(?:as\s+|a\s+)?(\d{1,2})(?:[:h](\d{2}))?\s*(?:h|horas?)?\s+(?:da|de)\s+(manha|tarde|noite|madrugada)\b/)))setT(per(+m[1],m[3]),m[2]?+m[2]:0);
+    else if(cut(/\b(?:ao\s+)?meio[- ]dia\b/))time='12:00';
+    else if(cut(/\b(?:a\s+)?meia[- ]noite\b/))time='00:00';
     else if((m=cut(/\bas\s+(\d{1,2})(?:[:h](\d{2}))?(?:\s*(?:h|horas?))?\b/)))setT(+m[1],m[2]?+m[2]:0);
     else if((m=cut(/\b(\d{1,2})[:h](\d{2})\b/)))setT(+m[1],+m[2]);
     else if((m=cut(/\b(\d{1,2})\s*h(?:oras?)?\b/)))setT(+m[1],0);
   }
-  if((m=cut(/\b(?:da|de|a|pela|na|no)\s+(manha|tarde|noite|madrugada)\b/))){
+  if((m=cut(/\b(?:da|de|a|pela|na|no|hoje a|amanha a)\s+(manha|tarde|noite|madrugada)\b/))){
     const p=m[1];
-    if(time){const hm=time.split(':').map(Number);let h=hm[0];if((p==='tarde'||p==='noite')&&h<12)h+=12;setT(h,hm[1]);}
+    if(time){const hm=time.split(':').map(Number);setT(per(hm[0],p),hm[1]);}
     else time={manha:'09:00',tarde:'15:00',noite:'20:00',madrugada:'05:00'}[p];
+  }
+  if(!time&&cut(/\bcedo\b/))time='07:00';
+  /* escolhe o dia da semana: hoje conta se o horário ainda não passou */
+  if(weekPick&&!date){
+    let best=null;
+    for(let i=0;i<=7;i++){const d=addDays(now,i);if(weekPick.indexOf(d.getDay())<0)continue;if(i===0&&(!repDays.length||!time||dtOf(today,time)<=now))continue;best=d;break;}
+    if(!best)best=addDays(now,7);
+    date=isoDate(best);
   }
   if(repeat==='custom'&&repU==='hour'&&!time){const t=new Date(now.getTime()+36e5);time=pad(t.getHours())+':00';if(!date)date=isoDate(t);}
   if(time&&!date){date=dtOf(today,time)>now?today:isoDate(addDays(now,1));}
+  if(repeat==='daily'&&time&&date===today&&dtOf(today,time)<=now)date=isoDate(addDays(now,1));
   if(repeat!=='none'&&!date)date=today;
   let title=orig.replace(/^\s*(?:me\s+)?(?:lembr(?:ar|a|e)|anotar|marcar|agendar|criar lembrete)\s*(?:de|que|para|:)?\s*[:,\-]?\s*/i,'');
-  for(let i=0;i<3;i++)title=title.replace(/\s+(?:as|às|a|de|em|para|no|na|pela|pelo|da|do|dia|e)\s*$/i,'');
-  title=title.replace(/\s{2,}/g,' ').replace(/^[\s,.\-:;]+|[\s,.\-:;]+$/g,'');
+  for(let i=0;i<4;i++)title=title.replace(/\s+(?:as|às|a|à|de|em|para|pra|no|na|pela|pelo|da|do|dia|e|,)\s*$/i,'');
+  title=title.replace(/\s*,\s*,/g,',').replace(/\s{2,}/g,' ').replace(/^[\s,.\-:;]+|[\s,.\-:;]+$/g,'');
   if(!title)title=String(text||'').trim();
   title=title.charAt(0).toUpperCase()+title.slice(1);
-  return {title,date,time,repeat,repN,repU,when:!!date};
+  return {title,date,time,repeat,repN,repU,repDays,when:!!date};
 }
 </script>
 
@@ -516,13 +557,14 @@ const SKIND={reminders:'reminder',notes:'note',events:'event',inbox:'inbox',fold
 const SCOLOF={};Object.keys(SKIND).forEach(c=>{SCOLOF[SKIND[c]]=c;});
 const newId=()=>(window.crypto&&crypto.randomUUID)?crypto.randomUUID():'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{const r=Math.random()*16|0;return(c==='x'?r:(r&3|8)).toString(16);});
 const Supa={
-  sess:null,map:{},q:[],busy:false,timer:null,
+  sess:null,map:{},q:[],dead:[],busy:false,timer:null,lastOk:0,lastErr:'',
   load(){
     try{this.sess=JSON.parse(lsGet('nucleo-sess')||'null');}catch(e){this.sess=null;}
     try{this.q=JSON.parse(lsGet('nucleo-q')||'[]');}catch(e){this.q=[];}
     try{this.map=JSON.parse(lsGet('nucleo-map')||'{}');}catch(e){this.map={};}
+    try{this.dead=JSON.parse(lsGet('nucleo-dead')||'[]');}catch(e){this.dead=[];}
   },
-  persist(){lsSet('nucleo-q',JSON.stringify(this.q));lsSet('nucleo-map',JSON.stringify(this.map));const o={};COLS.forEach(c=>o[c]=S.raw[c]||[]);lsSet('nucleo-cache',JSON.stringify(o));},
+  persist(){lsSet('nucleo-q',JSON.stringify(this.q));lsSet('nucleo-dead',JSON.stringify(this.dead));lsSet('nucleo-map',JSON.stringify(this.map));const o={};COLS.forEach(c=>o[c]=S.raw[c]||[]);lsSet('nucleo-cache',JSON.stringify(o));},
   saveSess(s){this.sess=s;lsSet('nucleo-sess',s?JSON.stringify(s):'');},
   async auth(path,body){
     const r=await fetch(CFG.url+'/auth/v1/'+path,{method:'POST',headers:{apikey:CFG.key,'Content-Type':'application/json'},body:JSON.stringify(body)});
@@ -553,7 +595,7 @@ const Supa={
     if(raw){try{const o=JSON.parse(raw);COLS.forEach(c=>{S.raw[c]=o[c]||[];});}catch(e){}}
     partition();
     if(!this.sess){this.loginScreen();return;}
-    S.ready=true;S.sync=this.q.length?'pend':'cloud';onData();
+    S.ready=true;S.sync=this.q.length?'pend':(this.dead.length?'fail':'cloud');onData();
     this.sync();
     if(!this.timer){
       this.timer=setInterval(()=>this.sync(),20000);
@@ -600,7 +642,7 @@ const Supa={
       if(!rid){rid=newId();this.map[id]={rid:rid,v:0};}
       this.enqueue({c:c,id:id,data:data,rid:rid});
     }
-    partition();this.persist();S.sync='pend';onData();this.sync();
+    partition();this.persist();if(S.sync!=='pend'&&S.sync!=='error')S.sync='saving';onData();this.sync();
   },
   async sendOne(op){
     const m=this.map[op.id]||(this.map[op.id]={rid:op.rid,v:0});
@@ -608,12 +650,12 @@ const Supa={
     if(m.v===0&&op.data!==null){
       const r=await this.rest('items',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify({id:m.rid,kind:SKIND[op.c],data:body,updated_by:'app'})});
       if(r.ok){const j=await r.json();m.v=j[0].version;return 'ok';}
-      if(r.status!==409)throw Object.assign(new Error('post'),{status:r.status});
+      if(r.status!==409)throw Object.assign(new Error(await r.text().catch(()=>'')),{status:r.status});
       const g=await this.rest('items?select=version&id=eq.'+m.rid);const gj=await g.json();if(!gj.length)return 'ok';m.v=gj[0].version;
     }
     const patch=op.data===null?{deleted_at:new Date().toISOString(),version:m.v,updated_by:'app'}:{data:body,version:m.v,updated_by:'app'};
     const r=await this.rest('items?id=eq.'+m.rid+'&version=eq.'+m.v,{method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify(patch)});
-    if(!r.ok)throw Object.assign(new Error('patch'),{status:r.status});
+    if(!r.ok)throw Object.assign(new Error(await r.text().catch(()=>'')),{status:r.status});
     const j=await r.json();
     if(j.length){m.v=j[0].version;return 'ok';}
     return 'conflict';
@@ -639,12 +681,26 @@ const Supa={
       const op=this.q[0];op.sent=true;
       let res;
       try{res=await this.sendOne(op);}
-      catch(e){op.sent=false;if(e.status===401)throw e;this.persist();return false;}
+      catch(e){
+        op.sent=false;
+        if(e.status===401)throw e;
+        this.lastErr=(e.status?'Erro '+e.status+': ':'Sem conexão: ')+String(e.message||'').slice(0,140);
+        const hard=e.status>=400&&e.status<500&&e.status!==408&&e.status!==429;
+        if(hard&&(op.tries=(op.tries||0)+1)>=3){
+          // não deixa um item com problema travar a fila inteira
+          op.err=this.lastErr;this.q=this.q.filter(x=>x!==op);this.dead.push(op);this.persist();
+          const nm=op.data&&(op.data.title||op.data.name||op.data.text)||'um item';
+          toast('Não consegui enviar “'+String(nm).slice(0,40)+'”. Ficou guardado neste aparelho. Veja em Ajustes.');
+          continue;
+        }
+        this.persist();return false;
+      }
       if(res==='conflict')await this.resolveConflict(op);
       this.q=this.q.filter(x=>x!==op);this.persist();
     }
     return true;
   },
+  retryDead(){this.dead.forEach(x=>{x.tries=0;x.sent=false;});this.q=this.q.concat(this.dead);this.dead=[];this.persist();this.sync();},
   async pull(){
     const rows=[];let off=0;
     for(;;){
@@ -653,7 +709,7 @@ const Supa={
       const part=await r.json();rows.push.apply(rows,part);
       if(part.length<1000)break;off+=1000;
     }
-    const pendIds={};this.q.forEach(x=>{pendIds[x.c+'/'+x.id]=x;});
+    const pendIds={},keep=this.dead.concat(this.q);keep.forEach(x=>{pendIds[x.c+'/'+x.id]=x;});
     const out={};COLS.forEach(c=>{out[c]=[];});
     rows.forEach(r=>{
       const c=SCOLOF[r.kind];if(!c)return;
@@ -664,7 +720,7 @@ const Supa={
       else out[c].push(Object.assign({id:id},d));
     });
     // itens novos ainda não enviados
-    this.q.forEach(x=>{if(x.data!==null&&!out[x.c].some(y=>y.id===x.id))out[x.c].push(Object.assign({id:x.id},x.data));});
+    keep.forEach(x=>{if(x.data!==null&&!out[x.c].some(y=>y.id===x.id))out[x.c].push(Object.assign({id:x.id},x.data));});
     COLS.forEach(c=>{S.raw[c]=out[c];});
     partition();this.persist();
   },
@@ -673,10 +729,11 @@ const Supa={
     this.busy=true;
     try{
       const ok=await this.flush();
-      if(ok){await this.pull();S.sync='cloud';S.ready=true;}
-      else S.sync='pend';
+      if(ok){await this.pull();this.lastOk=Date.now();this.lastErr='';S.sync=this.dead.length?'fail':'cloud';S.ready=true;}
+      else S.sync=this.q.length?'pend':'error';
     }catch(e){
       if(e.status===401){this.busy=false;this.loginScreen('Entre de novo.');return;}
+      if(!this.lastErr)this.lastErr='Sem conexão com o servidor.';
       S.sync=this.q.length?'pend':'error';
     }
     this.busy=false;onData();
@@ -904,7 +961,8 @@ function allTags(){const c={};S.notes.forEach(n=>tagsOf(n).forEach(t=>{c[t]=(c[t
 
 /* ---------- peças visuais ---------- */
 function syncNote(){
-  const m={local:['só neste aparelho',''],saving:['salvando…',''],boot:['conectando…',''],error:['sem conexão','bad'],pend:['envio pendente','bad']}[S.sync];
+  const nq=(typeof Supa!=='undefined'&&Supa.q)?Supa.q.length:0;
+  const m={local:['só neste aparelho',''],saving:['salvando…',''],boot:['conectando…',''],cloud:['salvo ✓','ok'],error:['sem internet · guardado no aparelho','warn'],pend:[(nq>1?nq+' alterações esperando internet':'1 alteração esperando internet'),'warn'],fail:['erro ao enviar · veja Ajustes','bad']}[S.sync];
   return m?' · <span class="st '+m[1]+'">'+m[0]+'</span>':'';
 }
 function hdr(eyebrow,title,extra,small){
@@ -1418,13 +1476,18 @@ function sheetCap(){
 }
 function sheetSet(){
   const ex=COLS.reduce((n,c)=>n+S[c].filter(x=>x.example).length,0);
-  const where={cloud:'Seus dados ficam salvos na nuvem e aparecem em qualquer aparelho que abrir este sistema.',local:'Sem sincronização: os dados ficam só neste navegador e podem sumir se você limpar o histórico.',saving:'Salvando…',boot:'Conectando…',error:'Sem conexão com a nuvem agora.',pend:'Alterações guardadas neste aparelho. Serão enviadas quando houver sinal.'}[S.sync];
+  const where={cloud:'Seus dados ficam salvos na nuvem e aparecem em qualquer aparelho que abrir este sistema.',local:'Sem sincronização: os dados ficam só neste navegador e podem sumir se você limpar o histórico.',saving:'Salvando…',boot:'Conectando…',error:'Sem internet agora. O que você salvar fica neste aparelho e vai para a nuvem quando a conexão voltar.',pend:'Há alterações guardadas neste aparelho esperando internet. Elas vão sozinhas quando a conexão voltar.',fail:'Alguns itens não foram aceitos pela nuvem. Eles continuam neste aparelho. Use “Tentar de novo” abaixo.'}[S.sync];
   const seg=(act,cur,opts)=>'<div class="seg" role="group">'+opts.map(o=>'<button class="'+(String(cur)===String(o[0])?'on':'')+'" data-act="'+act+'" data-v="'+o[0]+'" aria-pressed="'+(String(cur)===String(o[0]))+'">'+o[1]+'</button>').join('')+'</div>';
   let h='<div class="sheet"><div class="sheet-in">'+head('Ajustes')+'<div class="sheet-body" id="sheetBody">';
   h+='<div class="block"><span class="block-t">Tamanho do texto</span>'+seg('set-fs',S.fs,[[18,'Normal'],[20,'Grande'],[23,'Maior'],[26,'Máximo']])+'<div class="note-s">Fica guardado neste aparelho.</div></div>';
   h+='<div class="block"><span class="block-t">Pedir confirmação</span>'+seg('set-conf',S.conf,[['all','Em tudo'],['del','Só ao apagar']])+'<div class="note-s">“Em tudo” pergunta antes de salvar, concluir, apagar ou descartar. Sair sem salvar e apagar sempre perguntam.</div></div>';
   h+='<div class="block"><span class="block-t">Aparência</span>'+seg('set-theme',S.theme,[['auto','Automático'],['light','Claro'],['dark','Escuro']])+'</div>';
   h+='<div class="block"><span class="block-t">Onde ficam os dados</span><div class="note-s">'+esc(where)+'</div></div>';
+  if(Store.mode==='supa'){
+    const hm=t=>t?pad(new Date(t).getHours())+':'+pad(new Date(t).getMinutes()):'ainda não';
+    h+='<div class="block"><span class="block-t">Envio para a nuvem</span><div class="note-s">Última vez que tudo foi salvo na nuvem: <b>'+hm(Supa.lastOk)+'</b><br>Esperando internet: <b>'+Supa.q.length+'</b><br>Com erro: <b>'+Supa.dead.length+'</b>'+(Supa.lastErr?'<br>Último problema: '+esc(Supa.lastErr):'')+Supa.dead.map(x=>'<br>• '+esc(String((x.data&&(x.data.title||x.data.name||x.data.text))||'item apagado').slice(0,50))+(x.err?' — '+esc(x.err):'')).join('')+'</div>'
+      +'<button class="btn wide" data-act="sync-now">Enviar agora</button>'+(Supa.dead.length?'<button class="btn wide" data-act="retry-dead">Tentar de novo os itens com erro</button>':'')+'</div>';
+  }
   h+='<div class="block"><span class="block-t">Alarmes</span><div class="note-s">Os alarmes tocam enquanto este sistema está aberto. Com ele fechado, o aviso depende da versão instalada no iPhone, que é a próxima etapa.</div></div>';
   if(S.dlOk||Store.mode==='supa')h+='<button class="btn wide" data-act="export">Exportar backup (arquivo)</button>';
   if(Store.mode==='supa'){h+='<button class="btn wide" data-act="import">Importar backup (arquivo)</button><input type="file" id="impFile" accept=".json,application/json" hidden>';h+='<button class="btn wide danger" data-act="logout">Sair da conta</button>';}
@@ -1483,11 +1546,11 @@ async function saveCapture(d){
   const p=parseCapture(text),m=capMode(d),today=isoDate(new Date());
   closeSheet();
   if(m==='rem'){
-    const doc=Object.assign(newRem(p.date||''),{title:p.title,time:p.time,repeat:p.repeat,repN:p.repN||1,repU:p.repU||'week',alarms:p.time&&p.date?[{id:uid(),min:0,msg:''}]:[]});
+    const doc=Object.assign(newRem(p.date||''),{title:p.title,time:p.time,repeat:p.repeat,repN:p.repN||1,repDays:p.repDays||[],repU:p.repU||'week',alarms:p.time&&p.date?[{id:uid(),min:0,msg:''}]:[]});
     const id=await Store.put('reminders',doc);
     toast('Lembrete criado: '+p.title+(p.date?' · '+relDay(p.date,today)+(p.time?' às '+p.time:''):''),'Abrir',()=>{const r=S.reminders.find(x=>x.id===id);if(r)openRem(r);});
   }else if(m==='ev'){
-    await Store.put('events',{title:p.title,date:p.date||today,time:p.time,repeat:p.repeat,repN:p.repN||1,repU:p.repU==='hour'?'day':(p.repU||'week'),createdAt:Date.now()});toast('Compromisso criado: '+p.title);
+    await Store.put('events',{title:p.title,date:p.date||today,time:p.time,repeat:p.repeat,repN:p.repN||1,repDays:p.repDays||[],repU:p.repU==='hour'?'day':(p.repU||'week'),createdAt:Date.now()});toast('Compromisso criado: '+p.title);
   }else if(m==='note'){
     await Store.put('notes',Object.assign(newNote(''),{title:text.split('\n')[0].slice(0,60),body:text,updatedAt:Date.now()}));toast('Nota criada em Geral');
   }else{
@@ -1676,12 +1739,14 @@ const A={
   'view-img':d=>{const v=$('viewer');v.innerHTML='<img src="/_blob/'+esc(d.id)+'" alt="Imagem ampliada"><button data-act="close-viewer" aria-label="Fechar imagem">'+ic('close',1.1)+'</button>';v.hidden=false;},
   'close-viewer':()=>{$('viewer').hidden=true;},
   'cap-mode':d=>{S.sheet.draft.mode=d.m;renderSheet();},
-  'inbox-rem':d=>{const i=S.inbox.find(x=>x.id===d.id);if(!i)return;const p=parseCapture(i.text);openSheet('rem',Object.assign(newRem(p.date||''),{title:p.title,time:p.time,repeat:p.repeat,repN:p.repN||1,repU:p.repU||'week'}),{fromInbox:i.id});},
+  'inbox-rem':d=>{const i=S.inbox.find(x=>x.id===d.id);if(!i)return;const p=parseCapture(i.text);openSheet('rem',Object.assign(newRem(p.date||''),{title:p.title,time:p.time,repeat:p.repeat,repN:p.repN||1,repDays:p.repDays||[],repU:p.repU||'week'}),{fromInbox:i.id});},
   'inbox-note':d=>{const i=S.inbox.find(x=>x.id===d.id);if(!i)return;openSheet('note',Object.assign(newNote(''),{title:i.text.slice(0,60),body:i.text}),{fromInbox:i.id});},
   'inbox-del':async d=>{const i=S.inbox.find(x=>x.id===d.id);if(!i)return;if(!(await ask({title:'Descartar da caixa de entrada?',msg:i.text,ok:'Descartar',danger:true})))return;await Store.del('inbox',d.id);toast('Descartado');},
   'ring-open':d=>{const r=S.rings[+d.i];S.rings.splice(+d.i,1);renderRings();const rem=S.reminders.find(x=>x.id===r.rid);if(rem)openRem(rem);},
   'ring-close':d=>{S.rings.splice(+d.i,1);renderRings();},
   export:()=>exportAll(),
+  'sync-now':async()=>{await Supa.sync();renderSheet();toast(S.sync==='cloud'?'Tudo salvo na nuvem':'Ainda não consegui enviar. Confira a internet.');},
+  'retry-dead':()=>{Supa.retryDead();renderSheet();},
   import:()=>{const i=document.getElementById('impFile');if(i)i.click();},
   logout:async()=>{if(await ask({title:'Sair da conta?',msg:'Os dados continuam salvos na nuvem. Alterações ainda não enviadas podem se perder.',ok:'Sair',danger:true}))Supa.logout();},
   'rm-examples':()=>removeExamples()
