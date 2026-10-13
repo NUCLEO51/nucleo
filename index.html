@@ -2029,6 +2029,7 @@ function sheetSet(){
     const ps=pushStatus();
     h+='<div class="block"><span class="block-t">Avisos de alarme (com o app fechado)</span><div class="note-s"'+(ps.bad?' style="color:var(--danger);font-weight:700"':'')+'>'+esc(ps.t)+'</div>'+(ps.on?'':'<button class="btn primary wide" data-act="push-on">Ligar avisos neste aparelho</button>')+(ps.on?'<button class="btn wide" data-act="push-test">Testar aviso (feche o app e espere 1 minuto)</button>':'')+(Supa.alarmErr?'<div class="note-s">Servidor de alarmes: '+esc(Supa.alarmErr)+'</div>':'')+'</div>';
   }else h+='<div class="block"><span class="block-t">Alarmes</span><div class="note-s">Os alarmes tocam enquanto este sistema está aberto.</div></div>';
+  h+='<div class="block"><span class="block-t">FIN (dinheiro)</span><div class="note-s">Sistema à parte: contas do mês, cartões e dívidas.</div><a class="btn primary wide" href="fin/" style="display:flex;align-items:center;justify-content:center;text-decoration:none">Abrir o FIN</a></div>';
   if(S.dlOk||Store.mode==='supa')h+='<button class="btn wide" data-act="export">Exportar backup (arquivo)</button>';
   if(Store.mode==='supa'){h+='<button class="btn wide" data-act="import">Importar backup (arquivo)</button><input type="file" id="impFile" accept=".json,application/json" hidden>';h+='<button class="btn wide danger" data-act="logout">Sair da conta</button>';}
   if(ex)h+='<button class="btn wide danger" data-act="rm-examples">Remover os '+ex+' exemplos</button>';

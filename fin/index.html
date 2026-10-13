@@ -1,0 +1,574 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#F2F2F7">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="FIN">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>FIN</title>
+<style>
+/* FIN: sistema à parte, junto do Núcleo. Letra grande, botões grandes, confirmação antes de salvar. */
+:root{
+  --bg:#F2F2F7; --surface:#FFFFFF; --surface-2:#EDEDF1; --line:#D9D9DF;
+  --fg:#1C1C1E; --muted:#5E5E66;
+  --accent:#1F7A5C; --accent-fg:#FFFFFF; --accent-soft:#DDF0E6;
+  --warn:#8A5A00; --warn-soft:#F8EBCB;
+  --danger:#B3362B; --danger-soft:#F9E3E0;
+  --font:-apple-system,BlinkMacSystemFont,'SF Pro Text',system-ui,'Segoe UI',Roboto,sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#000; --surface:#1C1C1E; --surface-2:#2C2C2E; --line:#3A3A3E;
+    --fg:#F5F5F7; --muted:#A5A5AD;
+    --accent:#4FC796; --accent-fg:#06251A; --accent-soft:#10301F;
+    --warn:#F0C060; --warn-soft:#322A12;
+    --danger:#FF8A80; --danger-soft:#3B1613;
+    color-scheme:dark;
+  }
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html{font-size:20px}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--font);line-height:1.35;padding-bottom:calc(5.2rem + env(safe-area-inset-bottom,0px))}
+button,input,select{font:inherit;color:inherit}
+header.hd{padding:calc(.8rem + env(safe-area-inset-top,0px)) 1rem .4rem;display:flex;align-items:center;justify-content:space-between;gap:.5rem}
+h1{font-size:2rem;margin:0}
+h2{font-size:1.25rem;margin:1.2rem 1rem .4rem}
+.sub{color:var(--muted);font-size:.9rem;margin:0 1rem .4rem}
+.wrap{padding:0 .8rem}
+.card{background:var(--surface);border-radius:1rem;padding:.9rem 1rem;margin:.5rem 0;border:1px solid var(--line)}
+.row{display:flex;justify-content:space-between;align-items:baseline;gap:.6rem}
+.big{font-size:1.5rem;font-weight:800}
+.mut{color:var(--muted);font-size:.9rem}
+.tag{display:inline-block;border-radius:.5rem;padding:.1rem .5rem;font-size:.85rem;font-weight:700;background:var(--surface-2)}
+.tag.ok{background:var(--accent-soft);color:var(--accent)}
+.tag.warn{background:var(--warn-soft);color:var(--warn)}
+.tag.bad{background:var(--danger-soft);color:var(--danger)}
+.btn{display:block;width:100%;min-height:3.6rem;border-radius:1rem;border:0;font-weight:800;font-size:1.1rem;background:var(--accent);color:var(--accent-fg);margin:.5rem 0;cursor:pointer}
+.btn.sec{background:var(--surface-2);color:var(--fg)}
+.btn.bad{background:var(--danger);color:#fff}
+.btn:disabled{opacity:.5}
+.item{width:100%;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:1rem;padding:.9rem 1rem;margin:.5rem 0;min-height:3.6rem;cursor:pointer;display:block}
+.item .t{font-weight:800;font-size:1.1rem}
+nav.tabs{position:fixed;left:0;right:0;bottom:0;display:flex;background:var(--surface);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px);z-index:20}
+nav.tabs button{flex:1;border:0;background:none;min-height:4.2rem;font-weight:700;font-size:.85rem;color:var(--muted);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.1rem;cursor:pointer}
+nav.tabs button .e{font-size:1.5rem}
+nav.tabs button.on{color:var(--accent)}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:50;display:flex;align-items:flex-end;justify-content:center}
+.sheet{background:var(--bg);width:100%;max-width:34rem;max-height:92vh;overflow:auto;border-radius:1.2rem 1.2rem 0 0;padding:1rem 1rem calc(1rem + env(safe-area-inset-bottom,0px))}
+.sheet h3{margin:.2rem 0 .6rem;font-size:1.4rem}
+label.f{display:block;font-weight:800;margin:.8rem 0 .25rem}
+.in{width:100%;min-height:3.4rem;border-radius:.9rem;border:2px solid var(--line);background:var(--surface);padding:.6rem .8rem;font-size:1.1rem}
+.chk{display:flex;align-items:center;gap:.7rem;min-height:3.4rem;font-weight:700}
+.chk input{width:1.8rem;height:1.8rem}
+.err{color:var(--danger);font-weight:800;min-height:1.4rem;margin:.4rem 0}
+.hint{color:var(--muted);font-size:.85rem;margin:.2rem 0}
+.note{background:var(--warn-soft);color:var(--warn);border-radius:.9rem;padding:.7rem .9rem;margin:.6rem 0;font-size:.9rem}
+.bar{height:.7rem;border-radius:.4rem;background:var(--surface-2);overflow:hidden;margin:.4rem 0}
+.bar i{display:block;height:100%;background:var(--accent)}
+.bar i.hi{background:var(--danger)}
+.sum{white-space:pre-line}
+a.lnk{color:var(--accent);font-weight:800}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+'use strict';
+/* ---------- conexão (mesmo banco do Núcleo, tabela própria) ---------- */
+const CFG={url:'https://cptvxfzgimeawheqrhvz.supabase.co',key:'sb_publishable_Q7W8ptGAqUBvHFhCxbhXOw_aLjfC186'};
+const lsGet=k=>{try{return localStorage.getItem(k);}catch(e){return null;}};
+const lsSet=(k,v)=>{try{localStorage.setItem(k,v);}catch(e){}};
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const $=id=>document.getElementById(id);
+
+/* ---------- dinheiro: sempre em centavos inteiros ---------- */
+const BRL=new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'});
+const money=c=>(c==null||isNaN(c))?'Não informado':BRL.format(c/100);
+function parseMoney(s){ // '' -> null; inválido -> NaN
+  s=String(s||'').trim().replace(/^R\$\s*/,'');
+  if(!s)return null;
+  if(!/^-?\d{1,3}(\.\d{3})*(,\d{1,2})?$|^-?\d+(,\d{1,2})?$|^-?\d+(\.\d{1,2})?$/.test(s))return NaN;
+  let n;
+  if(s.includes(','))n=s.replace(/\./g,'').replace(',','.');
+  else n=s;
+  const f=parseFloat(n); if(isNaN(f))return NaN;
+  return Math.round(f*100);
+}
+const moneyIn=c=>c==null?'':(c/100).toFixed(2).replace('.',',');
+
+/* ---------- datas ---------- */
+const pad=n=>String(n).padStart(2,'0');
+const isoDate=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+const todayIso=()=>isoDate(new Date());
+const ymOf=iso=>iso.slice(0,7);
+function addMonths(ym,n){let [y,m]=ym.split('-').map(Number);m+=n;y+=Math.floor((m-1)/12);m=((m-1)%12+12)%12+1;return y+'-'+pad(m);}
+const dim=ym=>{const [y,m]=ym.split('-').map(Number);return new Date(y,m,0).getDate();};
+const dateOf=(ym,day)=>ym+'-'+pad(Math.min(day,dim(ym)));
+const brDate=iso=>iso?iso.slice(8,10)+'/'+iso.slice(5,7)+'/'+iso.slice(0,4):'';
+const MES=['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+const ymLabel=ym=>MES[+ym.slice(5,7)-1]+' de '+ym.slice(0,4);
+const ymShort=ym=>ym.slice(5,7)+'/'+ym.slice(0,4);
+
+/* ---------- estado ---------- */
+const S={recs:[],tab:'home',sess:null,ready:false,msg:'',cardId:null,invYm:null,busy:false};
+const byKind=k=>S.recs.filter(r=>r.kind===k);
+
+/* ---------- banco ---------- */
+const Api={
+  async auth(path,body){
+    const r=await fetch(CFG.url+'/auth/v1/'+path,{method:'POST',headers:{apikey:CFG.key,'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok)throw Object.assign(new Error(j.msg||j.error_description||'erro'),{status:r.status});
+    return {access:j.access_token,refresh:j.refresh_token,exp:Date.now()+(j.expires_in||3600)*1000};
+  },
+  saveSess(s){S.sess=s;lsSet('fin-sess',s?JSON.stringify(s):'');},
+  async token(){
+    if(!S.sess)throw Object.assign(new Error('login'),{status:401});
+    if(S.sess.exp-Date.now()<60000){
+      try{this.saveSess(await this.auth('token?grant_type=refresh_token',{refresh_token:S.sess.refresh}));}
+      catch(e){if(e.status>=400&&e.status<500){this.saveSess(null);throw Object.assign(e,{status:401});}throw e;}
+    }
+    return S.sess.access;
+  },
+  async rest(path,opt){
+    const t=await this.token();
+    const h=Object.assign({apikey:CFG.key,Authorization:'Bearer '+t,'Content-Type':'application/json'},(opt&&opt.headers)||{});
+    return fetch(CFG.url+'/rest/v1/'+path,Object.assign({},opt,{headers:h}));
+  },
+  async load(){
+    const r=await this.rest('fin_records?select=*&deleted_at=is.null&order=created_at.asc&limit=5000');
+    if(!r.ok){const j=await r.json().catch(()=>({}));throw Object.assign(new Error(j.message||'erro'),{status:r.status,code:j.code});}
+    S.recs=await r.json(); lsSet('fin-cache',JSON.stringify(S.recs));
+  },
+  async create(kind,data){
+    const r=await this.rest('fin_records',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify({kind,data})});
+    if(!r.ok)throw new Error('Não consegui salvar ('+r.status+').');
+    const j=await r.json(); S.recs.push(j[0]); lsSet('fin-cache',JSON.stringify(S.recs)); return j[0];
+  },
+  async update(rec,data){
+    const r=await this.rest('fin_records?id=eq.'+rec.id+'&version=eq.'+rec.version,{method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify({data})});
+    if(!r.ok)throw new Error('Não consegui salvar ('+r.status+').');
+    const j=await r.json();
+    if(!j.length){await this.load();throw new Error('Este item mudou em outro aparelho. Atualizei a tela. Tente de novo.');}
+    const i=S.recs.findIndex(x=>x.id===rec.id); if(i>=0)S.recs[i]=j[0]; lsSet('fin-cache',JSON.stringify(S.recs)); return j[0];
+  },
+  async remove(rec){
+    const r=await this.rest('fin_records?id=eq.'+rec.id+'&version=eq.'+rec.version,{method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify({deleted_at:new Date().toISOString()})});
+    if(!r.ok)throw new Error('Não consegui apagar ('+r.status+').');
+    const j=await r.json();
+    if(!j.length){await this.load();throw new Error('Este item mudou em outro aparelho. Atualizei a tela.');}
+    S.recs=S.recs.filter(x=>x.id!==rec.id); lsSet('fin-cache',JSON.stringify(S.recs));
+  }
+};
+
+/* ---------- janelas: confirmação e formulário ---------- */
+function modal(html){
+  const m=document.createElement('div');m.className='modal';m.innerHTML='<div class="sheet" role="dialog" aria-modal="true">'+html+'</div>';
+  document.body.appendChild(m);return m;
+}
+function confirmBox(title,lines,okLabel,bad){
+  return new Promise(res=>{
+    const m=modal('<h3>'+esc(title)+'</h3><div class="card sum">'+esc((lines||[]).join('\n'))+'</div>'
+      +'<button class="btn'+(bad?' bad':'')+'" id="cf-ok">'+esc(okLabel||'Sim, salvar')+'</button><button class="btn sec" id="cf-no">Voltar</button>');
+    m.querySelector('#cf-ok').onclick=()=>{m.remove();res(true);};
+    m.querySelector('#cf-no').onclick=()=>{m.remove();res(false);};
+  });
+}
+function info(title,text){return new Promise(res=>{const m=modal('<h3>'+esc(title)+'</h3><p>'+esc(text)+'</p><button class="btn" id="ok">Entendi</button>');m.querySelector('#ok').onclick=()=>{m.remove();res();};});}
+
+/* Formulário genérico. campos: {k,label,type:text|money|int|date|check|select,opts,hint,req,max}. onDelete opcional. */
+function form(title,fields,vals,opts){
+  opts=opts||{};vals=vals||{};
+  return new Promise(res=>{
+    const inp=f=>{
+      const v=vals[f.k];
+      if(f.type==='check')return '<label class="chk"><input type="checkbox" id="f-'+f.k+'"'+(v?' checked':'')+'> '+esc(f.label)+'</label>';
+      let h='<label class="f" for="f-'+f.k+'">'+esc(f.label)+(f.req?' *':'')+'</label>';
+      if(f.type==='select')h+='<select class="in" id="f-'+f.k+'">'+f.opts.map(o=>'<option value="'+esc(o[0])+'"'+(String(v)===String(o[0])?' selected':'')+'>'+esc(o[1])+'</option>').join('')+'</select>';
+      else{
+        const t=f.type==='date'?'date':'text';
+        const im=(f.type==='money')?'decimal':(f.type==='int'?'numeric':'text');
+        const val=f.type==='money'?moneyIn(v):(v==null?'':v);
+        h+='<input class="in" id="f-'+f.k+'" type="'+t+'" inputmode="'+im+'" autocomplete="off" value="'+esc(val)+'">';
+      }
+      if(f.hint)h+='<div class="hint">'+esc(f.hint)+'</div>';
+      return h;
+    };
+    const m=modal('<h3>'+esc(title)+'</h3>'+fields.map(inp).join('')+'<div class="err" id="f-err" role="alert"></div>'
+      +'<button class="btn" id="f-ok">Salvar</button><button class="btn sec" id="f-no">Voltar</button>'
+      +(opts.onDelete?'<button class="btn bad" id="f-del">Apagar</button>':''));
+    const err=t=>{m.querySelector('#f-err').textContent=t;};
+    m.querySelector('#f-no').onclick=()=>{m.remove();res(null);};
+    if(opts.onDelete)m.querySelector('#f-del').onclick=async()=>{m.remove();await opts.onDelete();res(null);};
+    m.querySelector('#f-ok').onclick=async()=>{
+      const out={};
+      for(const f of fields){
+        const el=m.querySelector('#f-'+f.k);
+        if(f.type==='check'){out[f.k]=el.checked;continue;}
+        let v=el.value.trim();
+        if(f.type==='money'){v=parseMoney(v);if(Number.isNaN(v)){err('Valor inválido em “'+f.label+'”. Exemplo: 1.234,56');return;}if(f.req&&v==null){err('Preencha “'+f.label+'”.');return;}}
+        else if(f.type==='int'){if(v===''){v=null;if(f.req){err('Preencha “'+f.label+'”.');return;}}else{v=Number(v);if(!Number.isInteger(v)||v<(f.min==null?0:f.min)||v>(f.max||999)){err('Número inválido em “'+f.label+'”.');return;}}}
+        else if(f.type==='select'){}
+        else if(f.req&&!v){err('Preencha “'+f.label+'”.');return;}
+        out[f.k]=v;
+      }
+      if(opts.validate){const e=opts.validate(out);if(e){err(e);return;}}
+      const lines=opts.summary?opts.summary(out):[];
+      const ok=await confirmBox('Confira antes de salvar',lines,'Sim, salvar');
+      if(!ok)return;
+      const b=m.querySelector('#f-ok');b.disabled=true;b.textContent='Salvando…';
+      try{await opts.save(out);m.remove();res(out);render();}
+      catch(e){b.disabled=false;b.textContent='Salvar';err(e.message||'Erro ao salvar.');}
+    };
+    const first=m.querySelector('.in');if(first&&!vals[fields[0].k])setTimeout(()=>first.focus(),50);
+  });
+}
+
+/* ---------- regras: contas do mês ---------- */
+function monthRows(ym){
+  const seen={};
+  return byKind('billmonth').filter(r=>r.data.ym===ym).filter(r=>{const k=r.data.billId;if(seen[k])return false;seen[k]=1;return true;})
+    .map(r=>({r,bill:S.recs.find(b=>b.id===r.data.billId)})).filter(x=>x.bill)
+    .sort((a,b)=>a.bill.data.dueDay-b.bill.data.dueDay);
+}
+async function ensureMonth(){
+  const ym=ymOf(todayIso());
+  for(const b of byKind('bill')){
+    const d=b.data;
+    const want=d.recurring?(ym>=d.startYm):(ym===d.startYm);
+    if(!want)continue;
+    if(byKind('billmonth').some(x=>x.data.billId===b.id&&x.data.ym===ym))continue;
+    try{await Api.create('billmonth',{billId:b.id,ym,amountC:d.variable?null:(d.amountC==null?null:d.amountC),paidAt:null});}catch(e){}
+  }
+}
+const billDue=(row)=>dateOf(row.r.data.ym,row.bill.data.dueDay);
+function billState(row){
+  if(row.r.data.paidAt)return {t:'Paga',c:'ok'};
+  const due=billDue(row),td=todayIso();
+  if(due<td)return {t:'Em atraso',c:'bad'};
+  if(row.r.data.amountC==null)return {t:'Sem valor',c:'warn'};
+  return {t:'A pagar',c:''};
+}
+
+/* ---------- regras: cartões ---------- */
+const invYmFor=(date,closeDay)=>(+date.slice(8,10)<=closeDay)?ymOf(date):addMonths(ymOf(date),1);
+function dueDateFor(card,ym){return card.dueDay>card.closeDay?dateOf(ym,card.dueDay):dateOf(addMonths(ym,1),card.dueDay);}
+function cardCalc(cardRec){
+  const c=cardRec.data,inv={};
+  const add=(ym,it)=>{(inv[ym]=inv[ym]||{ym,totalC:0,items:[]});inv[ym].totalC+=it.amountC;inv[ym].items.push(it);};
+  byKind('charge').filter(x=>x.data.cardId===cardRec.id).forEach(ch=>{
+    const d=ch.data,n=Math.max(1,d.n||1),base=invYmFor(d.date,c.closeDay);
+    let per=Math.trunc(d.totalC/n),first=d.totalC-per*(n-1);
+    if(n>1&&d.firstC!=null){first=d.firstC;per=Math.trunc((d.totalC-first)/(n-1));first=d.totalC-per*(n-1);}
+    for(let i=0;i<n;i++)add(addMonths(base,i),{rec:ch,desc:d.desc,date:d.date,parcela:i+1,n,amountC:i===0?first:per,by:d.by});
+  });
+  const paid=new Set(byKind('invpay').filter(x=>x.data.cardId===cardRec.id).map(x=>x.data.ym));
+  const openYm=invYmFor(todayIso(),c.closeDay);
+  let used=0;Object.values(inv).forEach(v=>{v.paid=paid.has(v.ym);if(!v.paid)used+=v.totalC;});
+  paid.forEach(ym=>{if(!inv[ym])inv[ym]={ym,totalC:0,items:[],paid:true};});
+  if(!inv[openYm])inv[openYm]={ym:openYm,totalC:0,items:[],paid:paid.has(openYm)};
+  const avail=c.limitC==null?null:c.limitC-used;
+  return {inv,openYm,used,avail};
+}
+function invStatus(card,v,openYm){
+  if(v.paid)return {t:'Paga',c:'ok'};
+  if(v.ym===openYm)return {t:'Aberta',c:''};
+  if(v.ym>openYm)return {t:'Futura',c:''};
+  return dueDateFor(card,v.ym)<todayIso()?{t:'Em atraso',c:'bad'}:{t:'Fechada · a pagar',c:'warn'};
+}
+const bestDay=c=>c.closeDay>=dim(todayIso().slice(0,7))?1:c.closeDay+1;
+
+/* ---------- telas ---------- */
+function header(t,extra){return '<header class="hd"><h1>'+esc(t)+'</h1><div>'+(extra||'')+'</div></header>';}
+function tabs(){
+  const T=[['home','🏠','Início'],['bills','🧾','Contas'],['cards','💳','Cartões'],['debts','📉','Dívidas']];
+  return '<nav class="tabs">'+T.map(t=>'<button data-act="tab" data-v="'+t[0]+'" class="'+(S.tab===t[0]?'on':'')+'"><span class="e">'+t[1]+'</span>'+t[2]+'</button>').join('')+'</nav>';
+}
+function vHome(){
+  const ym=ymOf(todayIso()),rows=monthRows(ym);
+  const open=rows.filter(x=>!x.r.data.paidAt);
+  const known=open.filter(x=>x.r.data.amountC!=null).reduce((a,x)=>a+x.r.data.amountC,0);
+  const sem=open.filter(x=>x.r.data.amountC==null).length;
+  const late=open.filter(x=>billDue(x)<todayIso()).length;
+  let h=header('FIN')+'<p class="sub">'+esc(ymLabel(ym))+'</p><div class="wrap">';
+  h+='<div class="card"><div class="mut">Contas do mês ainda a pagar (valores conhecidos)</div><div class="big">'+money(known)+'</div>'
+    +(sem?'<div style="margin-top:.4rem"><span class="tag warn">'+sem+' sem valor</span> <span class="mut">preencha em Contas</span></div>':'')
+    +(late?'<div style="margin-top:.4rem"><span class="tag bad">'+late+' em atraso</span></div>':'')
+    +(!rows.length?'<div class="mut" style="margin-top:.4rem">Nenhuma conta cadastrada ainda.</div>':'')+'</div>';
+  const cards=byKind('card');
+  if(cards.length){
+    h+='<h2>Cartões</h2>';
+    let tot=0,totKnown=true;
+    cards.forEach(cr=>{
+      const k=cardCalc(cr),c=cr.data;tot+=k.used;if(c.limitC==null)totKnown=false;
+      const pct=c.limitC?Math.min(100,Math.max(0,Math.round(k.used*100/c.limitC))):0;
+      const cur=k.inv[k.openYm],due=dueDateFor(c,k.openYm);
+      h+='<button class="item" data-act="card" data-id="'+cr.id+'"><div class="row"><span class="t">'+esc(c.name)+'</span><span class="mut">final '+esc(c.last4||'—')+'</span></div>'
+        +'<div class="bar"><i class="'+(pct>=80?'hi':'')+'" style="width:'+pct+'%"></i></div>'
+        +'<div class="row"><span class="mut">Usado</span><b>'+money(k.used)+'</b></div>'
+        +'<div class="row"><span class="mut">Pode usar</span><b>'+money(k.avail)+'</b></div>'
+        +'<div class="row"><span class="mut">Fatura atual</span><b>'+money(cur.totalC)+'</b></div>'
+        +'<div class="row"><span class="mut">Vence</span><b>'+brDate(due)+'</b></div></button>';
+    });
+    h+='<div class="card"><div class="row"><span class="mut">Total usado nos cartões</span><b>'+money(tot)+'</b></div></div>';
+  }
+  const debts=byKind('debt').filter(d=>d.data.status!=='PAGA');
+  if(debts.length){
+    const sum=debts.reduce((a,d)=>a+(d.data.balanceC||0),0),miss=debts.some(d=>d.data.balanceC==null);
+    h+='<h2>Dívidas</h2><div class="card"><div class="row"><span class="mut">Saldo conhecido ('+debts.length+')</span><b>'+money(sum)+'</b></div>'+(miss?'<div class="mut">Algum saldo está “Não informado”.</div>':'')+'</div>';
+  }
+  h+='<div class="note">Projeção parcial não é dinheiro disponível. O FIN só organiza e lembra: quem paga é você.</div>';
+  h+='<button class="btn sec" data-act="refresh">Atualizar</button><button class="btn sec" data-act="logout">Sair</button>';
+  h+='<p class="hint" style="text-align:center"><a class="lnk" href="../">Abrir o Núcleo</a></p></div>';
+  return h;
+}
+function vBills(){
+  const ym=ymOf(todayIso()),rows=monthRows(ym);
+  let h=header('Contas do mês','')+'<p class="sub">'+esc(ymLabel(ym))+'</p><div class="wrap">';
+  h+='<button class="btn" data-act="bill-new">+ Nova conta</button>';
+  if(!rows.length)h+='<div class="card mut">Nenhuma conta neste mês. Toque em “Nova conta”. Contas que mudam todo mês (luz, água) entram sem valor e o app cobra o valor de você.</div>';
+  const order={'Em atraso':0,'Sem valor':1,'A pagar':2,'Paga':3};
+  rows.sort((a,b)=>order[billState(a).t]-order[billState(b).t]||a.bill.data.dueDay-b.bill.data.dueDay);
+  rows.forEach(x=>{
+    const st=billState(x);
+    h+='<button class="item" data-act="bill-open" data-id="'+x.r.id+'"><div class="row"><span class="t">'+esc(x.bill.data.name)+'</span><span class="tag '+st.c+'">'+st.t+'</span></div>'
+      +'<div class="row"><span class="mut">Vence '+brDate(billDue(x))+'</span><b>'+money(x.r.data.amountC)+'</b></div></button>';
+  });
+  const pend=rows.filter(x=>!x.r.data.paidAt);
+  if(rows.length){
+    const total=rows.reduce((a,x)=>a+(x.r.data.amountC||0),0),paid=rows.filter(x=>x.r.data.paidAt).reduce((a,x)=>a+(x.r.data.amountC||0),0);
+    h+='<div class="card"><div class="row"><span class="mut">Total conhecido do mês</span><b>'+money(total)+'</b></div><div class="row"><span class="mut">Já pago</span><b>'+money(paid)+'</b></div><div class="row"><span class="mut">Faltam pagar</span><b>'+money(total-paid)+'</b></div>'+(pend.some(x=>x.r.data.amountC==null)?'<div class="mut">Contas sem valor não entram na soma.</div>':'')+'</div>';
+  }
+  const bills=byKind('bill');
+  if(bills.length){h+='<h2>Contas cadastradas</h2>';bills.forEach(b=>{h+='<button class="item" data-act="bill-edit" data-id="'+b.id+'"><div class="row"><span class="t">'+esc(b.data.name)+'</span><span class="mut">dia '+b.data.dueDay+'</span></div><div class="mut">'+(b.data.recurring?'Todo mês':'Só em '+ymShort(b.data.startYm))+' · '+(b.data.variable?'valor muda':money(b.data.amountC))+'</div></button>';});}
+  return h+'</div>';
+}
+function vCards(){
+  const cards=byKind('card');
+  let h=header('Cartões')+'<div class="wrap"><button class="btn" data-act="card-new">+ Novo cartão</button>';
+  if(!cards.length)h+='<div class="card mut">Cadastre cada cartão uma vez: apelido, últimos 4 dígitos, limite, dia do fechamento e dia do vencimento. Nunca coloque o número completo, validade ou código de segurança.</div>';
+  cards.forEach(cr=>{
+    const k=cardCalc(cr),c=cr.data;
+    h+='<button class="item" data-act="card" data-id="'+cr.id+'"><div class="row"><span class="t">'+esc(c.name)+'</span><span class="mut">final '+esc(c.last4||'—')+'</span></div>'
+      +'<div class="row"><span class="mut">Pode usar</span><b>'+money(k.avail)+'</b></div><div class="row"><span class="mut">Melhor dia de compra</span><b>dia '+bestDay(c)+'</b></div></button>';
+  });
+  return h+'</div>';
+}
+function vCard(){
+  const cr=S.recs.find(r=>r.id===S.cardId);
+  if(!cr){S.cardId=null;S.tab='cards';return vCards();}
+  const c=cr.data,k=cardCalc(cr);
+  const yms=Object.keys(k.inv).sort();
+  if(!S.invYm||!k.inv[S.invYm])S.invYm=k.openYm;
+  let h=header(c.name,'<button class="tag" data-act="card-edit" data-id="'+cr.id+'" style="border:0;min-height:2.6rem;font-size:1rem">Editar</button>')
+    +'<div class="wrap"><button class="btn sec" data-act="tab" data-v="cards">← Voltar</button>';
+  const pct=c.limitC?Math.min(100,Math.max(0,Math.round(k.used*100/c.limitC))):0;
+  h+='<div class="card"><div class="row"><span class="mut">Limite total</span><b>'+money(c.limitC)+'</b></div><div class="bar"><i class="'+(pct>=80?'hi':'')+'" style="width:'+pct+'%"></i></div>'
+    +'<div class="row"><span class="mut">Usado (tudo que não foi pago)</span><b>'+money(k.used)+'</b></div>'
+    +'<div class="row"><span class="mut">Pode usar</span><b>'+money(k.avail)+'</b></div>'
+    +(c.limitC==null?'<div class="mut">Sem limite informado, o “pode usar” não dá para calcular.</div>':'')
+    +'<div class="row"><span class="mut">Fecha todo dia</span><b>'+c.closeDay+'</b></div><div class="row"><span class="mut">Vence todo dia</span><b>'+c.dueDay+'</b></div>'
+    +'<div class="row"><span class="mut">Melhor dia de compra</span><b>dia '+bestDay(c)+'</b></div></div>';
+  h+='<div class="note">Parcelas futuras ocupam o limite até serem pagas. Cada banco pode agir diferente: confira com a sua fatura.</div>';
+  h+='<button class="btn" data-act="charge-new" data-id="'+cr.id+'">+ Novo lançamento</button>';
+  h+='<h2 style="margin-left:0">Faturas</h2>';
+  yms.forEach(ym=>{
+    const v=k.inv[ym],st=invStatus(c,v,k.openYm),on=ym===S.invYm;
+    h+='<button class="item" data-act="inv" data-ym="'+ym+'" style="'+(on?'border:2px solid var(--accent)':'')+'"><div class="row"><span class="t">'+esc(ymLabel(ym))+'</span><span class="tag '+st.c+'">'+st.t+'</span></div>'
+      +'<div class="row"><span class="mut">Vence '+brDate(dueDateFor(c,ym))+'</span><b>'+money(v.totalC)+'</b></div></button>';
+  });
+  const v=k.inv[S.invYm];
+  h+='<h2 style="margin-left:0">Lançamentos de '+esc(ymShort(S.invYm))+'</h2>';
+  if(!v.items.length)h+='<div class="card mut">Nada lançado nesta fatura.</div>';
+  v.items.sort((a,b)=>a.date<b.date?-1:1).forEach(it=>{
+    h+='<button class="item" data-act="charge-edit" data-id="'+it.rec.id+'"><div class="row"><span class="t">'+esc(it.desc)+(it.n>1?' '+it.parcela+'/'+it.n:'')+'</span><b>'+money(it.amountC)+'</b></div><div class="mut">Compra em '+brDate(it.date)+(it.by?' · '+esc(it.by):'')+(it.amountC<0?' · estorno':'')+'</div></button>';
+  });
+  h+='<button class="btn sec" data-act="inv-pay" data-ym="'+S.invYm+'">'+(v.paid?'Desfazer “fatura paga”':'Marcar esta fatura como paga')+'</button>';
+  h+='<p class="hint">Marcar como paga só avisa o FIN. O pagamento você faz no banco.</p>';
+  const mn=byKind('charge').filter(x=>x.data.cardId===cr.id).length;
+  h+='<p class="hint">'+mn+' compra(s) neste cartão.</p>';
+  return h+'</div>';
+}
+function vDebts(){
+  const ds=byKind('debt');
+  let h=header('Dívidas')+'<div class="wrap"><button class="btn" data-act="debt-new">+ Nova dívida</button>';
+  if(!ds.length)h+='<div class="card mut">Nenhuma dívida cadastrada.</div>';
+  ds.forEach(d=>{const x=d.data;h+='<button class="item" data-act="debt-edit" data-id="'+d.id+'"><div class="row"><span class="t">'+esc(x.creditor)+'</span><span class="tag '+(x.status==='PAGA'?'ok':(x.status==='ATRASADA'?'bad':''))+'">'+esc(x.status)+'</span></div><div class="row"><span class="mut">Saldo</span><b>'+money(x.balanceC)+'</b></div><div class="row"><span class="mut">Parcela</span><b>'+money(x.installC)+'</b></div>'+(x.dueDay?'<div class="mut">Vence dia '+x.dueDay+'</div>':'')+'</button>';});
+  return h+'</div>';
+}
+function render(){
+  const a=$('app');
+  if(!S.sess||!S.ready){return;}
+  let body;
+  if(S.tab==='home')body=vHome();else if(S.tab==='bills')body=vBills();else if(S.tab==='cards')body=S.cardId?vCard():vCards();else if(S.tab==='debts')body=vDebts();else body=vHome();
+  a.innerHTML=body+(S.msg?'<div class="wrap"><div class="err">'+esc(S.msg)+'</div></div>':'')+tabs();
+}
+
+/* ---------- ações ---------- */
+const DAY={type:'int',min:1,max:31};
+async function billForm(rec){
+  const d=rec?rec.data:{recurring:true,variable:false};
+  await form(rec?'Editar conta':'Nova conta',[
+    {k:'name',label:'Nome (ex.: Luz)',type:'text',req:true},
+    {k:'dueDay',label:'Vence todo dia',type:'int',min:1,max:31,req:true},
+    {k:'variable',label:'O valor muda todo mês',type:'check'},
+    {k:'amountC',label:'Valor fixo (se não muda)',type:'money',hint:'Deixe vazio se não souber. Vazio nunca vira zero.'},
+    {k:'recurring',label:'Repete todo mês',type:'check'}
+  ],d,{
+    validate:o=>o.variable?null:null,
+    summary:o=>['Conta: '+o.name,'Vence dia '+o.dueDay,o.variable?'Valor muda todo mês (o app cobra)':'Valor: '+money(o.amountC),o.recurring?'Repete todo mês':'Só neste mês'],
+    save:async o=>{
+      const data={name:o.name,dueDay:o.dueDay,variable:o.variable,amountC:o.variable?null:o.amountC,recurring:o.recurring,startYm:rec?rec.data.startYm:ymOf(todayIso())};
+      if(rec)await Api.update(rec,data);else{await Api.create('bill',data);await ensureMonth();}
+    },
+    onDelete:rec?async()=>{
+      if(await confirmBox('Apagar esta conta?',['Conta: '+d.name,'Ela deixa de aparecer nos próximos meses.','Vai para a lixeira, não some de vez.'],'Sim, apagar',true)){
+        try{
+          for(const m of byKind('billmonth').filter(x=>x.data.billId===rec.id&&!x.data.paidAt))await Api.remove(m);
+          await Api.remove(rec);render();
+        }catch(e){S.msg=e.message;render();}
+      }}:null
+  });
+}
+async function billMonthForm(row){
+  const d=row.r.data,b=row.bill.data;
+  const m=modal('<h3>'+esc(b.name)+'</h3><div class="card sum">'+esc('Vence '+brDate(billDue(row))+'\nValor: '+money(d.amountC)+'\nSituação: '+billState(row).t+(d.paidAt?' em '+brDate(d.paidAt):''))+'</div>'
+    +'<button class="btn" id="b-val">'+(d.amountC==null?'Informar o valor':'Mudar o valor')+'</button>'
+    +'<button class="btn" id="b-pay">'+(d.paidAt?'Desfazer “paga”':'Marcar como paga')+'</button>'
+    +'<button class="btn sec" id="b-edit">Editar a conta</button><button class="btn sec" id="b-no">Voltar</button>');
+  m.querySelector('#b-no').onclick=()=>m.remove();
+  m.querySelector('#b-edit').onclick=()=>{m.remove();billForm(row.bill);};
+  m.querySelector('#b-val').onclick=()=>{m.remove();form('Valor de '+b.name+' ('+ymShort(d.ym)+')',[{k:'amountC',label:'Valor',type:'money',req:true,hint:'Exemplo: 187,45'}],{amountC:d.amountC},{
+    summary:o=>[b.name+' · '+ymShort(d.ym),'Valor: '+money(o.amountC)],save:o=>Api.update(row.r,Object.assign({},d,{amountC:o.amountC}))});};
+  m.querySelector('#b-pay').onclick=async()=>{
+    const to=d.paidAt?null:todayIso();
+    if(!d.paidAt&&d.amountC==null){m.remove();await info('Falta o valor','Informe o valor da conta antes de marcar como paga.');return;}
+    if(await confirmBox(d.paidAt?'Desfazer “paga”?':'Marcar como paga?',[b.name+' · '+ymShort(d.ym),'Valor: '+money(d.amountC),d.paidAt?'Volta para “a pagar”.':'O FIN não paga nada. Só registra que você pagou.'],'Sim')){
+      m.remove();try{await Api.update(row.r,Object.assign({},d,{paidAt:to}));S.msg='';}catch(e){S.msg=e.message;}render();}
+  };
+}
+async function cardForm(rec){
+  const d=rec?rec.data:{};
+  await form(rec?'Editar cartão':'Novo cartão',[
+    {k:'name',label:'Apelido (ex.: Nubank)',type:'text',req:true},
+    {k:'last4',label:'Últimos 4 dígitos',type:'text',hint:'Somente os 4 últimos. Nunca o número inteiro, validade ou código.'},
+    {k:'limitC',label:'Limite total',type:'money',hint:'Deixe vazio se não souber.'},
+    {k:'closeDay',label:'Fecha todo dia',type:'int',min:1,max:31,req:true},
+    {k:'dueDay',label:'Vence todo dia',type:'int',min:1,max:31,req:true}
+  ],d,{
+    validate:o=>(o.last4&&!/^\d{4}$/.test(o.last4))?'Os últimos dígitos devem ser exatamente 4 números.':null,
+    summary:o=>['Cartão: '+o.name,'Final: '+(o.last4||'—'),'Limite: '+money(o.limitC),'Fecha dia '+o.closeDay+' · vence dia '+o.dueDay],
+    save:async o=>{if(rec)await Api.update(rec,o);else await Api.create('card',o);},
+    onDelete:rec?async()=>{
+      if(await confirmBox('Apagar este cartão?',['Cartão: '+d.name,'Os lançamentos dele também saem da tela.','Vai para a lixeira.'],'Sim, apagar',true)){
+        try{for(const x of S.recs.filter(r=>(r.kind==='charge'||r.kind==='invpay')&&r.data.cardId===rec.id))await Api.remove(x);await Api.remove(rec);S.cardId=null;S.tab='cards';}catch(e){S.msg=e.message;}render();}}:null
+  });
+}
+async function chargeForm(card,rec){
+  const d=rec?Object.assign({},rec.data,{estorno:rec.data.totalC<0,totalC:Math.abs(rec.data.totalC)}):{date:todayIso(),n:1,estorno:false};
+  await form(rec?'Editar lançamento':'Novo lançamento',[
+    {k:'date',label:'Data da compra',type:'date',req:true},
+    {k:'desc',label:'Descrição',type:'text',req:true},
+    {k:'totalC',label:'Valor total da compra',type:'money',req:true},
+    {k:'n',label:'Número de parcelas',type:'int',min:1,max:48,hint:'1 = à vista.'},
+    {k:'firstC',label:'Valor da 1ª parcela (só se for diferente das outras)',type:'money',hint:'Vazio = parcelas iguais. As outras dividem o resto.'},
+    {k:'estorno',label:'É estorno ou crédito (diminui a fatura)',type:'check'},
+    {k:'by',label:'Quem gastou (opcional)',type:'text',hint:'Útil para cartão adicional.'}
+  ],d,{
+    validate:o=>(o.totalC===0)?'O valor não pode ser zero.':null,
+    summary:o=>{const n=o.n||1,t=o.estorno?-Math.abs(o.totalC):Math.abs(o.totalC),per=Math.trunc(t/n);const ym=invYmFor(o.date,card.data.closeDay);
+      return [card.data.name,o.desc+(o.estorno?' (estorno)':''),'Total: '+money(t),n>1?(o.firstC!=null&&!o.estorno?'1ª de '+money(Math.abs(o.firstC))+' e mais '+(n-1)+' de '+money(Math.trunc((Math.abs(t)-Math.abs(o.firstC))/(n-1))):n+'x de '+money(per)+' (a 1ª pode ter centavos de ajuste)'):'À vista','Cai na fatura de '+ymLabel(ym)];},
+    save:async o=>{
+      const data={cardId:card.id,date:o.date,desc:o.desc,totalC:o.estorno?-Math.abs(o.totalC):Math.abs(o.totalC),n:o.n||1,firstC:(o.n>1&&o.firstC!=null&&!o.estorno)?Math.abs(o.firstC):null,by:o.by||''};
+      if(rec)await Api.update(rec,data);else await Api.create('charge',data);
+    },
+    onDelete:rec?async()=>{
+      if(await confirmBox('Apagar este lançamento?',[d.desc,money(rec.data.totalC)],'Sim, apagar',true)){try{await Api.remove(rec);}catch(e){S.msg=e.message;}render();}}:null
+  });
+}
+async function debtForm(rec){
+  const d=rec?rec.data:{status:'ATIVA'};
+  await form(rec?'Editar dívida':'Nova dívida',[
+    {k:'creditor',label:'Quem você deve',type:'text',req:true},
+    {k:'balanceC',label:'Saldo devedor',type:'money',hint:'Vazio = Não informado.'},
+    {k:'installC',label:'Valor da parcela',type:'money'},
+    {k:'dueDay',label:'Vence todo dia',type:'int',min:1,max:31},
+    {k:'status',label:'Situação',type:'select',opts:[['ATIVA','Ativa'],['ATRASADA','Atrasada'],['PAGA','Paga'],['DESCONHECIDA','Não sei']]},
+    {k:'note',label:'Observação',type:'text'}
+  ],d,{
+    summary:o=>['Dívida: '+o.creditor,'Saldo: '+money(o.balanceC),'Parcela: '+money(o.installC),'Situação: '+o.status],
+    save:async o=>{if(rec)await Api.update(rec,o);else await Api.create('debt',o);},
+    onDelete:rec?async()=>{if(await confirmBox('Apagar esta dívida?',[d.creditor],'Sim, apagar',true)){try{await Api.remove(rec);}catch(e){S.msg=e.message;}render();}}:null
+  });
+}
+
+document.addEventListener('click',async ev=>{
+  const b=ev.target.closest('[data-act]');if(!b)return;
+  const act=b.dataset.act,id=b.dataset.id,get=i=>S.recs.find(r=>r.id===i);
+  S.msg='';
+  if(act==='tab'){S.tab=b.dataset.v;if(S.tab!=='cards')S.cardId=null;if(S.tab==='cards'&&b.dataset.v==='cards')S.cardId=null;render();window.scrollTo(0,0);}
+  else if(act==='refresh'){try{await Api.load();await ensureMonth();}catch(e){S.msg='Sem internet.';}render();}
+  else if(act==='logout'){if(await confirmBox('Sair do FIN?',['Você terá que entrar de novo.'],'Sim, sair')){Api.saveSess(null);lsSet('fin-cache','');location.reload();}}
+  else if(act==='bill-new')billForm(null);
+  else if(act==='bill-edit')billForm(get(id));
+  else if(act==='bill-open'){const r=get(id);billMonthForm({r,bill:get(r.data.billId)});}
+  else if(act==='card-new')cardForm(null);
+  else if(act==='card-edit')cardForm(get(id));
+  else if(act==='card'){S.cardId=id;S.tab='cards';S.invYm=null;render();window.scrollTo(0,0);}
+  else if(act==='inv'){S.invYm=b.dataset.ym;render();}
+  else if(act==='charge-new')chargeForm(get(id),null);
+  else if(act==='charge-edit'){const r=get(id);chargeForm(get(r.data.cardId),r);}
+  else if(act==='inv-pay'){
+    const cr=get(S.cardId),ym=b.dataset.ym,ex=byKind('invpay').find(x=>x.data.cardId===cr.id&&x.data.ym===ym);
+    const k=cardCalc(cr).inv[ym];
+    if(await confirmBox(ex?'Desfazer “fatura paga”?':'Marcar fatura como paga?',[cr.data.name+' · '+ymLabel(ym),'Total: '+money(k.totalC),ex?'O valor volta a ocupar o limite.':'O valor sai do limite usado. O FIN não paga nada.'],'Sim')){
+      try{if(ex)await Api.remove(ex);else await Api.create('invpay',{cardId:cr.id,ym});}catch(e){S.msg=e.message;}render();}
+  }
+  else if(act==='debt-new')debtForm(null);
+  else if(act==='debt-edit')debtForm(get(id));
+});
+
+/* ---------- entrada ---------- */
+function loginScreen(msg){
+  let el=$('lg');if(!el){el=document.createElement('div');el.id='lg';document.body.appendChild(el);}
+  el.style.cssText='position:fixed;inset:0;z-index:99999;background:var(--bg);display:flex;flex-direction:column;justify-content:center;padding:1.5rem;overflow:auto';
+  el.innerHTML='<div style="max-width:28rem;width:100%;margin:0 auto"><h1>FIN</h1><p>Entre com o mesmo e-mail e a mesma senha do Núcleo.</p>'
+    +'<label class="f" for="lg-mail">E-mail</label><input class="in" id="lg-mail" type="email" autocomplete="username" autocapitalize="off">'
+    +'<label class="f" for="lg-pass">Senha</label><input class="in" id="lg-pass" type="password" autocomplete="current-password">'
+    +'<div class="err" id="lg-err" role="alert">'+esc(msg||'')+'</div><button class="btn" id="lg-go">Entrar</button></div>';
+  const go=async()=>{
+    const bt=$('lg-go'),er=$('lg-err');bt.disabled=true;bt.textContent='Entrando…';er.textContent='';
+    try{Api.saveSess(await Api.auth('token?grant_type=password',{email:$('lg-mail').value.trim(),password:$('lg-pass').value}));el.remove();await start();}
+    catch(x){bt.disabled=false;bt.textContent='Entrar';er.textContent=(x.status>=400&&x.status<500)?'E-mail ou senha incorretos.':'Sem conexão. Tente de novo.';}
+  };
+  $('lg-go').onclick=go;$('lg-pass').onkeydown=e=>{if(e.key==='Enter')go();};
+}
+function setupMissing(){
+  $('app').innerHTML=header('FIN')+'<div class="wrap"><div class="card"><b>Falta uma preparação única no banco.</b><p>A tabela do FIN ainda não existe no Supabase. Rode o arquivo <b>supabase/005_fin.sql</b> no SQL Editor (uma vez só) e abra o FIN de novo.</p></div><button class="btn" onclick="location.reload()">Tentar de novo</button></div>';
+}
+async function start(){
+  try{S.sess=JSON.parse(lsGet('fin-sess')||'null');}catch(e){S.sess=null;}
+  if(!S.sess){loginScreen();return;}
+  try{const c=JSON.parse(lsGet('fin-cache')||'[]');if(Array.isArray(c))S.recs=c;}catch(e){}
+  S.ready=true;render();
+  try{
+    await Api.load();
+    await ensureMonth();
+  }catch(e){
+    if(e.status===401){loginScreen('Entre de novo.');return;}
+    if(e.status===404||e.code==='PGRST205'||e.code==='42P01'){setupMissing();return;}
+    S.msg='Sem internet. Mostrando o que está guardado neste aparelho.';
+  }
+  render();
+}
+if('serviceWorker' in navigator)addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&S.ready&&!document.querySelector('.modal')){Api.load().then(()=>{render();}).catch(()=>{});}});
+start();
+</script>
+</body>
+</html>
