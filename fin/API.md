@@ -1,0 +1,22 @@
+# FIN — contrato para o chat financeiro
+
+O FIN guarda tudo na tabela `fin_records` (kind + data JSON). Valores em **centavos inteiros**; dado ausente = `null`, nunca 0.
+O FIN nunca paga nem move dinheiro. Apagar = lixeira (reversível).
+
+## Tipos (kind) e campos principais de `data`
+- `card`: nome/apelido, closeDay, dueDay, limitC, holder, payer
+- `charge`: compra no cartão (cardId, valor em centavos, parcelas, data, descrição)
+- `invpay`: pagamento de fatura registrado
+- `bill` / `billmonth`: conta recorrente e o valor/estado de cada mês
+- `debt`: creditor, balanceC, installC, rateBp (juros ao mês em centésimos de %), status, holder (devedor no contrato), payer (quem paga hoje), dueDay, account
+- `proposal`: pendências vindas do Núcleo (text, status) e `cfg:'capacity'` com `capacityC` (quanto dá por mês para dívidas)
+- `holder`/`payer`: `MARCELO` ou `MARLENE`
+
+## Como usar
+**A) Sem acesso à internet:** no FIN, 🤝 Chat financeiro → “Copiar tudo para o chat”. O chat devolve
+`{"fin_ops":1,"ops":[{"op":"create","kind":"debt","data":{...}},{"op":"update","id":"...","data":{...}},{"op":"delete","id":"..."}]}`
+e Marcelo cola em “Colar mudanças do chat” e confirma.
+
+**B) Com chamadas HTTP:** `POST {SUPABASE_URL}/rest/v1/rpc/fin_chat` com headers `apikey` e `Authorization: Bearer <chave publicável>` e corpo
+`{"p_token":"<código>","p_cmd":{"read":true}}` ou `{"p_token":"<código>","p_cmd":{"ops":[...]}}`.
+Tudo ou nada; máximo 60 ops; resposta traz `registros` atualizados. Edições ficam com `updated_by='chat'`.

@@ -504,6 +504,7 @@ function vHome(){
   }
   h+='<div class="note">Projeção parcial não é dinheiro disponível. O FIN só organiza e lembra: quem paga é você.</div>';
   h+=hasDemo()?'<button class="btn sec" data-act="demo-off">Apagar os exemplos de teste</button>':'<button class="btn sec" data-act="demo-on">Carregar exemplos de teste</button>';
+  h+='<button class="btn" data-act="chat">🤝 Chat financeiro</button>';
   h+='<button class="btn sec" data-act="refresh">Atualizar</button><button class="btn sec" data-act="logout">Sair</button>';
   h+='<p class="hint" style="text-align:center"><a class="lnk" href="../">Abrir o Núcleo</a></p></div>';
   return h;
@@ -582,6 +583,69 @@ function vDebts(){
   ds.forEach(d=>{const x=d.data;h+='<button class="item" data-act="debt-edit" data-id="'+d.id+'"><div class="row"><span class="t">'+esc(x.creditor)+'</span><span class="tag '+(x.status==='PAGA'?'ok':(x.status==='ATRASADA'?'bad':''))+'">'+esc(x.status)+'</span></div><div class="row"><span class="mut">Saldo</span><b>'+money(x.balanceC)+'</b></div><div class="row"><span class="mut">Parcela</span><b>'+money(x.installC)+'</b></div><div class="mut">Devedor no contrato: '+esc(pname(x.holder))+(x.payer?' · paga hoje: '+esc(pname(x.payer)):'')+(x.kindD?' · '+esc(x.kindD):'')+(x.rateBp!=null?' · juros '+(x.rateBp/100).toFixed(2).replace('.',',')+'% ao mês':'')+(x.account?' · conta '+esc(x.account):'')+'</div>'+(x.dueDay?'<div class="mut">Vence dia '+x.dueDay+'</div>':'')+'</button>';});
   return h+'</div>';
 }
+
+/* ---------- chat financeiro ---------- */
+const CHAT_KINDS=['card','charge','invpay','bill','billmonth','debt','proposal'];
+function chatSnapshot(){
+  return JSON.stringify({fin_snapshot:1,gerado_em:new Date().toISOString(),
+    regras:['Valores em centavos inteiros (R$ 10,50 = 1050). Dado ausente = null, nunca 0.','holder = MARCELO ou MARLENE (devedor/titular); payer = quem paga hoje.','Para mudar algo, devolva JSON {"fin_ops":1,"ops":[...]} com op create (kind,data), update (id,data = campos a mudar) ou delete (id). Máximo 60 ops.','Marcelo confere e confirma antes de salvar. O FIN nunca paga nem move dinheiro.','kinds: card, charge, invpay, bill, billmonth, debt, proposal (proposal com data.cfg=capacity guarda quanto dá para pagar por mês: capacityC).'],
+    registros:S.recs.map(r=>({id:r.id,kind:r.kind,version:r.version,data:r.data}))},null,1);
+}
+function chatParse(txt){
+  let t=String(txt||'').trim();const a=t.indexOf('{'),b=t.lastIndexOf('}');
+  if(a<0||b<a)throw new Error('Não achei o JSON no texto colado.');
+  let j;try{j=JSON.parse(t.slice(a,b+1));}catch(e){throw new Error('O JSON colado está quebrado.');}
+  if(!j||j.fin_ops!==1||!Array.isArray(j.ops)||!j.ops.length)throw new Error('Não é um pacote de mudanças do FIN.');
+  if(j.ops.length>60)throw new Error('Mudanças demais de uma vez (máximo 60).');
+  return j.ops.map(o=>{
+    if(!o||typeof o!=='object')throw new Error('Mudança inválida.');
+    if(o.op==='create'){if(CHAT_KINDS.indexOf(o.kind)<0||!o.data||typeof o.data!=='object')throw new Error('Criar: tipo ou dados inválidos.');return o;}
+    if(o.op==='update'||o.op==='delete'){const r=S.recs.find(x=>x.id===o.id);if(!r)throw new Error('Item não encontrado: '+o.id);
+      if(o.op==='update'&&(!o.data||typeof o.data!=='object'))throw new Error('Editar: dados inválidos.');return Object.assign({},o,{_r:r});}
+    throw new Error('Operação desconhecida: '+o.op);
+  });
+}
+function chatLine(o){
+  const d=o.data||{};const nm=x=>x?(x.creditor||x.name||x.bank||x.text||x.cfg||x.desc||x.kind||''):'';
+  if(o.op==='create')return 'CRIAR '+o.kind+': '+nm(d)+' '+JSON.stringify(d).slice(0,140);
+  if(o.op==='update')return 'EDITAR '+o._r.kind+' “'+nm(o._r.data)+'”: '+JSON.stringify(d).slice(0,140);
+  return 'APAGAR '+o._r.kind+' “'+nm(o._r.data)+'”';
+}
+async function chatApply(ops){
+  let n=0;
+  for(const o of ops){
+    if(o.op==='create')await Api.create(o.kind,o.data);
+    else if(o.op==='update')await Api.update(o._r,Object.assign({},o._r.data,o.data));
+    else await Api.remove(o._r);
+    n++;
+  }
+  return n;
+}
+function chatMenu(){
+  const m=modal('<h3>Chat financeiro</h3><p class="hint">1) Copie tudo e cole no chat financeiro. 2) Quando ele devolver mudanças, cole aqui. Nada é salvo sem você confirmar.</p>'
+    +'<button class="btn" id="c1">Copiar tudo para o chat</button><button class="btn" id="c2">Colar mudanças do chat</button><button class="btn sec" id="c0">Fechar</button><div id="cm" class="hint"></div>');
+  m.querySelector('#c0').onclick=()=>m.remove();
+  m.querySelector('#c1').onclick=async()=>{
+    const t=chatSnapshot();
+    try{await navigator.clipboard.writeText(t);m.querySelector('#cm').textContent='Copiado ('+S.recs.length+' itens). Cole no chat financeiro.';}
+    catch(e){m.remove();const x=modal('<h3>Copie o texto</h3><textarea id="tx" style="width:100%;height:50vh;font-size:.8rem"></textarea><button class="btn" id="ok">Fechar</button>');x.querySelector('#tx').value=t;x.querySelector('#tx').select();x.querySelector('#ok').onclick=()=>x.remove();}
+  };
+  m.querySelector('#c2').onclick=()=>{
+    m.remove();
+    const x=modal('<h3>Colar mudanças</h3><textarea id="tx" style="width:100%;height:40vh;font-size:.9rem" placeholder="Cole aqui o que o chat devolveu"></textarea><div id="er" class="err" hidden></div><button class="btn" id="ok">Conferir</button><button class="btn sec" id="no">Voltar</button>');
+    x.querySelector('#no').onclick=()=>x.remove();
+    x.querySelector('#ok').onclick=async()=>{
+      let ops;try{ops=chatParse(x.querySelector('#tx').value);}catch(e){const er=x.querySelector('#er');er.hidden=false;er.textContent=e.message;return;}
+      x.remove();
+      if(await confirmBox('Aplicar '+ops.length+' mudança(s) do chat?',ops.map(chatLine),'Sim, aplicar')){
+        try{const n=await chatApply(ops);S.msg='';await info('Pronto','Foram aplicadas '+n+' mudança(s).');}
+        catch(e){S.msg='Parei no meio: '+e.message;try{await Api.load();}catch(z){}}
+        render();
+      }
+    };
+  };
+}
+
 function render(){
   const a=$('app');
   if(!S.sess||!S.ready){return;}
@@ -711,6 +775,7 @@ document.addEventListener('click',async ev=>{
     if(await confirmBox('Apagar os exemplos de teste?',['Só some o que tem “(teste)”.','Seus dados de verdade não são mexidos.'],'Sim, apagar',true)){
       b.disabled=true;b.textContent='Apagando…';
       try{await clearDemo();S.msg='';}catch(e){S.msg='Não consegui apagar tudo: '+e.message;try{await Api.load();}catch(x){}}render();}}
+  else if(act==='chat')chatMenu();
   else if(act==='who'){S.who=b.dataset.v;render();}
   else if(act==='prop')reviewProp(get(id));
   else if(act==='cap-set'){const c=cfgRec();form('Quanto dá para pagar por mês',[{k:'capacityC',label:'Valor por mês para as dívidas',type:'money',req:true,hint:'Só o que sobra de verdade. Exemplo: 1.800,00'}],{capacityC:c?c.data.capacityC:null},{summary:o=>['Por mês: '+money(o.capacityC)],save:async o=>{if(c)await Api.update(c,Object.assign({},c.data,{capacityC:o.capacityC}));else await Api.create('proposal',{cfg:'capacity',capacityC:o.capacityC});}});}
