@@ -117,8 +117,17 @@ const ymLabel=ym=>MES[+ym.slice(5,7)-1]+' de '+ym.slice(0,4);
 const ymShort=ym=>ym.slice(5,7)+'/'+ym.slice(0,4);
 
 /* ---------- estado ---------- */
-const S={recs:[],tab:'home',sess:null,ready:false,msg:'',cardId:null,invYm:null,busy:false};
+const S={who:'ALL',recs:[],tab:'home',sess:null,ready:false,msg:'',cardId:null,invYm:null,busy:false};
 const byKind=k=>S.recs.filter(r=>r.kind===k);
+const PEOPLE=[['MARCELO','Marcelo'],['MARLENE','Marlene (mãe)']];
+const pname=k=>({MARCELO:'Marcelo',MARLENE:'Marlene (mãe)'}[k]||'Sem dono');
+const mine=d=>S.who==='ALL'||(!!d&&d.holder===S.who);
+const HOLD_OPTS=[['','Não definido']].concat(PEOPLE);
+const defHolder=()=>S.who==='ALL'?'':S.who;
+function whoBar(){
+  const O=[['ALL','Todos']].concat(PEOPLE);
+  return '<div class="wrap" style="display:flex;gap:.4rem;margin-bottom:.2rem">'+O.map(o=>'<button data-act="who" data-v="'+o[0]+'" class="tag" style="flex:1;border:2px solid '+(S.who===o[0]?'var(--accent)':'transparent')+';min-height:3rem;font-size:1rem;'+(S.who===o[0]?'background:var(--accent-soft);color:var(--accent)':'')+'">'+esc(o[1])+'</button>').join('')+'</div>';
+}
 
 /* ---------- banco ---------- */
 const Api={
@@ -293,16 +302,16 @@ function tabs(){
 }
 function upcoming(){
   const td=todayIso(),lim=isoDate(new Date(Date.now()+30*864e5)),out=[];
-  monthRows(ymOf(td)).filter(x=>!x.r.data.paidAt).forEach(x=>{const dt=billDue(x);if(dt<=lim)out.push({dt,kind:'Conta',name:x.bill.data.name,c:x.r.data.amountC,late:dt<td});});
-  byKind('card').forEach(cr=>{const k=cardCalc(cr);Object.values(k.inv).filter(v=>!v.paid&&v.ym<=k.openYm&&v.totalC>0).forEach(v=>{const dt=dueDateFor(cr.data,v.ym);if(dt<=lim)out.push({dt,kind:'Fatura',name:cr.data.name+' · '+ymShort(v.ym),c:v.totalC,late:dt<td});});});
-  byKind('debt').filter(d=>d.data.status!=='PAGA'&&d.data.dueDay).forEach(d=>{let ym=ymOf(td),dt=dateOf(ym,d.data.dueDay);if(dt<td&&d.data.status!=='ATRASADA'){dt=dateOf(addMonths(ym,1),d.data.dueDay);}if(dt<=lim)out.push({dt,kind:'Dívida',name:d.data.creditor,c:d.data.installC,late:dt<td||d.data.status==='ATRASADA'});});
+  monthRows(ymOf(td)).filter(x=>!x.r.data.paidAt&&mine(x.bill.data)).forEach(x=>{const dt=billDue(x);if(dt<=lim)out.push({dt,kind:'Conta',name:x.bill.data.name,c:x.r.data.amountC,late:dt<td});});
+  byKind('card').filter(c=>mine(c.data)).forEach(cr=>{const k=cardCalc(cr);Object.values(k.inv).filter(v=>!v.paid&&v.ym<=k.openYm&&v.totalC>0).forEach(v=>{const dt=dueDateFor(cr.data,v.ym);if(dt<=lim)out.push({dt,kind:'Fatura',name:cr.data.name+' · '+ymShort(v.ym),c:v.totalC,late:dt<td});});});
+  byKind('debt').filter(d=>d.data.status!=='PAGA'&&d.data.dueDay&&mine(d.data)).forEach(d=>{let ym=ymOf(td),dt=dateOf(ym,d.data.dueDay);if(dt<td&&d.data.status!=='ATRASADA'){dt=dateOf(addMonths(ym,1),d.data.dueDay);}if(dt<=lim)out.push({dt,kind:'Dívida',name:d.data.creditor,c:d.data.installC,late:dt<td||d.data.status==='ATRASADA'});});
   return out.sort((a,b)=>a.dt<b.dt?-1:1);
 }
 const hasDemo=()=>S.recs.some(r=>r.data&&r.data.demo);
 async function loadDemo(){
   const t=new Date(),dAgo=n=>isoDate(new Date(t.getTime()-n*864e5));
-  const A=await Api.create('card',{name:'Cartão Teste A',last4:'1111',limitC:300000,closeDay:10,dueDay:17,demo:true});
-  const B=await Api.create('card',{name:'Cartão Teste B',last4:'2222',limitC:150000,closeDay:25,dueDay:5,demo:true});
+  const A=await Api.create('card',{name:'Cartão Teste A',last4:'1111',limitC:300000,closeDay:10,dueDay:17,holder:'MARCELO',demo:true});
+  const B=await Api.create('card',{name:'Cartão Teste B',last4:'2222',limitC:150000,closeDay:25,dueDay:5,holder:'MARLENE',demo:true});
   const ch=(c,date,desc,totalC,n,firstC,by)=>Api.create('charge',{cardId:c.id,date,desc,totalC,n,firstC:firstC==null?null:firstC,by:by||'',demo:true});
   await ch(A,dAgo(25),'Tênis (teste)',34999,6,5499,'');
   await ch(A,dAgo(5),'Mercado (teste)',23050,1,null,'');
@@ -311,37 +320,53 @@ async function loadDemo(){
   await ch(B,dAgo(12),'Celular (teste)',120000,10,null,'');
   await ch(B,dAgo(2),'Farmácia (teste)',8990,1,null,'');
   const ym=ymOf(todayIso());
-  await Api.create('bill',{name:'Luz (teste)',dueDay:10,variable:true,amountC:null,recurring:true,startYm:ym,demo:true});
-  await Api.create('bill',{name:'Água (teste)',dueDay:25,variable:true,amountC:null,recurring:true,startYm:ym,demo:true});
-  await Api.create('bill',{name:'Aluguel (teste)',dueDay:5,variable:false,amountC:120000,recurring:true,startYm:ym,demo:true});
-  await Api.create('bill',{name:'Internet (teste)',dueDay:28,variable:false,amountC:9990,recurring:true,startYm:ym,demo:true});
+  await Api.create('bill',{name:'Luz (teste)',holder:'MARLENE',account:'Santander da Marlene',dueDay:10,variable:true,amountC:null,recurring:true,startYm:ym,demo:true});
+  await Api.create('bill',{name:'Água (teste)',holder:'MARLENE',account:'Santander da Marlene',dueDay:25,variable:true,amountC:null,recurring:true,startYm:ym,demo:true});
+  await Api.create('bill',{name:'Aluguel (teste)',holder:'MARCELO',dueDay:5,variable:false,amountC:120000,recurring:true,startYm:ym,demo:true});
+  await Api.create('bill',{name:'Internet (teste)',holder:'MARLENE',dueDay:28,variable:false,amountC:9990,recurring:true,startYm:ym,demo:true});
   await ensureMonth();
   const alu=monthRows(ym).find(x=>x.bill.data.name==='Aluguel (teste)');
   if(alu)await Api.update(alu.r,Object.assign({},alu.r.data,{paidAt:todayIso()}));
-  await Api.create('debt',{creditor:'João (teste)',balanceC:80000,installC:20000,dueDay:20,status:'ATIVA',note:'Empréstimo de teste',demo:true});
-  await Api.create('debt',{creditor:'Loja X (teste)',balanceC:45000,installC:9000,dueDay:3,status:'ATRASADA',note:'',demo:true});
+  await Api.create('debt',{creditor:'João (teste)',balanceC:80000,installC:20000,dueDay:20,status:'ATIVA',kindD:'Empréstimo',holder:'MARCELO',payer:'MARCELO',note:'Empréstimo de teste',demo:true});
+  await Api.create('debt',{creditor:'Banco Y consignado (teste)',balanceC:450000,installC:90000,dueDay:3,status:'ATIVA',kindD:'Consignado',holder:'MARLENE',payer:'MARLENE',account:'Santander da Marlene',note:'',demo:true});
 }
 async function clearDemo(){
   const ids=new Set(S.recs.filter(r=>r.data&&r.data.demo).map(r=>r.id));
   for(const r of S.recs.slice()){if(ids.has(r.id)||(r.kind==='billmonth'&&ids.has(r.data.billId))||(r.kind==='invpay'&&ids.has(r.data.cardId)))await Api.remove(r);}
 }
 function vHome(){
-  const ym=ymOf(todayIso()),rows=monthRows(ym);
+  const ym=ymOf(todayIso()),rows=monthRows(ym).filter(x=>mine(x.bill.data));
   const open=rows.filter(x=>!x.r.data.paidAt);
   const known=open.filter(x=>x.r.data.amountC!=null).reduce((a,x)=>a+x.r.data.amountC,0);
   const sem=open.filter(x=>x.r.data.amountC==null).length;
   const late=open.filter(x=>billDue(x)<todayIso()).length;
-  let h=header('FIN')+'<p class="sub">'+esc(ymLabel(ym))+'</p><div class="wrap">';
+  let h=header('FIN')+'<p class="sub">'+esc(ymLabel(ym))+(S.who!=='ALL'?' · '+esc(pname(S.who)):'')+'</p>'+whoBar()+'<div class="wrap">';
   h+='<div class="card"><div class="mut">Contas do mês ainda a pagar (valores conhecidos)</div><div class="big">'+money(known)+'</div>'
     +(sem?'<div style="margin-top:.4rem"><span class="tag warn">'+sem+' sem valor</span> <span class="mut">preencha em Contas</span></div>':'')
     +(late?'<div style="margin-top:.4rem"><span class="tag bad">'+late+' em atraso</span></div>':'')
     +(!rows.length?'<div class="mut" style="margin-top:.4rem">Nenhuma conta cadastrada ainda.</div>':'')+'</div>';
+  if(S.who==='ALL'){
+    const keys=PEOPLE.map(x=>x[0]).concat(['']);
+    const info=keys.map(k=>{
+      const dd=byKind('debt').filter(d=>(d.data.holder||'')===k&&d.data.status!=='PAGA');
+      const cc=byKind('card').filter(c=>(c.data.holder||'')===k);
+      const bb=monthRows(ym).filter(x=>(x.bill.data.holder||'')===k&&!x.r.data.paidAt);
+      return {k,debt:dd.reduce((a,d)=>a+(d.data.balanceC||0),0),used:cc.reduce((a,c)=>a+cardCalc(c).used,0),open:bb.reduce((a,x)=>a+(x.r.data.amountC||0),0),n:dd.length+cc.length+bb.length};
+    }).filter(i=>i.n>0);
+    if(info.length){
+      h+='<h2>Por pessoa</h2>';
+      info.forEach(i=>{h+='<div class="card"><div class="t" style="font-weight:800;font-size:1.1rem">'+esc(pname(i.k))+'</div>'
+        +'<div class="row"><span class="mut">Dívidas (saldo conhecido)</span><b>'+money(i.debt)+'</b></div>'
+        +'<div class="row"><span class="mut">Usado nos cartões</span><b>'+money(i.used)+'</b></div>'
+        +'<div class="row"><span class="mut">Contas do mês a pagar</span><b>'+money(i.open)+'</b></div></div>';});
+    }
+  }
   const up=upcoming();
   if(up.length){
     h+='<h2>Próximos vencimentos (30 dias)</h2>';
     up.forEach(u=>{h+='<div class="card"><div class="row"><span class="t" style="font-weight:800">'+esc(u.name)+'</span><b>'+money(u.c)+'</b></div><div class="row"><span class="mut">'+u.kind+' · '+brDate(u.dt)+'</span>'+(u.late?'<span class="tag bad">Em atraso</span>':'')+'</div></div>';});
   }
-  const cards=byKind('card');
+  const cards=byKind('card').filter(c=>mine(c.data));
   if(cards.length){
     h+='<h2>Cartões</h2>';
     let tot=0,totKnown=true;
@@ -358,7 +383,7 @@ function vHome(){
     });
     h+='<div class="card"><div class="row"><span class="mut">Total usado nos cartões</span><b>'+money(tot)+'</b></div></div>';
   }
-  const debts=byKind('debt').filter(d=>d.data.status!=='PAGA');
+  const debts=byKind('debt').filter(d=>d.data.status!=='PAGA'&&mine(d.data));
   if(debts.length){
     const sum=debts.reduce((a,d)=>a+(d.data.balanceC||0),0),miss=debts.some(d=>d.data.balanceC==null);
     h+='<h2>Dívidas</h2><div class="card"><div class="row"><span class="mut">Saldo conhecido ('+debts.length+')</span><b>'+money(sum)+'</b></div>'+(miss?'<div class="mut">Algum saldo está “Não informado”.</div>':'')+'</div>';
@@ -370,8 +395,8 @@ function vHome(){
   return h;
 }
 function vBills(){
-  const ym=ymOf(todayIso()),rows=monthRows(ym);
-  let h=header('Contas do mês','')+'<p class="sub">'+esc(ymLabel(ym))+'</p><div class="wrap">';
+  const ym=ymOf(todayIso()),rows=monthRows(ym).filter(x=>mine(x.bill.data));
+  let h=header('Contas do mês','')+'<p class="sub">'+esc(ymLabel(ym))+'</p>'+whoBar()+'<div class="wrap">';
   h+='<button class="btn" data-act="bill-new">+ Nova conta</button>';
   if(!rows.length)h+='<div class="card mut">Nenhuma conta neste mês. Toque em “Nova conta”. Contas que mudam todo mês (luz, água) entram sem valor e o app cobra o valor de você.</div>';
   const order={'Em atraso':0,'Sem valor':1,'A pagar':2,'Paga':3};
@@ -379,24 +404,24 @@ function vBills(){
   rows.forEach(x=>{
     const st=billState(x);
     h+='<button class="item" data-act="bill-open" data-id="'+x.r.id+'"><div class="row"><span class="t">'+esc(x.bill.data.name)+'</span><span class="tag '+st.c+'">'+st.t+'</span></div>'
-      +'<div class="row"><span class="mut">Vence '+brDate(billDue(x))+'</span><b>'+money(x.r.data.amountC)+'</b></div></button>';
+      +'<div class="row"><span class="mut">Vence '+brDate(billDue(x))+'</span><b>'+money(x.r.data.amountC)+'</b></div>'+(x.bill.data.holder?'<div class="mut">De '+esc(pname(x.bill.data.holder))+(x.bill.data.account?' · paga pela conta '+esc(x.bill.data.account):'')+'</div>':'<div class="mut">Sem dono definido</div>')+'</button>';
   });
   const pend=rows.filter(x=>!x.r.data.paidAt);
   if(rows.length){
     const total=rows.reduce((a,x)=>a+(x.r.data.amountC||0),0),paid=rows.filter(x=>x.r.data.paidAt).reduce((a,x)=>a+(x.r.data.amountC||0),0);
     h+='<div class="card"><div class="row"><span class="mut">Total conhecido do mês</span><b>'+money(total)+'</b></div><div class="row"><span class="mut">Já pago</span><b>'+money(paid)+'</b></div><div class="row"><span class="mut">Faltam pagar</span><b>'+money(total-paid)+'</b></div>'+(pend.some(x=>x.r.data.amountC==null)?'<div class="mut">Contas sem valor não entram na soma.</div>':'')+'</div>';
   }
-  const bills=byKind('bill');
+  const bills=byKind('bill').filter(b=>mine(b.data));
   if(bills.length){h+='<h2>Contas cadastradas</h2>';bills.forEach(b=>{h+='<button class="item" data-act="bill-edit" data-id="'+b.id+'"><div class="row"><span class="t">'+esc(b.data.name)+'</span><span class="mut">dia '+b.data.dueDay+'</span></div><div class="mut">'+(b.data.recurring?'Todo mês':'Só em '+ymShort(b.data.startYm))+' · '+(b.data.variable?'valor muda':money(b.data.amountC))+'</div></button>';});}
   return h+'</div>';
 }
 function vCards(){
-  const cards=byKind('card');
-  let h=header('Cartões')+'<div class="wrap"><button class="btn" data-act="card-new">+ Novo cartão</button>';
+  const cards=byKind('card').filter(c=>mine(c.data));
+  let h=header('Cartões')+whoBar()+'<div class="wrap"><button class="btn" data-act="card-new">+ Novo cartão</button>';
   if(!cards.length)h+='<div class="card mut">Cadastre cada cartão uma vez: apelido, últimos 4 dígitos, limite, dia do fechamento e dia do vencimento. Nunca coloque o número completo, validade ou código de segurança.</div>';
   cards.forEach(cr=>{
     const k=cardCalc(cr),c=cr.data;
-    h+='<button class="item" data-act="card" data-id="'+cr.id+'"><div class="row"><span class="t">'+esc(c.name)+'</span><span class="mut">final '+esc(c.last4||'—')+'</span></div>'
+    h+='<button class="item" data-act="card" data-id="'+cr.id+'"><div class="row"><span class="t">'+esc(c.name)+'</span><span class="mut">final '+esc(c.last4||'—')+'</span></div><div class="mut">Titular: '+esc(pname(c.holder))+'</div>'
       +'<div class="row"><span class="mut">Pode usar</span><b>'+money(k.avail)+'</b></div><div class="row"><span class="mut">Melhor dia de compra</span><b>dia '+bestDay(c)+'</b></div></button>';
   });
   return h+'</div>';
@@ -437,10 +462,10 @@ function vCard(){
   return h+'</div>';
 }
 function vDebts(){
-  const ds=byKind('debt');
-  let h=header('Dívidas')+'<div class="wrap"><button class="btn" data-act="debt-new">+ Nova dívida</button>';
+  const ds=byKind('debt').filter(d=>mine(d.data));
+  let h=header('Dívidas')+whoBar()+'<div class="wrap"><button class="btn" data-act="debt-new">+ Nova dívida</button>';
   if(!ds.length)h+='<div class="card mut">Nenhuma dívida cadastrada.</div>';
-  ds.forEach(d=>{const x=d.data;h+='<button class="item" data-act="debt-edit" data-id="'+d.id+'"><div class="row"><span class="t">'+esc(x.creditor)+'</span><span class="tag '+(x.status==='PAGA'?'ok':(x.status==='ATRASADA'?'bad':''))+'">'+esc(x.status)+'</span></div><div class="row"><span class="mut">Saldo</span><b>'+money(x.balanceC)+'</b></div><div class="row"><span class="mut">Parcela</span><b>'+money(x.installC)+'</b></div>'+(x.dueDay?'<div class="mut">Vence dia '+x.dueDay+'</div>':'')+'</button>';});
+  ds.forEach(d=>{const x=d.data;h+='<button class="item" data-act="debt-edit" data-id="'+d.id+'"><div class="row"><span class="t">'+esc(x.creditor)+'</span><span class="tag '+(x.status==='PAGA'?'ok':(x.status==='ATRASADA'?'bad':''))+'">'+esc(x.status)+'</span></div><div class="row"><span class="mut">Saldo</span><b>'+money(x.balanceC)+'</b></div><div class="row"><span class="mut">Parcela</span><b>'+money(x.installC)+'</b></div><div class="mut">Devedor no contrato: '+esc(pname(x.holder))+(x.payer?' · paga hoje: '+esc(pname(x.payer)):'')+(x.kindD?' · '+esc(x.kindD):'')+(x.account?' · conta '+esc(x.account):'')+'</div>'+(x.dueDay?'<div class="mut">Vence dia '+x.dueDay+'</div>':'')+'</button>';});
   return h+'</div>';
 }
 function render(){
@@ -460,12 +485,14 @@ async function billForm(rec){
     {k:'dueDay',label:'Vence todo dia',type:'int',min:1,max:31,req:true},
     {k:'variable',label:'O valor muda todo mês',type:'check'},
     {k:'amountC',label:'Valor fixo (se não muda)',type:'money',hint:'Deixe vazio se não souber. Vazio nunca vira zero.'},
-    {k:'recurring',label:'Repete todo mês',type:'check'}
-  ],d,{
+    {k:'recurring',label:'Repete todo mês',type:'check'},
+    {k:'holder',label:'De quem é a conta',type:'select',opts:HOLD_OPTS},
+    {k:'account',label:'Conta bancária que paga (opcional)',type:'text',hint:'Ex.: Santander da Marlene.'}
+  ],Object.assign({holder:defHolder()},d),{
     validate:o=>o.variable?null:null,
-    summary:o=>['Conta: '+o.name,'Vence dia '+o.dueDay,o.variable?'Valor muda todo mês (o app cobra)':'Valor: '+money(o.amountC),o.recurring?'Repete todo mês':'Só neste mês'],
+    summary:o=>['Conta: '+o.name,'Vence dia '+o.dueDay,o.variable?'Valor muda todo mês (o app cobra)':'Valor: '+money(o.amountC),o.recurring?'Repete todo mês':'Só neste mês','De: '+pname(o.holder)+(o.account?' · conta '+o.account:'')],
     save:async o=>{
-      const data={name:o.name,dueDay:o.dueDay,variable:o.variable,amountC:o.variable?null:o.amountC,recurring:o.recurring,startYm:rec?rec.data.startYm:ymOf(todayIso())};
+      const data={name:o.name,dueDay:o.dueDay,variable:o.variable,amountC:o.variable?null:o.amountC,recurring:o.recurring,holder:o.holder,account:o.account||'',startYm:rec?rec.data.startYm:ymOf(todayIso())};
       if(rec)await Api.update(rec,data);else{await Api.create('bill',data);await ensureMonth();}
     },
     onDelete:rec?async()=>{
@@ -501,10 +528,11 @@ async function cardForm(rec){
     {k:'last4',label:'Últimos 4 dígitos',type:'text',hint:'Somente os 4 últimos. Nunca o número inteiro, validade ou código.'},
     {k:'limitC',label:'Limite total',type:'money',hint:'Deixe vazio se não souber.'},
     {k:'closeDay',label:'Fecha todo dia',type:'int',min:1,max:31,req:true},
-    {k:'dueDay',label:'Vence todo dia',type:'int',min:1,max:31,req:true}
-  ],d,{
+    {k:'dueDay',label:'Vence todo dia',type:'int',min:1,max:31,req:true},
+    {k:'holder',label:'Titular do cartão',type:'select',opts:HOLD_OPTS}
+  ],Object.assign({holder:defHolder()},d),{
     validate:o=>(o.last4&&!/^\d{4}$/.test(o.last4))?'Os últimos dígitos devem ser exatamente 4 números.':null,
-    summary:o=>['Cartão: '+o.name,'Final: '+(o.last4||'—'),'Limite: '+money(o.limitC),'Fecha dia '+o.closeDay+' · vence dia '+o.dueDay],
+    summary:o=>['Cartão: '+o.name,'Final: '+(o.last4||'—'),'Limite: '+money(o.limitC),'Fecha dia '+o.closeDay+' · vence dia '+o.dueDay,'Titular: '+pname(o.holder)],
     save:async o=>{if(rec)await Api.update(rec,o);else await Api.create('card',o);},
     onDelete:rec?async()=>{
       if(await confirmBox('Apagar este cartão?',['Cartão: '+d.name,'Os lançamentos dele também saem da tela.','Vai para a lixeira.'],'Sim, apagar',true)){
@@ -541,9 +569,13 @@ async function debtForm(rec){
     {k:'installC',label:'Valor da parcela',type:'money'},
     {k:'dueDay',label:'Vence todo dia',type:'int',min:1,max:31},
     {k:'status',label:'Situação',type:'select',opts:[['ATIVA','Ativa'],['ATRASADA','Atrasada'],['PAGA','Paga'],['DESCONHECIDA','Não sei']]},
+    {k:'kindD',label:'Tipo',type:'select',opts:[['','Não definido'],['Consignado','Consignado'],['Empréstimo','Empréstimo'],['Cartão','Cartão'],['Loja/carnê','Loja/carnê'],['Outro','Outro']]},
+    {k:'holder',label:'Devedor no contrato (quem assinou)',type:'select',opts:HOLD_OPTS},
+    {k:'payer',label:'Quem paga hoje',type:'select',opts:HOLD_OPTS},
+    {k:'account',label:'Conta de onde sai o pagamento (opcional)',type:'text'},
     {k:'note',label:'Observação',type:'text'}
-  ],d,{
-    summary:o=>['Dívida: '+o.creditor,'Saldo: '+money(o.balanceC),'Parcela: '+money(o.installC),'Situação: '+o.status],
+  ],Object.assign({holder:defHolder()},d),{
+    summary:o=>['Dívida: '+o.creditor,'Saldo: '+money(o.balanceC),'Parcela: '+money(o.installC),'Situação: '+o.status,'Tipo: '+(o.kindD||'Não definido'),'Devedor no contrato: '+pname(o.holder),'Quem paga hoje: '+pname(o.payer)],
     save:async o=>{if(rec)await Api.update(rec,o);else await Api.create('debt',o);},
     onDelete:rec?async()=>{if(await confirmBox('Apagar esta dívida?',[d.creditor],'Sim, apagar',true)){try{await Api.remove(rec);}catch(e){S.msg=e.message;}render();}}:null
   });
@@ -564,6 +596,7 @@ document.addEventListener('click',async ev=>{
     if(await confirmBox('Apagar os exemplos de teste?',['Só some o que tem “(teste)”.','Seus dados de verdade não são mexidos.'],'Sim, apagar',true)){
       b.disabled=true;b.textContent='Apagando…';
       try{await clearDemo();S.msg='';}catch(e){S.msg='Não consegui apagar tudo: '+e.message;try{await Api.load();}catch(x){}}render();}}
+  else if(act==='who'){S.who=b.dataset.v;render();}
   else if(act==='bill-new')billForm(null);
   else if(act==='bill-edit')billForm(get(id));
   else if(act==='bill-open'){const r=get(id);billMonthForm({r,bill:get(r.data.billId)});}
