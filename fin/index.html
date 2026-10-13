@@ -33,8 +33,10 @@
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html{font-size:20px}
-body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--font);line-height:1.35;padding-bottom:calc(5.2rem + env(safe-area-inset-bottom,0px))}
+html,body{max-width:100%;overflow-x:hidden}
+body{margin:0;width:100%;background:var(--bg);color:var(--fg);font-family:var(--font);line-height:1.35;padding-bottom:calc(5.2rem + env(safe-area-inset-bottom,0px))}
 button,input,select{font:inherit;color:inherit}
+.wrap,.card,.item,.btn,.note{max-width:100%;min-width:0;overflow-wrap:anywhere}
 header.hd{padding:calc(.8rem + env(safe-area-inset-top,0px)) 1rem .4rem;display:flex;align-items:center;justify-content:space-between;gap:.5rem}
 h1{font-size:2rem;margin:0}
 h2{font-size:1.25rem;margin:1.2rem 1rem .4rem}
