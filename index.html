@@ -1409,7 +1409,20 @@ function render(){
 }
 function renderRemBody(){const b=$('remBody');if(!b)return;const ws=S.weekStart;b.innerHTML=remHomeBody(smart(),lmap(),isoDate(new Date()),ws,isoDate(ws)===isoDate(mondayOf(new Date())));}
 function go(fn){fn();render();$('main').scrollTop=0;}
-function onData(){render();checkAlarms();purgeOld();}
+/* Itens que chegam da Siri caem na Caixa de entrada; aqui viram lembrete ou nota sozinhos */
+const siriBusy={};
+async function processSiri(){
+  if(!S.ready||Store.mode!=='supa')return;
+  for(const it of S.inbox.filter(x=>x.source==='siri'&&x.text&&!siriBusy[x.id])){
+    siriBusy[it.id]=1;
+    try{
+      const d={text:it.text,mode:'auto'};
+      await saveCapture(d,true);
+      await Store.del('inbox',it.id);
+    }catch(e){delete siriBusy[it.id];}
+  }
+}
+function onData(){render();checkAlarms();purgeOld();processSiri();}
 
 /* ---------- avisos ---------- */
 function toast(msg,action,fn){
@@ -1991,14 +2004,14 @@ async function saveSheet(){
   if(removed.length){const a=await getAssets();if(a)removed.forEach(id=>a.delete(id).catch(()=>{}));}
   closeSheet();toast('Salvo');
 }
-async function saveCapture(d){
+async function saveCapture(d,quiet){
   const text=d.text.trim();
   const p=parseCapture(text),m=capMode(d),today=isoDate(new Date());
-  closeSheet();
+  if(!quiet)closeSheet();
   if(m==='rem'){
     const doc=Object.assign(newRem(p.date||''),{title:p.title,time:p.time,repeat:p.repeat,repN:p.repN||1,repDays:p.repDays||[],repU:p.repU||'week',alarms:p.time&&p.date?[{id:uid(),min:0,msg:''}]:[]});
     const id=await Store.put('reminders',doc);
-    toast('Lembrete criado: '+p.title+(p.date?' · '+relDay(p.date,today)+(p.time?' às '+p.time:''):''),'Abrir',()=>{const r=S.reminders.find(x=>x.id===id);if(r)openRem(r);});
+    toast((quiet?'Siri → ':'')+'Lembrete criado: '+p.title+(p.date?' · '+relDay(p.date,today)+(p.time?' às '+p.time:''):''),'Abrir',()=>{const r=S.reminders.find(x=>x.id===id);if(r)openRem(r);});
   }else if(m==='ev'){
     await Store.put('events',{title:p.title,date:p.date||today,time:p.time,repeat:p.repeat,repN:p.repN||1,repDays:p.repDays||[],repU:p.repU==='hour'?'day':(p.repU||'week'),createdAt:Date.now()});toast('Compromisso criado: '+p.title);
   }else if(m==='note'){
