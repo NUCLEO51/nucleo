@@ -501,12 +501,185 @@ function partition(){
   TRASHABLE.forEach(c=>(S.raw[c]||[]).forEach(x=>{if(x.deletedAt)S.trash.push({c,x});}));
   S.trash.sort((a,b)=>b.x.deletedAt-a.x.deletedAt);
 }
+/* ---------- Supabase (versão instalável) ---------- */
+const CFG={url:'https://cptvxfzgimeawheqrhvz.supabase.co',key:'sb_publishable_Q7W8ptGAqUBvHFhCxbhXOw_aLjfC186'};
+const SKIND={reminders:'reminder',notes:'note',events:'event',inbox:'inbox',folders:'folder',lists:'list'};
+const SCOLOF={};Object.keys(SKIND).forEach(c=>{SCOLOF[SKIND[c]]=c;});
+const newId=()=>(window.crypto&&crypto.randomUUID)?crypto.randomUUID():'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{const r=Math.random()*16|0;return(c==='x'?r:(r&3|8)).toString(16);});
+const Supa={
+  sess:null,map:{},q:[],busy:false,timer:null,
+  load(){
+    try{this.sess=JSON.parse(lsGet('nucleo-sess')||'null');}catch(e){this.sess=null;}
+    try{this.q=JSON.parse(lsGet('nucleo-q')||'[]');}catch(e){this.q=[];}
+    try{this.map=JSON.parse(lsGet('nucleo-map')||'{}');}catch(e){this.map={};}
+  },
+  persist(){lsSet('nucleo-q',JSON.stringify(this.q));lsSet('nucleo-map',JSON.stringify(this.map));const o={};COLS.forEach(c=>o[c]=S.raw[c]||[]);lsSet('nucleo-cache',JSON.stringify(o));},
+  saveSess(s){this.sess=s;lsSet('nucleo-sess',s?JSON.stringify(s):'');},
+  async auth(path,body){
+    const r=await fetch(CFG.url+'/auth/v1/'+path,{method:'POST',headers:{apikey:CFG.key,'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok)throw Object.assign(new Error(j.msg||j.error_description||'erro'),{status:r.status});
+    return {access:j.access_token,refresh:j.refresh_token,exp:Date.now()+(j.expires_in||3600)*1000};
+  },
+  async login(email,pass){this.saveSess(await this.auth('token?grant_type=password',{email:email,password:pass}));},
+  logout(){this.saveSess(null);lsSet('nucleo-cache','');location.reload();},
+  async token(){
+    if(!this.sess)throw Object.assign(new Error('login'),{status:401});
+    if(this.sess.exp-Date.now()<60000){
+      try{this.saveSess(await this.auth('token?grant_type=refresh_token',{refresh_token:this.sess.refresh}));}
+      catch(e){if(e.status>=400&&e.status<500){this.saveSess(null);throw Object.assign(e,{status:401});}throw e;}
+    }
+    return this.sess.access;
+  },
+  async rest(path,opt){
+    const t=await this.token();
+    const h=Object.assign({apikey:CFG.key,Authorization:'Bearer '+t,'Content-Type':'application/json'},(opt&&opt.headers)||{});
+    return fetch(CFG.url+'/rest/v1/'+path,Object.assign({},opt,{headers:h}));
+  },
+  async start(){
+    this.load();
+    // mostra o que está guardado neste aparelho (funciona sem sinal)
+    const raw=lsGet('nucleo-cache');
+    COLS.forEach(c=>{S.raw[c]=[];});
+    if(raw){try{const o=JSON.parse(raw);COLS.forEach(c=>{S.raw[c]=o[c]||[];});}catch(e){}}
+    partition();
+    if(!this.sess){this.loginScreen();return;}
+    S.ready=true;S.sync=this.q.length?'pend':'cloud';onData();
+    this.sync();
+    if(!this.timer){
+      this.timer=setInterval(()=>this.sync(),20000);
+      addEventListener('online',()=>this.sync());
+      document.addEventListener('visibilitychange',()=>{if(!document.hidden)this.sync();});
+    }
+  },
+  loginScreen(msg){
+    let el=document.getElementById('lg');
+    if(!el){el=document.createElement('div');el.id='lg';document.body.appendChild(el);}
+    el.style.cssText='position:fixed;inset:0;z-index:99999;background:var(--bg);color:var(--fg);display:flex;flex-direction:column;justify-content:center;gap:1rem;padding:1.5rem;overflow:auto;font-size:1rem';
+    const inp='font:inherit;font-size:1.1rem;padding:.9rem;border-radius:.8rem;border:2px solid var(--line);background:var(--surface);color:var(--fg);width:100%;box-sizing:border-box';
+    el.innerHTML='<div style="max-width:28rem;width:100%;margin:0 auto;display:flex;flex-direction:column;gap:1rem">'
+      +'<h1 style="font-size:2rem;margin:0">Núcleo</h1>'
+      +'<p style="margin:0;font-size:1.15rem">Entre com o seu e-mail e a sua senha.</p>'
+      +'<label style="font-weight:700;font-size:1.1rem" for="lg-mail">E-mail</label><input id="lg-mail" type="email" autocomplete="username" autocapitalize="off" style="'+inp+'">'
+      +'<label style="font-weight:700;font-size:1.1rem" for="lg-pass">Senha</label><input id="lg-pass" type="password" autocomplete="current-password" style="'+inp+'">'
+      +'<div id="lg-err" role="alert" style="min-height:1.5rem;font-weight:700;color:var(--danger,#B3261E)">'+(msg||'')+'</div>'
+      +'<button id="lg-go" type="button" style="font:inherit;font-size:1.2rem;font-weight:700;min-height:3.8rem;border-radius:.9rem;border:0;background:var(--accent);color:var(--accent-fg);cursor:pointer">Entrar</button></div>';
+    const go=async()=>{
+      const b=document.getElementById('lg-go'),e=document.getElementById('lg-err');
+      b.disabled=true;b.textContent='Entrando…';e.textContent='';
+      try{await this.login(document.getElementById('lg-mail').value.trim(),document.getElementById('lg-pass').value);el.remove();await this.start();}
+      catch(x){b.disabled=false;b.textContent='Entrar';e.textContent=(x.status>=400&&x.status<500)?'E-mail ou senha incorretos.':'Sem conexão. Tente de novo.';}
+    };
+    document.getElementById('lg-go').onclick=go;
+    document.getElementById('lg-pass').onkeydown=ev=>{if(ev.key==='Enter')go();};
+  },
+  enqueue(op){
+    // junta alterações repetidas do mesmo item que ainda não foram enviadas
+    const i=this.q.findIndex(x=>x.c===op.c&&x.id===op.id&&!x.sent);
+    if(i>=0){op.rid=this.q[i].rid;this.q[i]=op;}else this.q.push(op);
+  },
+  apply(c,id,data){
+    const arr=S.raw[c]=S.raw[c]||[];
+    let rid=this.map[id]&&this.map[id].rid;
+    if(data===null){
+      S.raw[c]=arr.filter(x=>x.id!==id);
+      if(!rid){this.q=this.q.filter(x=>!(x.c===c&&x.id===id));this.persist();partition();onData();return;}
+      this.enqueue({c:c,id:id,data:null,rid:rid});
+    }else{
+      const doc=Object.assign({id:id},data),i=arr.findIndex(x=>x.id===id);
+      if(i>=0)arr[i]=doc;else arr.push(doc);
+      if(!rid){rid=newId();this.map[id]={rid:rid,v:0};}
+      this.enqueue({c:c,id:id,data:data,rid:rid});
+    }
+    partition();this.persist();S.sync='pend';onData();this.sync();
+  },
+  async sendOne(op){
+    const m=this.map[op.id]||(this.map[op.id]={rid:op.rid,v:0});
+    const body=op.data===null?null:Object.assign({},op.data,{_id:op.id});
+    if(m.v===0&&op.data!==null){
+      const r=await this.rest('items',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify({id:m.rid,kind:SKIND[op.c],data:body,updated_by:'app'})});
+      if(r.ok){const j=await r.json();m.v=j[0].version;return 'ok';}
+      if(r.status!==409)throw Object.assign(new Error('post'),{status:r.status});
+      const g=await this.rest('items?select=version&id=eq.'+m.rid);const gj=await g.json();if(!gj.length)return 'ok';m.v=gj[0].version;
+    }
+    const patch=op.data===null?{deleted_at:new Date().toISOString(),version:m.v,updated_by:'app'}:{data:body,version:m.v,updated_by:'app'};
+    const r=await this.rest('items?id=eq.'+m.rid+'&version=eq.'+m.v,{method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify(patch)});
+    if(!r.ok)throw Object.assign(new Error('patch'),{status:r.status});
+    const j=await r.json();
+    if(j.length){m.v=j[0].version;return 'ok';}
+    return 'conflict';
+  },
+  async resolveConflict(op){
+    // guarda as duas versões: a do servidor continua; a deste aparelho vira uma cópia
+    const g=await this.rest('items?select=id,data,version&id=eq.'+this.map[op.id].rid);const j=await g.json();
+    if(op.data!==null){
+      const copyId=uid(),d=Object.assign({},op.data);
+      if(d.title)d.title=d.title+' (versão deste aparelho)';
+      const arr=S.raw[op.c]=S.raw[op.c]||[];arr.push(Object.assign({id:copyId},d));
+      this.map[copyId]={rid:newId(),v:0};this.q.push({c:op.c,id:copyId,data:d,rid:this.map[copyId].rid});
+      toast('Alguém mudou este item ao mesmo tempo. Guardei as duas versões.');
+    }
+    if(j.length){
+      this.map[op.id].v=j[0].version;
+      const arr=S.raw[op.c]=S.raw[op.c]||[],k=arr.findIndex(x=>x.id===op.id),srv=Object.assign({},j[0].data);delete srv._id;srv.id=op.id;
+      if(k>=0)arr[k]=srv;else arr.push(srv);
+    }
+  },
+  async flush(){
+    while(this.q.length){
+      const op=this.q[0];
+      let res;
+      try{res=await this.sendOne(op);}
+      catch(e){if(e.status===401)throw e;this.persist();return false;}
+      if(res==='conflict')await this.resolveConflict(op);
+      this.q.shift();this.persist();
+    }
+    return true;
+  },
+  async pull(){
+    const rows=[];let off=0;
+    for(;;){
+      const r=await this.rest('items?select=id,kind,data,version&deleted_at=is.null&order=created_at',{headers:{Range:off+'-'+(off+999),'Range-Unit':'items'}});
+      if(!r.ok)throw Object.assign(new Error('pull'),{status:r.status});
+      const part=await r.json();rows.push.apply(rows,part);
+      if(part.length<1000)break;off+=1000;
+    }
+    const pendIds={};this.q.forEach(x=>{pendIds[x.c+'/'+x.id]=x;});
+    const out={};COLS.forEach(c=>{out[c]=[];});
+    rows.forEach(r=>{
+      const c=SCOLOF[r.kind];if(!c)return;
+      const d=Object.assign({},r.data),id=d._id||r.id;delete d._id;
+      this.map[id]={rid:r.id,v:r.version};
+      const p=pendIds[c+'/'+id];
+      if(p){if(p.data!==null)out[c].push(Object.assign({id:id},p.data));}
+      else out[c].push(Object.assign({id:id},d));
+    });
+    // itens novos ainda não enviados
+    this.q.forEach(x=>{if(x.data!==null&&!out[x.c].some(y=>y.id===x.id))out[x.c].push(Object.assign({id:x.id},x.data));});
+    COLS.forEach(c=>{S.raw[c]=out[c];});
+    partition();this.persist();
+  },
+  async sync(){
+    if(this.busy||!this.sess)return;
+    this.busy=true;
+    try{
+      const ok=await this.flush();
+      if(ok){await this.pull();S.sync='cloud';S.ready=true;}
+      else S.sync='pend';
+    }catch(e){
+      if(e.status===401){this.busy=false;this.loginScreen('Entre de novo.');return;}
+      S.sync=this.q.length?'pend':'error';
+    }
+    this.busy=false;onData();
+  }
+};
 const Store={
   db:null,mode:'boot',
   async init(){
     let db=null;
     try{if(window.claude&&window.claude.use)db=await window.claude.use('db');}catch(e){db=null;}
     if(db){this.db=db;this.mode='cloud';this.subscribe();}
+    else if(CFG.key){this.mode='supa';await Supa.start();}
     else{this.mode='local';this.loadLocal();partition();S.sync='local';S.ready=true;onData();}
   },
   subscribe(){
@@ -525,6 +698,7 @@ const Store={
     const id=obj.id||uid();
     const data=clone(obj);
     delete data.id;
+    if(this.mode==='supa'){Supa.apply(c,id,data);return id;}
     if(this.mode==='local'){
       const arr=S.raw[c]=S.raw[c]||[];
       const doc=Object.assign({id},data),i=arr.findIndex(x=>x.id===id);
@@ -538,6 +712,7 @@ const Store={
     return id;
   },
   async del(c,id){
+    if(this.mode==='supa'){Supa.apply(c,id,null);return;}
     if(this.mode==='local'){S.raw[c]=(S.raw[c]||[]).filter(x=>x.id!==id);partition();this.saveLocal();onData();return;}
     S.pending++;S.sync='saving';render();
     try{await this.db.doc(c+'/'+id).delete();}
@@ -720,7 +895,7 @@ function allTags(){const c={};S.notes.forEach(n=>tagsOf(n).forEach(t=>{c[t]=(c[t
 
 /* ---------- peças visuais ---------- */
 function syncNote(){
-  const m={local:['só neste aparelho',''],saving:['salvando…',''],boot:['conectando…',''],error:['sem conexão','bad']}[S.sync];
+  const m={local:['só neste aparelho',''],saving:['salvando…',''],boot:['conectando…',''],error:['sem conexão','bad'],pend:['envio pendente','bad']}[S.sync];
   return m?' · <span class="st '+m[1]+'">'+m[0]+'</span>':'';
 }
 function hdr(eyebrow,title,extra,small){
@@ -1229,7 +1404,7 @@ function sheetCap(){
 }
 function sheetSet(){
   const ex=COLS.reduce((n,c)=>n+S[c].filter(x=>x.example).length,0);
-  const where={cloud:'Seus dados ficam salvos na nuvem e aparecem em qualquer aparelho que abrir este sistema.',local:'Sem sincronização: os dados ficam só neste navegador e podem sumir se você limpar o histórico.',saving:'Salvando…',boot:'Conectando…',error:'Sem conexão com a nuvem agora.'}[S.sync];
+  const where={cloud:'Seus dados ficam salvos na nuvem e aparecem em qualquer aparelho que abrir este sistema.',local:'Sem sincronização: os dados ficam só neste navegador e podem sumir se você limpar o histórico.',saving:'Salvando…',boot:'Conectando…',error:'Sem conexão com a nuvem agora.',pend:'Alterações guardadas neste aparelho. Serão enviadas quando houver sinal.'}[S.sync];
   const seg=(act,cur,opts)=>'<div class="seg" role="group">'+opts.map(o=>'<button class="'+(String(cur)===String(o[0])?'on':'')+'" data-act="'+act+'" data-v="'+o[0]+'" aria-pressed="'+(String(cur)===String(o[0]))+'">'+o[1]+'</button>').join('')+'</div>';
   let h='<div class="sheet"><div class="sheet-in">'+head('Ajustes')+'<div class="sheet-body" id="sheetBody">';
   h+='<div class="block"><span class="block-t">Tamanho do texto</span>'+seg('set-fs',S.fs,[[18,'Normal'],[20,'Grande'],[23,'Maior'],[26,'Máximo']])+'<div class="note-s">Fica guardado neste aparelho.</div></div>';
@@ -1511,6 +1686,7 @@ document.addEventListener('keydown',e=>{
 document.addEventListener('pointerdown',()=>{try{const AC=window.AudioContext||window.webkitAudioContext;if(AC&&!S.ac){S.ac=new AC();}if(S.ac&&S.ac.state==='suspended')S.ac.resume();}catch(e){}},{once:true});
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)checkAlarms();});
 
+window.__nucleo={Store:Store,Supa:Supa,S:S};
 buildTabs();render();Store.init();
 getAssets().then(a=>{S.assetsOk=!!a;});
 getDl().then(d=>{S.dlOk=!!d;});
