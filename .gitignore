@@ -1,0 +1,4 @@
+backup*
+*.zip
+.env
+*.key
