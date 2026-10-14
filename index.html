@@ -2453,5 +2453,26 @@ setInterval(checkAlarms,15000);
 })();
 </script>
 
+<script>
+/* Voltar sempre à mão: com a tela ampliada (zoom), o botão de voltar da própria tela pode sair da área visível.
+   Nesse caso aparece este botão flutuante, preso à parte visível da tela, e ele aciona o voltar da tela de cima. */
+(function(){
+  const vv=window.visualViewport;if(!vv)return;
+  const fab=document.createElement('button');
+  fab.type='button';fab.id='backFab';fab.setAttribute('aria-label','Voltar');fab.textContent='← Voltar';
+  fab.style.cssText='position:fixed;left:0;top:0;z-index:2147483000;display:none;min-height:3.4rem;padding:0 1.4rem;font:inherit;font-size:1.2rem;font-weight:800;border:0;border-radius:1rem;background:#ffd60a;color:#000;box-shadow:0 6px 20px rgba(0,0,0,.55);transform-origin:0 0';
+  document.body.appendChild(fab);
+  const SEL=['.ask-bg .btn.cancel','#viewer:not([hidden]) [data-act="close-viewer"]','.fview [data-fv="close"]','#draw [data-dw="cancel"]','#rd [data-rd="close"]','#finSend #finNo','.sheet [data-act="close-sheet"]','#main button.back'];
+  function alvo(){for(const s of SEL){const l=document.querySelectorAll(s);if(l.length)return l[l.length-1];}return null;}
+  function pos(){
+    const a=vv.scale>1.05?alvo():null;
+    if(!a){fab.style.display='none';return;}
+    fab.style.display='block';
+    fab.style.transform='translate('+(vv.offsetLeft+8/vv.scale)+'px,'+(vv.offsetTop+8/vv.scale)+'px) scale('+(1/vv.scale)+')';
+  }
+  vv.addEventListener('resize',pos);vv.addEventListener('scroll',pos);setInterval(pos,500);
+  fab.addEventListener('click',e=>{e.preventDefault();const a=alvo();if(a)a.click();setTimeout(pos,50);});
+})();
+</script>
 </body>
 </html>
