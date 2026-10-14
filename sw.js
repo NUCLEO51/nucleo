@@ -1,5 +1,5 @@
 /* Núcleo: guarda o app no aparelho para abrir sem internet. Os dados NÃO passam por aqui. */
-const V='nucleo-app-v12';
+const V='nucleo-app-v13';
 const ARQ=['./','index.html','manifest.webmanifest','icon-192.png','icon-512.png','apple-touch-icon.png'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(V).then(c=>c.addAll(ARQ)).then(()=>self.skipWaiting()));});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==V).map(k=>caches.delete(k)))).then(()=>self.clients.claim()));});
@@ -13,7 +13,7 @@ self.addEventListener('fetch',e=>{
 /* Avisos de alarme (chegam do servidor mesmo com o app fechado) */
 self.addEventListener('push',e=>{
   let d={};try{d=e.data?e.data.json():{};}catch(x){d={body:e.data?e.data.text():''};}
-  e.waitUntil(self.registration.showNotification(d.title||'Núcleo',{body:d.body||'Lembrete',tag:d.tag||'nucleo',icon:'icon-192.png',badge:'icon-192.png',requireInteraction:true,data:{url:'./'}}));
+  e.waitUntil(self.registration.showNotification(d.title||'Núcleo',{body:d.body||'Lembrete',tag:d.tag||'nucleo',icon:'icon-192.png?v=caveira3',badge:'icon-192.png?v=caveira3',requireInteraction:true,data:{url:'./'}}));
 });
 self.addEventListener('notificationclick',e=>{
   e.notification.close();
