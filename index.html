@@ -1479,7 +1479,7 @@ function render(){
 function renderRemBody(){const b=$('remBody');if(!b)return;const ws=S.weekStart;b.innerHTML=remHomeBody(smart(),lmap(),isoDate(new Date()),ws,isoDate(ws)===isoDate(mondayOf(new Date())));}
 function go(fn){fn();render();$('main').scrollTop=0;}
 /* ---------- avisos no iPhone (Web Push) ---------- */
-const VAPID_PUB='BHdjmEGFLzLyhrn7Dl3pOPmKswBkp0ZeJT6Fxf_Iq_klyjwMHA-t9X8v4GYZG4In0s1jt-dr7QGFxQNG36FaTgI';
+const VAPID_PUB='BBwhnhSGwKGzLFNAknU9aV924oArn5H5kG64vugJ32U_BvIQdLPrtL90qV_qkmPAMhJ52PLod7Ms-nJ1jl3iRoQ';
 const b64u=t=>{const r=atob((t+'='.repeat((4-t.length%4)%4)).replace(/-/g,'+').replace(/_/g,'/'));const a=new Uint8Array(r.length);for(let i=0;i<r.length;i++)a[i]=r.charCodeAt(i);return a;};
 function pushSupported(){return ('serviceWorker' in navigator)&&('PushManager' in window)&&!!window.Notification;}
 function pushStatus(){
@@ -1491,8 +1491,14 @@ function pushStatus(){
 }
 async function savePushSub(){
   const reg=await navigator.serviceWorker.ready;
+  const want=b64u(VAPID_PUB);
   let sub=await reg.pushManager.getSubscription();
-  if(!sub)sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64u(VAPID_PUB)});
+  if(sub){ /* inscrição feita com outra chave (a antiga) não recebe avisos: refaz */
+    const cur=sub.options&&sub.options.applicationServerKey?new Uint8Array(sub.options.applicationServerKey):null;
+    const same=cur&&cur.length===want.length&&cur.every((v,i)=>v===want[i]);
+    if(!same){try{await sub.unsubscribe();}catch(e){} sub=null;}
+  }
+  if(!sub)sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:want});
   const j=sub.toJSON();
   const r=await Supa.rest('push_subscriptions?on_conflict=endpoint',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify({endpoint:j.endpoint,keys:j.keys})});
   if(!r.ok)throw new Error('aparelho '+r.status);

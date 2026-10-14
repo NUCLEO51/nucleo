@@ -1,21 +1,39 @@
 // Núcleo: envia os avisos (notificações) dos alarmes que já chegaram na hora.
-// Chamada a cada minuto pelo relógio do banco (pg_cron). Só aceita quem sabe o código do relógio.
+// Chamada a cada minuto pelo relógio do banco (pg_cron -> public.chamar_alarmes()).
+// As chaves e o código do relógio ficam na tabela push_config (sem acesso público), não no repositório.
+// Na primeira execução, se ainda não houver chaves, a função cria o par e guarda na tabela.
 import webpush from "npm:web-push@3.6.7";
 
 const URL_ = Deno.env.get("SUPABASE_URL")!;
 const KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const H = { apikey: KEY, Authorization: `Bearer ${KEY}`, "Content-Type": "application/json" };
 
-webpush.setVapidDetails(
-  Deno.env.get("VAPID_SUBJECT")!,
-  Deno.env.get("VAPID_PUBLIC_KEY")!,
-  Deno.env.get("VAPID_PRIVATE_KEY")!,
-);
+type Cfg = { vapid_subject: string; vapid_public: string | null; vapid_private: string | null; cron_secret: string };
+
+async function lerCfg(): Promise<Cfg | null> {
+  const r = await fetch(`${URL_}/rest/v1/push_config?id=eq.1&select=vapid_subject,vapid_public,vapid_private,cron_secret`, { headers: H });
+  if (!r.ok) return null;
+  const j = await r.json();
+  return j[0] ?? null;
+}
 
 Deno.serve(async (req) => {
-  if (req.headers.get("x-cron-secret") !== Deno.env.get("CRON_SECRET")) {
+  let cfg = await lerCfg();
+  if (!cfg || req.headers.get("x-cron-secret") !== cfg.cron_secret) {
     return new Response("negado", { status: 401 });
   }
+
+  // primeira vez: cria as chaves de aviso e guarda (só grava se ainda estiverem vazias)
+  if (!cfg.vapid_public || !cfg.vapid_private) {
+    const k = webpush.generateVAPIDKeys();
+    await fetch(`${URL_}/rest/v1/push_config?id=eq.1&vapid_public=is.null`, {
+      method: "PATCH", headers: H, body: JSON.stringify({ vapid_public: k.publicKey, vapid_private: k.privateKey }),
+    });
+    cfg = await lerCfg();
+    if (!cfg || !cfg.vapid_public || !cfg.vapid_private) return new Response("chaves nao criadas", { status: 500 });
+  }
+  webpush.setVapidDetails(cfg.vapid_subject, cfg.vapid_public, cfg.vapid_private);
+
   const now = new Date();
   const iso = now.toISOString();
   const velho = new Date(now.getTime() - 36 * 3600e3).toISOString();
@@ -46,7 +64,8 @@ Deno.serve(async (req) => {
         enviados++;
       } catch (e) {
         const code = (e as { statusCode?: number }).statusCode;
-        if (code === 404 || code === 410) {
+        // aparelho que não existe mais ou inscrito com chave antiga: tira da lista (o app se inscreve de novo)
+        if (code === 401 || code === 403 || code === 404 || code === 410) {
           await fetch(`${URL_}/rest/v1/push_subscriptions?id=eq.${sub.id}`, { method: "DELETE", headers: H });
           removidos++;
         }
