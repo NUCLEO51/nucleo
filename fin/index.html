@@ -506,6 +506,7 @@ function vHome(){
   h+=hasDemo()?'<button class="btn sec" data-act="demo-off">Apagar os exemplos de teste</button>':'<button class="btn sec" data-act="demo-on">Carregar exemplos de teste</button>';
   h+='<button class="btn" data-act="tab" data-v="stmt">📄 Extratos do banco</button>';
   h+='<button class="btn" data-act="chat">🤝 Chat financeiro</button>';
+  h+=backupBlock();
   h+='<button class="btn sec" data-act="refresh">Atualizar</button><button class="btn sec" data-act="logout">Sair</button>';
   h+='<p class="hint" style="text-align:center"><a class="lnk" href="../">Abrir o Núcleo</a></p></div>';
   return h;
@@ -776,6 +777,44 @@ async function chatApply(ops){
   }
   return n;
 }
+/* ---------- cópia de segurança (arquivo no aparelho; não envia dados para lugar nenhum) ---------- */
+const BKP_KEY='fin-last-backup';
+function backupJson(recs,now){
+  return JSON.stringify({app:'FIN',formato:1,geradoEm:now.toISOString(),total:recs.length,registros:recs},null,1);
+}
+function backupDays(){
+  const t=lsGet(BKP_KEY); if(!t)return null;
+  const ms=Date.now()-new Date(t).getTime(); if(isNaN(ms))return null;
+  return Math.max(0,Math.floor(ms/86400000));
+}
+function backupBlock(){
+  const d=backupDays();
+  const aviso=d===null?'Você ainda não baixou nenhuma cópia dos seus dados.':(d>=7?'Faz '+d+' dias desde a última cópia. Baixe uma nova.':'Última cópia: há '+d+' dia(s).');
+  return '<button class="btn" data-act="backup">💾 Baixar cópia dos dados</button><p class="hint" style="text-align:center">'+esc(aviso)+'</p>';
+}
+async function baixarCopia(){
+  if(!await confirmBox('Baixar uma cópia?',['Vai salvar um arquivo com todos os seus dados do FIN, inclusive os apagados.','Ele tem informação financeira: guarde em lugar seguro.'],'Sim, baixar'))return;
+  let recs;
+  try{
+    const r=await Api.rest('fin_records?select=*&order=created_at.asc&limit=5000');
+    if(!r.ok)throw new Error('erro '+r.status);
+    recs=await r.json();
+  }catch(e){await info('Não consegui baixar','Sem internet ou o banco não respondeu. Tente de novo. Nada foi alterado.');return;}
+  const now=new Date();
+  const nome='FIN-copia-'+isoDate(now)+'.json';
+  const txt=backupJson(recs,now);
+  try{
+    const file=new File([txt],nome,{type:'application/json'});
+    if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title:nome});}
+    else{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type:'application/json'}));a.download=nome;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),4000);}
+  }catch(e){
+    if(e&&e.name==='AbortError')return; /* fechou a janela de compartilhar: não conta como cópia feita */
+    await info('Não consegui salvar o arquivo','Tente de novo.');return;
+  }
+  lsSet(BKP_KEY,now.toISOString());
+  await info('Cópia pronta','Foram '+recs.length+' registros. Guarde o arquivo '+nome+' em Arquivos, iCloud ou Drive.');
+  render();
+}
 function chatMenu(){
   const m=modal('<h3>Chat financeiro</h3><p class="hint">1) Copie tudo e cole no chat financeiro. 2) Quando ele devolver mudanças, cole aqui. Nada é salvo sem você confirmar.</p>'
     +'<button class="btn" id="c1">Copiar tudo para o chat</button><button class="btn" id="c2">Colar mudanças do chat</button><button class="btn sec" id="c0">Fechar</button><div id="cm" class="hint"></div>');
@@ -932,6 +971,7 @@ document.addEventListener('click',async ev=>{
       b.disabled=true;b.textContent='Apagando…';
       try{await clearDemo();S.msg='';}catch(e){S.msg='Não consegui apagar tudo: '+e.message;try{await Api.load();}catch(x){}}render();}}
   else if(act==='chat')chatMenu();
+  else if(act==='backup')baixarCopia();
   else if(act==='stmt-pick'){const f=$('stfile');if(f)f.click();}
   else if(act==='who'){S.who=b.dataset.v;render();}
   else if(act==='prop')reviewProp(get(id));
