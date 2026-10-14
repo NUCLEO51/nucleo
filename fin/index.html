@@ -68,7 +68,7 @@ label.f{display:block;font-weight:800;margin:.8rem 0 .25rem}
 .chk{display:flex;align-items:center;gap:.7rem;min-height:3.4rem;font-weight:700}
 .chk input{width:1.8rem;height:1.8rem}
 .err{color:var(--danger);font-weight:800;min-height:1.4rem;margin:.4rem 0}
-.hint{color:var(--muted);font-size:.85rem;margin:.2rem 0}
+.hint{color:var(--muted);font-size:.85rem;margin:.2rem 0;white-space:pre-line}
 .note{background:var(--warn-soft);color:var(--warn);border-radius:.9rem;padding:.7rem .9rem;margin:.6rem 0;font-size:.9rem}
 .bar{height:.7rem;border-radius:.4rem;background:var(--surface-2);overflow:hidden;margin:.4rem 0}
 .bar i{display:block;height:100%;background:var(--accent)}
@@ -504,6 +504,7 @@ function vHome(){
   }
   h+='<div class="note">Projeção parcial não é dinheiro disponível. O FIN só organiza e lembra: quem paga é você.</div>';
   h+=hasDemo()?'<button class="btn sec" data-act="demo-off">Apagar os exemplos de teste</button>':'<button class="btn sec" data-act="demo-on">Carregar exemplos de teste</button>';
+  h+='<button class="btn" data-act="tab" data-v="stmt">📄 Extratos do banco</button>';
   h+='<button class="btn" data-act="chat">🤝 Chat financeiro</button>';
   h+='<button class="btn sec" data-act="refresh">Atualizar</button><button class="btn sec" data-act="logout">Sair</button>';
   h+='<p class="hint" style="text-align:center"><a class="lnk" href="../">Abrir o Núcleo</a></p></div>';
@@ -584,8 +585,162 @@ function vDebts(){
   return h+'</div>';
 }
 
+
+/* ---------- extratos (Mobills .xlsx) ---------- */
+const ST_KIND={INCOME:'Renda',EXPENSE:'Gasto',TRANSFER:'Transferência',CARD_SETTLEMENT:'Pagou fatura',LOAN_DISBURSEMENT:'Empréstimo recebido'};
+const stNorm=x=>String(x==null?'':x).normalize('NFD').replace(/[̀-ͯ]/g,'').trim().toLowerCase();
+function fnv(str){let h=0x811c9dc5;for(let i=0;i<str.length;i++){h^=str.charCodeAt(i);h=Math.imul(h,0x01000193)>>>0;}return h.toString(16).padStart(8,'0');}
+function stClassify(desc,cat,c){
+  const d=stNorm(desc),k=stNorm(cat);
+  if(c>0){if(k==='salario'||k==='renda extra')return 'INCOME';if(d.startsWith('credito liberado'))return 'LOAN_DISBURSEMENT';return 'TRANSFER';}
+  if(k==='transferencia enviada'||k==='pix'||k==='investimento')return 'TRANSFER';
+  if(d.indexOf('fatura')>=0)return 'CARD_SETTLEMENT';
+  return 'EXPENSE';
+}
+/* leitor mínimo de .xlsx (primeira planilha, só valores) */
+async function xlsxRows(buf){
+  if(buf.byteLength>5000000)throw new Error('Arquivo grande demais.');
+  if(typeof DecompressionStream==='undefined')throw new Error('Este navegador não abre .xlsx. Use o Safari atualizado.');
+  const b=new Uint8Array(buf),v=new DataView(buf),u16=o=>v.getUint16(o,true),u32=o=>v.getUint32(o,true);
+  let eo=-1;for(let i=b.length-22;i>=Math.max(0,b.length-22-65535);i--)if(u32(i)===0x06054b50){eo=i;break;}
+  if(eo<0)throw new Error('Não é um arquivo .xlsx.');
+  const cnt=u16(eo+10);let p=u32(eo+16);const ents=[];
+  for(let i=0;i<cnt;i++){
+    if(u32(p)!==0x02014b50)throw new Error('Arquivo corrompido.');
+    const nl=u16(p+28),el=u16(p+30),cl=u16(p+32);
+    ents.push({name:new TextDecoder().decode(b.subarray(p+46,p+46+nl)),method:u16(p+10),size:u32(p+20),off:u32(p+42)});p+=46+nl+el+cl;
+  }
+  const rd=async e=>{
+    if(u32(e.off)!==0x04034b50)throw new Error('Arquivo corrompido.');
+    const st=e.off+30+u16(e.off+26)+u16(e.off+28),raw=b.subarray(st,st+e.size);
+    if(e.method===0)return new TextDecoder().decode(raw);
+    if(e.method!==8)throw new Error('Compressão não suportada.');
+    const ds=new DecompressionStream('deflate-raw'),w=ds.writable.getWriter();w.write(raw).catch(()=>{});w.close().catch(()=>{});
+    return new TextDecoder().decode(await new Response(ds.readable).arrayBuffer());
+  };
+  const un=t=>t.replace(/&(#x[0-9a-fA-F]+|#\d+|amp|lt|gt|quot|apos);/g,(m,g)=>g==='amp'?'&':g==='lt'?'<':g==='gt'?'>':g==='quot'?'"':g==='apos'?"'":String.fromCodePoint(g[1]==='x'?parseInt(g.slice(2),16):parseInt(g.slice(1),10)));
+  const tx=x=>Array.from(x.matchAll(/<t(?:\s[^>]*)?>([\s\S]*?)<\/t>/g)).map(m=>un(m[1])).join('');
+  const sheet=ents.find(e=>e.name==='xl/worksheets/sheet1.xml')||ents.filter(e=>/^xl\/worksheets\/[^/]+\.xml$/.test(e.name)).sort((a,c)=>a.name<c.name?-1:1)[0];
+  if(!sheet)throw new Error('Não achei a planilha.');
+  const se=ents.find(e=>e.name==='xl/sharedStrings.xml');
+  const sh=se?Array.from((await rd(se)).matchAll(/<si>([\s\S]*?)<\/si>|<si\s*\/>/g)).map(m=>tx(m[1]||'')):[];
+  const xml=await rd(sheet),rows=[];
+  for(const rm of xml.matchAll(/<row\b[^>]*?(?:\/>|>([\s\S]*?)<\/row>)/g)){
+    const row=[];
+    for(const c of (rm[1]||'').matchAll(/<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)){
+      const at=c[1],ref=(/\br="([A-Z]+)\d+"/.exec(at)||[])[1],ty=(/\bt="(\w+)"/.exec(at)||[])[1],bd=c[2]||'',vv=(/<v>([\s\S]*?)<\/v>/.exec(bd)||[])[1];
+      if(!ref)throw new Error('Célula inválida.');
+      let val=null;
+      if(ty==='s'){if(vv===undefined||sh[Number(vv)]===undefined)throw new Error('Texto ausente na planilha.');val=sh[Number(vv)];}
+      else if(ty==='inlineStr')val=tx(bd);
+      else if(ty==='str')val=vv===undefined?null:un(vv);
+      else if(ty==='b'||ty==='e')throw new Error('Tipo de célula não suportado.');
+      else if(vv!==undefined){val=Number(vv);if(!isFinite(val))throw new Error('Número inválido.');}
+      let n=0;for(const ch of ref)n=n*26+(ch.charCodeAt(0)-64);n--;
+      while(row.length<=n)row.push(null);row[n]=val;
+    }
+    rows.push(row);
+  }
+  return rows;
+}
+/* Mobills "Relatório de transações": Data, Descrição, Valor, Conta, Categoria, Subcategoria, Tags */
+function mobillsParse(rows){
+  const H=['data','descricao','valor','conta','categoria','subcategoria','tags'];
+  const head=(rows[0]||[]).map(stNorm);
+  if(H.some((h,i)=>head[i]!==h))throw new Error('As colunas não são as do relatório de transações do Mobills (Data, Descrição, Valor, Conta, Categoria, Subcategoria, Tags).');
+  const body=[];rows.slice(1).forEach((r,i)=>{if(r.some(c=>c!==null&&c!==''))body.push({r:r,line:i+2});});
+  if(!body.length)throw new Error('O arquivo não tem lançamentos.');
+  if(body.length>10000)throw new Error('Lançamentos demais (máximo 10.000).');
+  const occ={},accts={};
+  body.forEach(x=>{
+    const r=x.r,line=x.line,m=typeof r[0]==='string'?/^(\d{2})\/(\d{2})\/(\d{4})$/.exec(r[0].trim()):null;
+    if(!m)throw new Error('Data inválida na linha '+line+'.');
+    const date=m[3]+'-'+m[2]+'-'+m[1];if(isNaN(new Date(date+'T00:00:00Z'))||new Date(date+'T00:00:00Z').toISOString().slice(0,10)!==date)throw new Error('Data inválida na linha '+line+'.');
+    const v=r[2],c=Math.round(v*100);
+    if(typeof v!=='number'||!isFinite(v)||Math.abs(v*100-c)>1e-6||c===0)throw new Error('Valor inválido na linha '+line+'.');
+    const acct=String(r[3]==null?'':r[3]).trim();if(!acct)throw new Error('Conta ausente na linha '+line+'.');
+    const desc=String(r[1]==null?'':r[1]),cat=String(r[4]==null?'':r[4]);
+    const content=JSON.stringify([date,c,stNorm(desc),stNorm(acct),stNorm(cat),stNorm(r[5])]);
+    occ[content]=(occ[content]||0)+1;
+    (accts[acct]=accts[acct]||[]).push({i:date+'-'+fnv(content)+'-'+occ[content],d:date,c:c,k:stClassify(desc,cat,c),t:desc.slice(0,80),g:cat.slice(0,40)});
+  });
+  return {accts:accts,rows:body.length,dupGroups:Object.keys(occ).filter(k=>occ[k]>1).length};
+}
+function stPlan(parsed,holder){
+  const out=[];
+  for(const name of Object.keys(parsed.accts)){
+    const ents=parsed.accts[name];
+    const rec=S.recs.find(r=>r.kind==='stmt'&&r.data.account===name);
+    if(rec&&rec.data.holder&&rec.data.holder!==holder)throw new Error('A conta “'+name+'” já está salva como de '+pname(rec.data.holder)+'.');
+    const old={};(rec?rec.data.entries:[]).forEach(e=>{old[e.i]=e;});
+    let add=0,same=0;
+    for(const e of ents){
+      const o=old[e.i];
+      if(o){if(o.c!==e.c||o.d!==e.d||o.k!==e.k)throw new Error('Conflito: um lançamento já salvo veio diferente. Nada foi gravado.');same++;}
+      else add++;
+    }
+    out.push({name:name,rec:rec,ents:ents,add:add,same:same});
+  }
+  return out;
+}
+async function stApply(plan,holder){
+  for(const x of plan){
+    if(!x.add)continue;
+    const have={};(x.rec?x.rec.data.entries:[]).forEach(e=>{have[e.i]=1;});
+    const merged=(x.rec?x.rec.data.entries.slice():[]).concat(x.ents.filter(e=>!have[e.i]));
+    merged.sort((a,b)=>a.d<b.d?-1:a.d>b.d?1:0);
+    const data={account:x.name,holder:holder,source:'mobills',entries:merged};
+    if(x.rec)await Api.update(x.rec,data);else await Api.create('stmt',data);
+  }
+}
+async function stImport(file){
+  let parsed;
+  try{parsed=mobillsParse(await xlsxRows(await file.arrayBuffer()));}
+  catch(e){S.msg='Não consegui ler o arquivo: '+e.message;render();return;}
+  const names=Object.keys(parsed.accts);
+  const dates=[].concat.apply([],names.map(n=>parsed.accts[n].map(e=>e.d))).sort();
+  const cnt={};names.forEach(n=>parsed.accts[n].forEach(e=>{cnt[e.k]=(cnt[e.k]||0)+1;}));
+  const first=[
+    parsed.rows+' lançamentos, de '+brDate(dates[0])+' até '+brDate(dates[dates.length-1])+'.',
+    'Contas no arquivo: '+names.join(', ')+'.'
+  ].concat(Object.keys(ST_KIND).filter(k=>cnt[k]).map(k=>ST_KIND[k]+': '+cnt[k]));
+  if(parsed.dupGroups)first.push('Há '+parsed.dupGroups+' grupo(s) de linhas iguais. Elas ficam como lançamentos separados.');
+  await form('Importar extrato do Mobills',[{k:'holder',label:'De quem são estas contas?',type:'select',opts:PEOPLE,hint:first.join('\n')}],{holder:defHolder()||'MARCELO'},{
+    validate:o=>{try{stPlan(parsed,o.holder);}catch(e){return e.message;}return '';},
+    summary:o=>{const pl=stPlan(parsed,o.holder);return ['Contas de: '+pname(o.holder)].concat(pl.map(x=>x.name+': '+x.add+' novos, '+x.same+' já existiam')).concat(['Nada é pago nem alterado no banco.']);},
+    save:async o=>{await stApply(stPlan(parsed,o.holder),o.holder);}
+  });
+}
+function stRows(){
+  const out=[];
+  byKind('stmt').filter(r=>mine(r.data)).forEach(r=>r.data.entries.forEach(e=>out.push(Object.assign({acct:r.data.account},e))));
+  return out;
+}
+function vStmt(){
+  let h=header('Extratos')+whoBar()+'<div class="wrap"><button class="btn" data-act="stmt-pick">📥 Importar arquivo do Mobills (.xlsx)</button><input type="file" id="stfile" accept=".xlsx" hidden>'
+    +'<p class="hint">No Mobills: Relatório de transações → exportar em Excel. Importar de novo o mesmo período não duplica.</p>';
+  const rows=stRows();
+  if(!rows.length)return h+'<div class="card mut">Nenhum extrato importado ainda.</div></div>';
+  const by={};
+  rows.forEach(e=>{const ym=e.d.slice(0,7);const m=by[ym]=by[ym]||{INCOME:0,EXPENSE:0,CARD_SETTLEMENT:0,LOAN_DISBURSEMENT:0,TRANSFER:0};m[e.k]+=e.c;});
+  Object.keys(by).sort().reverse().slice(0,6).forEach(ym=>{
+    const m=by[ym];
+    h+='<h2>'+ymShort(ym)+'</h2><div class="card"><div class="row"><span class="mut">Renda</span><b>'+money(m.INCOME)+'</b></div>'
+      +'<div class="row"><span class="mut">Gastos</span><b>'+money(-m.EXPENSE)+'</b></div>'
+      +'<div class="row"><span class="mut">Fatura de cartão paga</span><b>'+money(-m.CARD_SETTLEMENT)+'</b></div>'
+      +(m.LOAN_DISBURSEMENT?'<div class="row"><span class="mut">Empréstimo recebido</span><b>'+money(m.LOAN_DISBURSEMENT)+'</b></div>':'')
+      +'<div class="row"><span class="mut">Transferências (saldo)</span><b>'+money(m.TRANSFER)+'</b></div></div>';
+  });
+  h+='<h2>Últimos lançamentos</h2>';
+  rows.sort((a,b)=>a.d<b.d?1:a.d>b.d?-1:0).slice(0,40).forEach(e=>{
+    h+='<div class="item"><div class="row"><span class="t">'+esc(e.t||'(sem descrição)')+'</span><b>'+money(e.c)+'</b></div><div class="mut">'+brDate(e.d)+' · '+ST_KIND[e.k]+(e.g?' · '+esc(e.g):'')+' · '+esc(e.acct)+'</div></div>';
+  });
+  h+='<p class="hint">Mostrando os 40 mais recentes. Renda, empréstimo, transferência e fatura paga não entram em “Gastos”.</p>';
+  return h+'</div>';
+}
+
 /* ---------- chat financeiro ---------- */
-const CHAT_KINDS=['card','charge','invpay','bill','billmonth','debt','proposal'];
+const CHAT_KINDS=['card','charge','invpay','bill','billmonth','debt','proposal','stmt'];
 function chatSnapshot(){
   return JSON.stringify({fin_snapshot:1,gerado_em:new Date().toISOString(),
     regras:['Valores em centavos inteiros (R$ 10,50 = 1050). Dado ausente = null, nunca 0.','holder = MARCELO ou MARLENE (devedor/titular); payer = quem paga hoje.','Para mudar algo, devolva JSON {"fin_ops":1,"ops":[...]} com op create (kind,data), update (id,data = campos a mudar) ou delete (id). Máximo 60 ops.','Marcelo confere e confirma antes de salvar. O FIN nunca paga nem move dinheiro.','kinds: card, charge, invpay, bill, billmonth, debt, proposal (proposal com data.cfg=capacity guarda quanto dá para pagar por mês: capacityC).'],
@@ -650,7 +805,7 @@ function render(){
   const a=$('app');
   if(!S.sess||!S.ready){return;}
   let body;
-  if(S.tab==='home')body=vHome();else if(S.tab==='bills')body=vBills();else if(S.tab==='cards')body=S.cardId?vCard():vCards();else if(S.tab==='debts')body=vDebts();else if(S.tab==='plan')body=vPlan();else body=vHome();
+  if(S.tab==='home')body=vHome();else if(S.tab==='bills')body=vBills();else if(S.tab==='cards')body=S.cardId?vCard():vCards();else if(S.tab==='debts')body=vDebts();else if(S.tab==='plan')body=vPlan();else if(S.tab==='stmt')body=vStmt();else body=vHome();
   a.innerHTML=body+(S.msg?'<div class="wrap"><div class="err">'+esc(S.msg)+'</div></div>':'')+tabs();
 }
 
@@ -760,6 +915,7 @@ async function debtForm(rec,preset){
   });
 }
 
+document.addEventListener('change',ev=>{const t=ev.target;if(t&&t.id==='stfile'&&t.files&&t.files[0]){const f=t.files[0];t.value='';stImport(f);}});
 document.addEventListener('click',async ev=>{
   const b=ev.target.closest('[data-act]');if(!b)return;
   const act=b.dataset.act,id=b.dataset.id,get=i=>S.recs.find(r=>r.id===i);
@@ -776,6 +932,7 @@ document.addEventListener('click',async ev=>{
       b.disabled=true;b.textContent='Apagando…';
       try{await clearDemo();S.msg='';}catch(e){S.msg='Não consegui apagar tudo: '+e.message;try{await Api.load();}catch(x){}}render();}}
   else if(act==='chat')chatMenu();
+  else if(act==='stmt-pick'){const f=$('stfile');if(f)f.click();}
   else if(act==='who'){S.who=b.dataset.v;render();}
   else if(act==='prop')reviewProp(get(id));
   else if(act==='cap-set'){const c=cfgRec();form('Quanto dá para pagar por mês',[{k:'capacityC',label:'Valor por mês para as dívidas',type:'money',req:true,hint:'Só o que sobra de verdade. Exemplo: 1.800,00'}],{capacityC:c?c.data.capacityC:null},{summary:o=>['Por mês: '+money(o.capacityC)],save:async o=>{if(c)await Api.update(c,Object.assign({},c.data,{capacityC:o.capacityC}));else await Api.create('proposal',{cfg:'capacity',capacityC:o.capacityC});}});}
