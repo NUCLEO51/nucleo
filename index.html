@@ -2049,6 +2049,11 @@ function sheetCap(){
   h+='<div><label class="lbl" for="cap-text">O que você quer anotar?</label><textarea class="inp cap-ta" id="cap-text" data-bind="text" placeholder="Ex.: me lembra de ligar para a seguradora amanhã às 10">'+esc(d.text)+'</textarea><div class="note-s" style="margin:.4rem .2rem 0">Para falar em vez de digitar: toque no microfone do teclado. Se ele não aparece, ligue em Ajustes › Geral › Teclado › Ativar Ditado.</div></div>';
   h+='<div><span class="lbl">Salvar como</span><div class="chips">'+[['auto','Automático'],['rem','Lembrete'],['ev','Compromisso'],['note','Nota'],['inbox','Caixa de entrada']].map(k=>'<button class="chip'+(d.mode===k[0]?' on':'')+'" data-act="cap-mode" data-m="'+k[0]+'">'+k[1]+'</button>').join('')+'</div></div>';
   h+='<div id="capPrev">'+capPreviewHtml(d)+'</div>';
+  h+='<div><span class="lbl">Quer data, hora, alarme, repetição ou prioridade?</span>'
+    +'<button class="btn grow" style="margin-top:.5rem;width:100%" data-act="cap-full" data-m="rem">📅 Lembrete completo</button>'
+    +'<button class="btn grow" style="margin-top:.5rem;width:100%" data-act="cap-full" data-m="ev">🗓 Compromisso completo</button>'
+    +'<button class="btn grow" style="margin-top:.5rem;width:100%" data-act="cap-full" data-m="note">📝 Nota completa</button>'
+    +'<div class="note-s" style="margin:.4rem .2rem 0">Abre o formulário completo e leva o que você já escreveu.</div></div>';
   h+='</div><div class="sheet-ft"><button class="btn primary grow" data-act="save-sheet">Salvar</button></div></div></div>';
   return h;
 }
@@ -2392,6 +2397,10 @@ const A={
   'view-img':d=>{const v=$('viewer');v.innerHTML='<img src="'+imgSrc(d.id)+'" data-img="'+esc(d.id)+'" alt="Imagem ampliada"><button data-act="close-viewer" aria-label="Fechar imagem">'+ic('close',1.1)+'</button>';v.hidden=false;},
   'close-viewer':()=>{$('viewer').hidden=true;},
   'cap-mode':d=>{S.sheet.draft.mode=d.m;renderSheet();},
+  'cap-full':d=>{const sh=S.sheet;if(!sh||sh.type!=='cap')return;const t=(sh.draft.text||'').trim(),p=t?parseCapture(t):{};
+    if(d.m==='rem')openSheet('rem',Object.assign(newRem(p.date||''),{title:p.title||t.slice(0,120),time:p.time||'',repeat:p.repeat||'none',repN:p.repN||1,repDays:p.repDays||[],repU:p.repU||'week'}));
+    else if(d.m==='ev')openSheet('ev',{title:p.title||t.slice(0,120),date:p.date||isoDate(new Date()),time:p.time||'',repeat:p.repeat||'none',repN:p.repN||1,repU:p.repU||'week',repDays:p.repDays||[],repUntil:'',createdAt:Date.now()});
+    else openSheet('note',Object.assign(newNote(''),{title:t.slice(0,60),body:t}));},
   'inbox-rem':d=>{const i=S.inbox.find(x=>x.id===d.id);if(!i)return;const p=parseCapture(i.text);openSheet('rem',Object.assign(newRem(p.date||''),{title:p.title,time:p.time,repeat:p.repeat,repN:p.repN||1,repDays:p.repDays||[],repU:p.repU||'week'}),{fromInbox:i.id});},
   'inbox-note':d=>{const i=S.inbox.find(x=>x.id===d.id);if(!i)return;openSheet('note',Object.assign(newNote(''),{title:i.text.slice(0,60),body:i.text}),{fromInbox:i.id});},
   'inbox-del':async d=>{const i=S.inbox.find(x=>x.id===d.id);if(!i)return;if(!(await ask({title:'Descartar da caixa de entrada?',msg:i.text,ok:'Descartar',danger:true})))return;await Store.del('inbox',d.id);toast('Descartado');},
