@@ -472,6 +472,22 @@ function parseCapture(text,now){
   else if(cut(/\b(?:todos os dias|todo dia|diariamente)\b/))repeat='daily';
   else if(cut(/\b(?:toda semana|todas as semanas|semanalmente)\b/))repeat='weekly';
   else if(cut(/\b(?:todo mes|todos os meses|mensalmente)\b/))repeat='monthly';
+  /* avisos antes do horário: "uma hora antes", "30 minutos antes", "um dia antes", "meia hora antes" */
+  const alarmsMin=[];
+  {
+    const unitMin=u=>/^min/.test(u)?1:/^h/.test(u)?60:/^dia/.test(u)?1440:10080;
+    const reA=new RegExp('\\b(?:e\\s+)?(?:meia hora|'+NUM+'\\s+(minutos?|min|horas?|h|dias?|semanas?))\\s+(?:antes|de antecedencia)\\b');
+    let mm,guard=0;
+    while(guard++<5&&(mm=cut(reA))){
+      const v=/meia hora/.test(mm[0])?30:num(mm[1])*unitMin(mm[2]);
+      if(v>0&&alarmsMin.indexOf(v)<0)alarmsMin.push(v);
+    }
+    if(alarmsMin.length){
+      cut(/\b(?:e\s+)?(?:coloque|coloca|ponha|poe|bota|botar|colocar|crie|criar|adicione|adiciona)\s+(?:o\s+|um\s+|dois\s+)?(?:alarmes?|avisos?|alertas?)(?:\s+(?:para|pra|de|com))?\b/);
+      cut(/\b(?:e\s+)?me\s+avis[ae]r?(?:\s+(?:com|para|pra))?\b/);
+      cut(/\b(?:com|e)\s+(?:alarmes?|avisos?|alertas?)(?:\s+(?:para|pra|de))?\b/);
+    }
+  }
   /* prazos relativos */
   if((m=cut(new RegExp('\\b(?:daqui(?: a)?|em|dentro de)\\s+'+NUM+'\\s+(minutos?|min|horas?|h|dias?|semanas?|meses|mes|anos?)\\b')))){
     const v=num(m[1]),u=m[2];let t;
@@ -512,21 +528,25 @@ function parseCapture(text,now){
   }
   /* horário */
   const setT=(h,mi)=>{if(h>=0&&h<=23&&mi>=0&&mi<=59)time=pad(h)+':'+pad(mi);};
+  let plain='';
   const per=(h,p)=>((p==='tarde'||p==='noite')&&h<12)?h+12:(p==='manha'&&h===12?0:h);
   if(!time){
     if((m=cut(/\b(?:as\s+|a\s+)?(\d{1,2})(?:[:h](\d{2}))?\s*(?:h|horas?)?\s+(?:da|de)\s+(manha|tarde|noite|madrugada)\b/)))setT(per(+m[1],m[3]),m[2]?+m[2]:0);
     else if(cut(/\b(?:ao\s+)?meio[- ]dia\b/))time='12:00';
     else if(cut(/\b(?:a\s+)?meia[- ]noite\b/))time='00:00';
-    else if((m=cut(/\bas\s+(\d{1,2})(?:[:h](\d{2}))?(?:\s*(?:h|horas?))?\b/)))setT(+m[1],m[2]?+m[2]:0);
-    else if((m=cut(/\b(\d{1,2})[:h](\d{2})\b/)))setT(+m[1],+m[2]);
-    else if((m=cut(/\b(\d{1,2})\s*h(?:oras?)?\b/)))setT(+m[1],0);
+    else if((m=cut(/\bas\s+(\d{1,2})(?:[:h](\d{2}))?(?:\s*(?:h|horas?))?\b/))){setT(+m[1],m[2]?+m[2]:0);plain=m[1];}
+    else if((m=cut(/\b(\d{1,2})[:h](\d{2})\b/))){setT(+m[1],+m[2]);plain=m[1];}
+    else if((m=cut(/\b(\d{1,2})\s*h(?:oras?)?\b/))){setT(+m[1],0);plain=m[1];}
   }
   if((m=cut(/\b(?:da|de|a|pela|na|no|hoje a|amanha a)\s+(manha|tarde|noite|madrugada)\b/))){
-    const p=m[1];
+    const p=m[1];plain='';
     if(time){const hm=time.split(':').map(Number);setT(per(hm[0],p),hm[1]);}
     else time={manha:'09:00',tarde:'15:00',noite:'20:00',madrugada:'05:00'}[p];
   }
   if(!time&&cut(/\bcedo\b/))time='07:00';
+  /* "1h30", "às 2", "3h" sem dizer manhã ou tarde: compromissos às 1 a 6 costumam ser da tarde (diga "da madrugada" para o contrário) */
+  let pmGuess=false;
+  if(time&&plain&&!(plain.length>1&&plain.charAt(0)==='0')){const hm=time.split(':').map(Number);if(hm[0]>=1&&hm[0]<=6){setT(hm[0]+12,hm[1]);pmGuess=true;}}
   /* escolhe o dia da semana: hoje conta se o horário ainda não passou */
   if(weekPick&&!date){
     let best=null;
@@ -541,9 +561,11 @@ function parseCapture(text,now){
   let title=orig.replace(/^\s*(?:me\s+)?(?:lembr(?:ar|a|e)|anotar|marcar|agendar|criar lembrete)\s*(?:de|que|para|:)?\s*[:,\-]?\s*/i,'');
   for(let i=0;i<4;i++)title=title.replace(/\s+(?:as|às|a|à|de|em|para|pra|no|na|pela|pelo|da|do|dia|e|,)\s*$/i,'');
   title=title.replace(/\s*,\s*,/g,',').replace(/\s{2,}/g,' ').replace(/^[\s,.\-:;]+|[\s,.\-:;]+$/g,'');
+  const semTenho=title.replace(/^(?:que\s+)?(?:eu\s+)?(?:tenho|vou ter)\s+(?:que\s+)?(?:um\s+|uma\s+|o\s+|a\s+)?/i,'');
+  if(semTenho.trim())title=semTenho;
   if(!title)title=String(text||'').trim();
   title=title.charAt(0).toUpperCase()+title.slice(1);
-  return {title,date,time,repeat,repN,repU,repDays,when:!!date};
+  return {title,date,time,repeat,repN,repU,repDays,when:!!date,alarms:alarmsMin,pmGuess};
 }
 </script>
 
@@ -2035,13 +2057,16 @@ function capMode(d){
 function capSummary(d){
   const p=parseCapture(d.text),m=capMode(d),today=isoDate(new Date());
   let when='';
-  if(m==='rem'||m==='ev'){const dd=p.date||today;when=(m==='rem'&&!p.date)?'sem data':relDay(dd,today)+(p.time?' às '+p.time:'')+(p.repeat!=='none'?' · '+repLabel(p):'');}
-  return {m,what:m==='note'||m==='inbox'?d.text.trim().slice(0,70):p.title,when};
+  let note='';
+  if(m==='rem'||m==='ev'){const dd=p.date||today;when=(m==='rem'&&!p.date)?'sem data':relDay(dd,today)+(p.time?' às '+p.time:'')+(p.repeat!=='none'?' · '+repLabel(p):'');
+    if(m==='rem'&&p.alarms&&p.alarms.length&&p.time&&p.date)when+=' · avisos: '+p.alarms.slice().sort((a,b)=>a-b).map(minLabel).join(', ');
+    if(p.pmGuess)note='Entendi '+p.time+' (à tarde). Para madrugada, diga “da madrugada”.';}
+  return {m,what:m==='note'||m==='inbox'?d.text.trim().slice(0,70):p.title,when,note};
 }
 function capPreviewHtml(d){
   if(!d.text.trim())return '<div class="note-s">Eu entendo “amanhã às 10”, “quarta 14h”, “dia 20”, “todo dia”.</div>';
   const c=capSummary(d);
-  return '<div class="prev"><b>'+CAPL[c.m]+': '+esc(c.what)+'</b><small>'+esc(c.when||(c.m==='inbox'?'Fica guardado para organizar depois.':''))+'</small></div>';
+  return '<div class="prev"><b>'+CAPL[c.m]+': '+esc(c.what)+'</b><small>'+esc(c.when||(c.m==='inbox'?'Fica guardado para organizar depois.':''))+'</small>'+(c.note?'<small>'+esc(c.note)+'</small>':'')+'</div>';
 }
 function sheetCap(){
   const sh=S.sheet,d=sh.draft;
@@ -2133,7 +2158,7 @@ async function saveCapture(d,quiet){
   const p=parseCapture(text),m=capMode(d),today=isoDate(new Date());
   if(!quiet)closeSheet();
   if(m==='rem'){
-    const doc=Object.assign(newRem(p.date||''),{title:p.title,time:p.time,repeat:p.repeat,repN:p.repN||1,repDays:p.repDays||[],repU:p.repU||'week',alarms:p.time&&p.date?[{id:uid(),min:0,msg:''}]:[]});
+    const doc=Object.assign(newRem(p.date||''),{title:p.title,time:p.time,repeat:p.repeat,repN:p.repN||1,repDays:p.repDays||[],repU:p.repU||'week',alarms:p.time&&p.date?((p.alarms&&p.alarms.length)?p.alarms.map(min=>({id:uid(),min,msg:''})):[{id:uid(),min:0,msg:''}]):[]});
     const id=await Store.put('reminders',doc);
     toast((quiet?'Siri → ':'')+'Lembrete criado: '+p.title+(p.date?' · '+relDay(p.date,today)+(p.time?' às '+p.time:''):''),'Abrir',()=>{const r=S.reminders.find(x=>x.id===id);if(r)openRem(r);});
   }else if(m==='ev'){
@@ -2398,7 +2423,7 @@ const A={
   'close-viewer':()=>{$('viewer').hidden=true;},
   'cap-mode':d=>{S.sheet.draft.mode=d.m;renderSheet();},
   'cap-full':d=>{const sh=S.sheet;if(!sh||sh.type!=='cap')return;const t=(sh.draft.text||'').trim(),p=t?parseCapture(t):{};
-    if(d.m==='rem')openSheet('rem',Object.assign(newRem(p.date||''),{title:p.title||t.slice(0,120),time:p.time||'',repeat:p.repeat||'none',repN:p.repN||1,repDays:p.repDays||[],repU:p.repU||'week'}));
+    if(d.m==='rem'){const r=Object.assign(newRem(p.date||''),{title:p.title||t.slice(0,120),time:p.time||'',repeat:p.repeat||'none',repN:p.repN||1,repDays:p.repDays||[],repU:p.repU||'week'});if(p.alarms&&p.alarms.length&&p.time&&p.date)r.alarms=p.alarms.map(min=>({id:uid(),min,msg:''}));openSheet('rem',r);}
     else if(d.m==='ev')openSheet('ev',{title:p.title||t.slice(0,120),date:p.date||isoDate(new Date()),time:p.time||'',repeat:p.repeat||'none',repN:p.repN||1,repU:p.repU||'week',repDays:p.repDays||[],repUntil:'',createdAt:Date.now()});
     else openSheet('note',Object.assign(newNote(''),{title:t.slice(0,60),body:t}));},
   'inbox-rem':d=>{const i=S.inbox.find(x=>x.id===d.id);if(!i)return;const p=parseCapture(i.text);openSheet('rem',Object.assign(newRem(p.date||''),{title:p.title,time:p.time,repeat:p.repeat,repN:p.repN||1,repDays:p.repDays||[],repU:p.repU||'week'}),{fromInbox:i.id});},
