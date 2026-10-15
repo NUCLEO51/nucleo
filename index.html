@@ -1142,6 +1142,9 @@ function dayItems(iso){
 const dayCount=iso=>S.reminders.filter(r=>r.date===iso&&!r.done).length+S.events.filter(e=>occursOn(e,iso)).length;
 function lmap(){const m={};S.lists.forEach(l=>{m[l.id]=l;});return m;}
 const remList=(r,lm)=>r.list&&lm[r.list]?r.list:'';
+/* concluídos dentro de cada lista: ligar/desligar (guardado neste aparelho, uma escolha por lista) */
+const HD_KEY='nucleo-hidedone';
+function hiddenDone(){try{return JSON.parse(lsGet(HD_KEY)||'{}')||{};}catch(e){return {};}}
 function smart(){
   const today=isoDate(new Date()),R=S.reminders,open=R.filter(r=>!r.done);
   return {
@@ -1347,6 +1350,8 @@ function remSub(){
     const open=list.filter(r=>!r.done),done=list.filter(r=>r.done);
     const edit=real?'<button class="iconbtn" data-act="edit-list" data-id="'+esc(id)+'" aria-label="Renomear, cor, seções ou apagar lista">'+ic('edit',1.1,2.2)+'</button>':'';
     let h=subHdr('Lembretes','rview-back','Lista',real?(l.name||'Sem nome'):'Lembretes',edit,col);
+    const hd=hiddenDone()[id]===1;
+    h+='<div class="actbar" style="margin-top:.8rem"><button class="btn grow" data-act="toggle-done-list" data-id="'+esc(id)+'" aria-pressed="'+(!hd)+'">'+(hd?'Mostrar concluídos':'Ocultar concluídos')+' ('+done.length+')</button></div>';
     const secs=real?(l.sections||[]).filter(x=>(x.t||'').trim()):[];
     const ids=new Set(secs.map(x=>x.id));
     const noSec=open.filter(r=>!r.section||!ids.has(r.section));
@@ -1355,7 +1360,7 @@ function remSub(){
       const its=open.filter(r=>r.section===sc.id);
       h+='<div class="sec-lh"><h2>'+esc(sc.t)+'</h2><span class="cnt num">'+its.length+'</span></div><div class="group">'+its.map(r=>remRow(r,true)).join('')+addRow('new-rem','Novo lembrete aqui',' data-list="'+esc(id)+'" data-section="'+esc(sc.id)+'"')+'</div>';
     });
-    if(done.length)h+='<div class="sec-lh"><h2>Concluídos</h2><span class="cnt num">'+done.length+'</span></div><div class="group">'+done.map(r=>remRow(r,true)).join('')+'</div>';
+    if(done.length&&!hd)h+='<div class="sec-lh"><h2>Concluídos</h2><span class="cnt num">'+done.length+'</span></div><div class="group">'+done.map(r=>remRow(r,true)).join('')+'</div>';
     if(real&&!secs.length)h+='<div class="actbar"><button class="btn grow" data-act="edit-list" data-id="'+esc(id)+'">'+ic('plus',1,2.4)+'Criar seções nesta lista</button></div>';
     return h;
   }
@@ -2355,6 +2360,7 @@ const A={
   jump:d=>{const el=$(d.to);if(el&&el.offsetHeight)el.scrollIntoView({behavior:'smooth',block:'start'});else toast('Nada aqui por enquanto.');},
   rview:d=>go(()=>{S.rview=d.v;S.rq='';}),
   'rview-back':()=>go(()=>{S.rview=null;}),
+  'toggle-done-list':d=>{const m=hiddenDone();if(m[d.id])delete m[d.id];else m[d.id]=1;try{lsSet(HD_KEY,JSON.stringify(m));}catch(e){}render();},
   'day-prev':()=>{const iso=S.rview.slice(2);S.rview='d:'+isoDate(addDays(parseISO(iso),-1));render();},
   'day-next':()=>{const iso=S.rview.slice(2);S.rview='d:'+isoDate(addDays(parseISO(iso),1));render();},
   'day-today':()=>{S.rview='d:'+isoDate(new Date());render();},

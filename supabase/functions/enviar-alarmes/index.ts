@@ -1,17 +1,18 @@
 // Núcleo: envia os avisos (notificações) dos alarmes que já chegaram na hora e repete o aviso.
 // Chamada a cada minuto pelo relógio do banco (pg_cron -> public.chamar_alarmes()).
 // As chaves e o código do relógio ficam na tabela push_config (sem acesso público), não no repositório.
-// Repetição: depois do aviso, manda de novo a cada minuto (REPS vezes) até o app ser aberto,
+// Repetição: depois do aviso, manda de novo a cada 2 minutos (REPS vezes, cerca de 20 minutos) até o app ser aberto,
 // que apaga as repetições (tabela alarm_repeats). O primeiro aviso não tem número; as repetições são "1 de 10" a "10 de 10".
 import webpush from "npm:web-push@3.6.7";
 
 const URL_ = Deno.env.get("SUPABASE_URL")!;
 const KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const H = { apikey: KEY, Authorization: `Bearer ${KEY}`, "Content-Type": "application/json" };
-const REPS = 10; // repetições depois do primeiro aviso (cerca de 10 minutos)
+const REPS = 10; // repetições depois do primeiro aviso
 // o relógio do banco roda a cada minuto, mas com alguns milissegundos de diferença: agenda 15 s antes do minuto
-// seguinte e aceita repetições até 5 s à frente, para nenhuma ficar para o minuto depois.
-const STEP_MS = 60_000 - 15_000;
+// seguinte ao intervalo e aceita repetições até 5 s à frente, para nenhuma ficar para o minuto depois.
+const INTERVALO_MS = 120_000; // 2 minutos entre os avisos
+const STEP_MS = INTERVALO_MS - 15_000;
 const JANELA_MS = 5_000;
 
 type Cfg = { vapid_subject: string; vapid_public: string | null; vapid_private: string | null; cron_secret: string };
