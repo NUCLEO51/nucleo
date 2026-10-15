@@ -56,6 +56,11 @@ button{font:inherit;color:inherit;cursor:pointer}
 input,textarea,select{font:inherit;font-size:1rem;color:var(--fg)}
 :focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 .num{font-variant-numeric:tabular-nums}
+.rl-big{font-size:3.6rem;font-weight:800;text-align:center;margin:1.4rem 0 1rem;letter-spacing:.02em;font-variant-numeric:tabular-nums}
+.rl-done{text-align:center;font-size:1.6rem;font-weight:800;color:var(--danger);margin:.2rem 0 1rem}
+.rl-row{display:flex;gap:.7rem;margin:.9rem 0;flex-wrap:wrap}
+.rl-row .btn{flex:1;min-height:3.6rem;font-size:1.15rem}
+.rl-lap{display:flex;justify-content:space-between;padding:.7rem .2rem;border-bottom:1px solid var(--line);font-size:1.1rem}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}
 #app{height:100%;display:flex;flex-direction:column;max-width:680px;margin-inline:auto}
 .page{flex:1;min-height:0;overflow-y:auto;padding:0 1rem 2rem;-webkit-overflow-scrolling:touch}
@@ -847,7 +852,7 @@ const Supa={
       const r=await this.rest('alarms?select=id,key&fired_at=is.null&key=not.is.null');
       if(!r.ok)throw new Error('alarmes '+r.status);
       const have=await r.json(),hk=new Set(have.map(x=>x.key)),wk=new Set(want.map(x=>x.key));
-      const stale=have.filter(x=>!wk.has(x.key)&&String(x.key).indexOf('teste|')!==0).map(x=>x.id);
+      const stale=have.filter(x=>!wk.has(x.key)&&String(x.key).indexOf('teste|')!==0&&String(x.key).indexOf('tempo|')!==0).map(x=>x.id);
       if(stale.length){const d=await this.rest('alarms?id=in.('+stale.join(',')+')',{method:'DELETE'});if(!d.ok)throw new Error('alarmes del '+d.status);}
       const add=want.filter(x=>!hk.has(x.key));
       if(add.length){const q=await this.rest('alarms?on_conflict=key',{method:'POST',headers:{Prefer:'resolution=ignore-duplicates,return=minimal'},body:JSON.stringify(add)});if(!q.ok)throw new Error('alarmes add '+q.status);}
@@ -1268,6 +1273,7 @@ function viewHoje(){
     tile('go-agenda','hoje','cal','t-green',ag.length,'Agenda hoje')+
     tile('go-rem','s:prog','alert',overdue.length?'t-red t-late':'t-red',overdue.length,'Atrasados')+
     tile('jump','sec-inbox','inbox','t-orange',S.inbox.length,'Caixa de entrada')+'</div>';
+  h+='<div class="actbar"><button class="btn grow" data-act="rl-open">⏱ Cronômetro e temporizador</button></div>';
   h+='<div class="tiles">'+tile('fin-send','','inbox','t-green','+','Enviar ao FIN')+tile('fin-open','','calgrid','t-cyan','→','Abrir o FIN')+'</div>';
   h+=secH('Lembretes de hoje','<button class="txtbtn" data-act="new-rem" data-date="'+today+'">'+ic('plus',1,2.4)+'Novo</button>','sec-today');
   h+='<div class="group">'+(todayR.length?todayR.map(r=>remRow(r,false)).join(''):emptyRow('Nada para hoje.','Toque no + azul para anotar.'))+'</div>';
@@ -1510,6 +1516,64 @@ function viewNotas(){
   return h;
 }
 
+/* ---------- Relógio: cronômetro e temporizador ---------- */
+const RL_KEY='nucleo-relogio';
+const rlSwDef=()=>({run:false,t0:0,acc:0,laps:[]}),rlTmDef=()=>({run:false,end:0,total:300000,left:300000,key:'',done:false});
+function rlLoad(){let o={};try{o=JSON.parse(lsGet(RL_KEY)||'{}')||{};}catch(e){}return {mode:o.mode==='tm'?'tm':'sw',sw:Object.assign(rlSwDef(),o.sw||{}),tm:Object.assign(rlTmDef(),o.tm||{})};}
+let RL=rlLoad();
+function rlSave(){lsSet(RL_KEY,JSON.stringify(RL));}
+const swMs=()=>RL.sw.acc+(RL.sw.run?Date.now()-RL.sw.t0:0);
+const tmLeft=()=>RL.tm.run?Math.max(0,RL.tm.end-Date.now()):RL.tm.left;
+function fmtT(ms,dec){ms=Math.max(0,ms);const t=Math.floor(ms/1000),h=Math.floor(t/3600),m=Math.floor(t%3600/60),sc=t%60;const b=(h?h+':'+pad(m):pad(m))+':'+pad(sc);return dec?b+'.'+Math.floor(ms%1000/100):b;}
+/* com o app fechado, o aviso do temporizador vem do servidor (mesma via dos lembretes; chega em até 1 minuto depois) */
+async function rlAddAlarm(end){
+  RL.tm.key='tempo|'+Date.now();rlSave();
+  try{if(Store.mode==='supa'&&Supa.sess)await Supa.rest('alarms',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify({key:RL.tm.key,fire_at:new Date(end).toISOString(),message:'⏱ Temporizador: acabou o tempo'})});}catch(e){}
+}
+async function rlDelAlarm(){
+  const k=RL.tm.key;RL.tm.key='';rlSave();if(!k)return;
+  try{if(Store.mode==='supa'&&Supa.sess)await Supa.rest('alarms?key=eq.'+encodeURIComponent(k),{method:'DELETE'});}catch(e){}
+}
+function rlWake(){try{if(navigator.wakeLock&&navigator.wakeLock.request)navigator.wakeLock.request('screen').catch(()=>{});}catch(e){}}
+function rlRing(){let n=0;const id=setInterval(()=>{beep();if(++n>=6)clearInterval(id);},700);toast('⏱ Acabou o tempo do temporizador');}
+function rlTick(){
+  const t=RL.tm;
+  if(t.run&&Date.now()>=t.end){
+    const atrasado=Date.now()-t.end>30000;
+    t.run=false;t.left=0;t.done=true;rlSave();rlDelAlarm();
+    if(!atrasado)rlRing();
+    if(S.tab==='relogio')render();
+  }
+  if(S.tab==='relogio'){
+    const a=$('swTime'),b=$('tmTime');
+    if(a)a.textContent=fmtT(swMs(),true);
+    if(b)b.textContent=fmtT(tmLeft());
+  }
+}
+function viewRelogio(){
+  const sw=RL.sw,tm=RL.tm;
+  let h=subHdr('Hoje','rl-back','Cronômetro e temporizador','Relógio');
+  h+='<div class="rl-row" style="margin-top:1rem"><button class="btn'+(RL.mode==='sw'?' primary':'')+'" data-act="rl-mode" data-v="sw">Cronômetro</button><button class="btn'+(RL.mode==='tm'?' primary':'')+'" data-act="rl-mode" data-v="tm">Temporizador</button></div>';
+  if(RL.mode==='sw'){
+    h+='<div class="rl-big" id="swTime">'+fmtT(swMs(),true)+'</div>';
+    h+='<div class="rl-row">';
+    if(sw.run)h+='<button class="btn" data-act="rl-sw-lap">Volta</button><button class="btn primary" data-act="rl-sw-start">Parar</button>';
+    else if(swMs()>0)h+='<button class="btn" data-act="rl-sw-reset">Zerar</button><button class="btn primary" data-act="rl-sw-start">Continuar</button>';
+    else h+='<button class="btn primary" data-act="rl-sw-start">Iniciar</button>';
+    h+='</div>';
+    if(sw.laps.length)h+='<div class="group">'+sw.laps.map((l,i)=>{const prev=sw.laps[i+1]?sw.laps[i+1].t:0;return '<div class="rl-lap num"><span>Volta '+(sw.laps.length-i)+'</span><b>'+fmtT(l.t-prev,true)+'</b><span>'+fmtT(l.t,true)+'</span></div>';}).join('')+'</div>';
+  }else{
+    h+='<div class="rl-big" id="tmTime">'+fmtT(tmLeft())+'</div>';
+    if(tm.done)h+='<div class="rl-done">⏱ Acabou!</div>';
+    if(!tm.run){
+      h+='<div class="chips" style="justify-content:center">'+[1,5,10,15,30,45,60].map(m=>'<button class="chip" data-act="rl-tm-preset" data-m="'+m+'">'+(m===60?'1 h':m+' min')+'</button>').join('')+'</div>';
+      h+='<div class="rl-row"><button class="btn" data-act="rl-tm-adj" data-d="-1">− 1 min</button><button class="btn" data-act="rl-tm-adj" data-d="1">+ 1 min</button></div>';
+    }
+    h+='<div class="rl-row">'+(tm.run?'<button class="btn primary" data-act="rl-tm-start">Pausar</button><button class="btn" data-act="rl-tm-reset">Zerar</button>':'<button class="btn primary" data-act="rl-tm-start">'+(tm.left>0&&tm.left<tm.total?'Continuar':'Iniciar')+'</button><button class="btn" data-act="rl-tm-reset">Zerar</button>')+'</div>';
+    h+='<div class="note-s" style="text-align:center">Com o app fechado, o aviso chega em até 1 minuto depois de acabar o tempo (precisa dos avisos ligados em Ajustes).</div>';
+  }
+  return h;
+}
 function buildTabs(){
   const t=(id,icn,l)=>'<button class="tab" data-act="tab" data-tab="'+id+'" id="tab-'+id+'">'+ic(icn,1.45,1.9)+l+'</button>';
   $('tabs').innerHTML=t('hoje','today','Hoje')+t('lembretes','list','Lembretes')+'<button class="fab" data-act="capture" aria-label="Anotar rápido">'+ic('plus',1.5,2.4)+'</button>'+t('agenda','cal','Agenda')+t('notas','note','Notas');
@@ -1521,7 +1585,7 @@ function render(){
   if(S.tab==='notas'&&active&&active.id==='q'&&$('notesBody')){$('notesBody').innerHTML=notesBody();return;}
   if(S.tab==='lembretes'&&active&&active.id==='rq'&&$('remBody')){renderRemBody();return;}
   const main=$('main'),st=main.scrollTop;
-  main.innerHTML=({hoje:viewHoje,lembretes:viewLembretes,agenda:viewAgenda,notas:viewNotas})[S.tab]();
+  main.innerHTML=({hoje:viewHoje,lembretes:viewLembretes,agenda:viewAgenda,notas:viewNotas,relogio:viewRelogio})[S.tab]();
   main.scrollTop=st;
 }
 function renderRemBody(){const b=$('remBody');if(!b)return;const ws=S.weekStart;b.innerHTML=remHomeBody(smart(),lmap(),isoDate(new Date()),ws,isoDate(ws)===isoDate(mondayOf(new Date())));}
@@ -2501,6 +2565,16 @@ const A={
   'view-img':d=>{const v=$('viewer');v.innerHTML='<img src="'+imgSrc(d.id)+'" data-img="'+esc(d.id)+'" alt="Imagem ampliada"><button data-act="close-viewer" aria-label="Fechar imagem">'+ic('close',1.1)+'</button>';v.hidden=false;},
   'close-viewer':()=>{$('viewer').hidden=true;},
   'cap-mode':d=>{S.sheet.draft.mode=d.m;renderSheet();},
+  'rl-open':()=>go(()=>{S.tab='relogio';}),
+  'rl-back':()=>go(()=>{S.tab='hoje';}),
+  'rl-mode':d=>{RL.mode=d.v==='tm'?'tm':'sw';rlSave();render();},
+  'rl-sw-start':()=>{const sw=RL.sw;if(sw.run){sw.acc=swMs();sw.run=false;}else{sw.t0=Date.now();sw.run=true;rlWake();}rlSave();render();},
+  'rl-sw-lap':()=>{if(!RL.sw.run)return;RL.sw.laps.unshift({t:swMs()});rlSave();render();},
+  'rl-sw-reset':()=>{RL.sw=rlSwDef();rlSave();render();},
+  'rl-tm-preset':d=>{if(RL.tm.run)return;const ms=Math.max(1,+d.m||1)*60000;RL.tm.total=ms;RL.tm.left=ms;RL.tm.done=false;rlSave();render();},
+  'rl-tm-adj':d=>{if(RL.tm.run)return;const ms=Math.max(60000,RL.tm.left+(+d.d||0)*60000);RL.tm.left=ms;RL.tm.total=ms;RL.tm.done=false;rlSave();render();},
+  'rl-tm-start':()=>{const t=RL.tm;if(t.run){t.left=tmLeft();t.run=false;rlSave();rlDelAlarm();render();return;}if(t.left<=0)return;t.done=false;t.end=Date.now()+t.left;t.run=true;rlSave();rlWake();rlAddAlarm(t.end);render();},
+  'rl-tm-reset':()=>{const t=RL.tm;t.run=false;t.left=t.total;t.done=false;rlSave();rlDelAlarm();render();},
   'cap-clock':()=>{const sh=S.sheet;if(!sh||sh.type!=='cap')return;const d=sh.draft,p=parseCapture(d.text||'');const on=d.clock===undefined?!!p.strong:!!d.clock;d.clock=!on;renderSheet();},
   'cap-full':d=>{const sh=S.sheet;if(!sh||sh.type!=='cap')return;const t=(sh.draft.text||'').trim(),p=t?parseCapture(t):{};
     if(d.m==='rem'){const r=Object.assign(newRem(p.date||''),{title:p.title||t.slice(0,120),time:p.time||'',repeat:p.repeat||'none',repN:p.repN||1,repDays:p.repDays||[],repU:p.repU||'week'});if(p.alarms&&p.alarms.length&&p.time&&p.date)r.alarms=p.alarms.map(min=>({id:uid(),min,msg:''}));openSheet('rem',r);}
@@ -2564,6 +2638,7 @@ buildTabs();render();Store.init();
 getAssets().then(a=>{S.assetsOk=!!a;});
 getDl().then(d=>{S.dlOk=!!d;});
 setInterval(checkAlarms,15000);
+setInterval(rlTick,200);
 })();
 </script>
 
