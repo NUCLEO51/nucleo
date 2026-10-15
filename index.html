@@ -1154,7 +1154,7 @@ function smart(){
     todos:open,
     hoje:open.filter(r=>r.date&&r.date<=today),
     prog:open.filter(r=>r.date),
-    flag:open.filter(r=>r.flag),
+    late:open.filter(r=>r.date&&(r.time?dtOf(r.date,r.time)<new Date():r.date<today)),
     urg:open.filter(r=>(r.priority||0)>=3),
     done:R.filter(r=>r.done)
   };
@@ -1208,6 +1208,20 @@ function subHdr(back,act,eyebrow,title,extra,color){
 function secH(title,right,id){return '<div class="sec-h"'+(id?' id="'+id+'"':'')+'><h2>'+title+'</h2>'+(right||'')+'</div>';}
 const chev=()=>'<span class="li-chev">'+ic('right',1,2.4)+'</span>';
 const PRI=['','!','!!','!!!'];
+/* quanto falta (ou quanto está atrasado) para o lembrete */
+function leftChip(r){
+  if(r.done||!r.date)return '';
+  const now=new Date(),today=isoDate(now);
+  const fmt=m=>m<60?m+' min':m<1440?Math.floor(m/60)+' h'+(m%60?' '+(m%60)+' min':''):Math.floor(m/1440)+(Math.floor(m/1440)===1?' dia':' dias');
+  if(!r.time){
+    if(r.date<today){const d=Math.round((parseISO(today)-parseISO(r.date))/864e5);return '<span class="pill danger">atrasado '+d+(d===1?' dia':' dias')+'</span>';}
+    return '';
+  }
+  const diff=dtOf(r.date,r.time)-now,mins=Math.max(1,Math.round(Math.abs(diff)/60000));
+  if(diff<0)return '<span class="pill danger">atrasado '+fmt(mins)+'</span>';
+  if(diff<864e5)return '<span class="pill">em '+fmt(mins)+'</span>';
+  return '';
+}
 function remRow(r,showDate){
   const today=isoDate(new Date());
   const subs=r.subtasks||[],sd=subs.filter(s=>s.done).length,bits=[];
@@ -1225,7 +1239,7 @@ function remRow(r,showDate){
       (nt?'<div class="li-note">'+esc(nt)+'</div>':'')+
       ((bits.length||rl)?'<div class="li-s num"'+(late?' style="color:var(--danger)"':'')+'>'+bits.map(esc).join(' · ')+(rl?(bits.length?' · ':'')+'<span style="white-space:nowrap">'+ic('repeat',.75,2.4)+' '+esc(rl)+'</span>':'')+'</div>':'')+
       (tg.length?'<div class="li-tags">'+tg.map(esc).join(' ')+'</div>':'')+'</div>'+
-    (r.flag?'<span class="flag">'+ic('flag',.95,2.4)+'</span>':'')+
+    leftChip(r)+
     (nal&&r.time?'<span class="pill alarm">'+ic('bell',.7,2.4)+nal+'</span>':'')+'</div>';
 }
 function timeRow(t,title,act,id,opts){
@@ -1297,7 +1311,7 @@ function remHomeBody(sm,lm,today,ws,cur){
     tile('rview','s:todos','inbox','t-cyan',sm.todos.length,'Todos')+
     tile('rview','s:hoje','cal','t-blue',sm.hoje.length,'Hoje')+
     tile('rview','s:prog','calgrid','t-red',sm.prog.length,'Programados')+
-    tile('rview','s:flag','flag','t-orange',sm.flag.length,'Sinalizados')+
+    tile('rview','s:late','bell','t-orange',sm.late.length,'Atrasados')+
     tile('rview','s:urg','alert','t-pink',sm.urg.length,'Urgentes')+
     tile('rview','s:done','check','t-purple',sm.done.length,'Concluídos')+'</div>';
   h+=secH('Minhas listas','<button class="txtbtn" data-act="new-list">'+ic('plus',1,2.4)+'Nova lista</button>');
@@ -1317,7 +1331,7 @@ function remHomeBody(sm,lm,today,ws,cur){
 function listRow(id,name,color,n){
   return '<div class="li ic" data-act="rview" data-v="l:'+esc(id)+'"><span class="sq round" style="background:'+esc(color)+'">'+ic('list',1,2.4)+'</span><div class="li-main"><div class="li-t">'+esc(name)+'</div></div><span class="li-n num">'+n+'</span>'+chev()+'</div>';
 }
-const SMART={todos:'Todos',hoje:'Hoje',prog:'Programados',flag:'Sinalizados',urg:'Urgentes',done:'Concluídos'};
+const SMART={todos:'Todos',hoje:'Hoje',prog:'Programados',late:'Atrasados',urg:'Urgentes',done:'Concluídos'};
 function remSub(){
   const v=S.rview,today=isoDate(new Date()),lm=lmap();
   if(v==='trash')return trashView(['reminders','events'],'Lembretes','rview-back');
@@ -1344,7 +1358,7 @@ function remSub(){
       return h;
     }
     h+='<div class="group" style="margin-top:1rem">'+(list.length?list.map(r=>remRow(r,true)).join(''):emptyRow('',{todos:'Tudo em dia.',hoje:'Nada para hoje.',flag:'Nenhum lembrete sinalizado. Abra um lembrete e toque em Sinalizar.',urg:'Nenhum lembrete com prioridade alta.',done:'Nada concluído ainda.'}[k]))+
-      (k==='done'||k==='urg'||k==='flag'?'':addRow('new-rem','Novo lembrete',k==='hoje'?' data-date="'+today+'"':''))+'</div>';
+      (k==='done'||k==='urg'||k==='late'?'':addRow('new-rem','Novo lembrete',k==='hoje'?' data-date="'+today+'"':''))+'</div>';
     return h;
   }
   if(v.indexOf('l:')===0){
@@ -1588,6 +1602,9 @@ function toast(msg,action,fn){
   if(action){$('toastAct').onclick=()=>{t.hidden=true;fn&&fn();};}
   clearTimeout(toast._t);toast._t=setTimeout(()=>{t.hidden=true;},action?6000:3500);
 }
+/* Avisos de sucesso (salvo, criado, concluído, apagado) desligados a pedido de Marcelo.
+   Erros e instruções continuam aparecendo. Nada se perde: apagados ficam 30 dias em "Apagados recentemente". */
+function okToast(){}
 function beep(){
   try{
     const AC=window.AudioContext||window.webkitAudioContext;if(!AC)return;
@@ -1713,7 +1730,7 @@ function sheetRem(){
     '<div class="chips" style="margin-top:.6rem"><button class="chip" data-act="qdate" data-v="0">Hoje</button><button class="chip" data-act="qdate" data-v="1">Amanhã</button><button class="chip" data-act="qdate" data-v="7">Em 1 semana</button><button class="chip" data-act="qdate" data-v="">Sem data</button></div>'+(!sh.isNew&&d.date&&!d.done?'<div style="margin-top:.8rem"><span class="lbl">Adiar para</span>'+snoozeChips()+'</div>':'')+'</div>';
   h+='<div class="block"><span class="block-t">Organizar</span><div><label class="lbl" for="f-list">Lista</label><select class="inp" id="f-list" data-bind="list" data-rerender><option value="">Lembretes</option>'+S.lists.slice().sort(byName).map(l=>'<option value="'+esc(l.id)+'"'+(remList(d,lm)===l.id?' selected':'')+'>'+esc(l.name||'Sem nome')+'</option>').join('')+'</select></div>'+
     (function(){const l=lm[remList(d,lm)];const ss=l?(l.sections||[]).filter(x=>(x.t||'').trim()):[];return ss.length?'<div><label class="lbl" for="f-sec">Seção</label><select class="inp" id="f-sec" data-bind="section"><option value="">Sem seção</option>'+ss.map(x=>'<option value="'+esc(x.id)+'"'+(d.section===x.id?' selected':'')+'>'+esc(x.t)+'</option>').join('')+'</select></div>':'';})()+'<div><span class="lbl">Prioridade (importância)</span><div class="seg" role="group">'+[[0,'Nenhuma'],[1,'Baixa !'],[2,'Média !!'],[3,'Alta !!!']].map(p=>'<button class="'+((d.priority||0)===p[0]?'on':'')+'" data-act="set-prio" data-v="'+p[0]+'" aria-pressed="'+((d.priority||0)===p[0])+'">'+p[1]+'</button>').join('')+'</div><div class="note-s" style="margin-top:.35rem">Aparece como ! no lembrete e ele vem antes dos outros do mesmo dia. “Alta” também entra em <b>Urgentes</b>.</div></div>'+
-    '<label class="check"><input type="checkbox" data-bind="flag" '+(d.flag?'checked':'')+'>Sinalizar (marcar para olhar de novo)</label><div class="note-s" style="margin-top:-.5rem">Sinalizados ficam juntos na lista <b>Sinalizados</b>, com uma bandeira.</div></div>';
+    '</div>';
   h+='<div class="block"><span class="block-t">Alarmes</span>';
   if(!hasWhen)h+='<div class="note-s">Escolha data e horário para configurar os alarmes.</div>';
   else{
@@ -2009,7 +2026,6 @@ function sheetRemV(){
   h+='<div class="vtitle'+(r.done?' done':'')+'">'+esc(r.title||'Sem título')+'</div>';
   const tags=[];
   if(r.done)tags.push('<span class="pill ok">Feito</span>');
-  if(r.flag)tags.push('<span class="pill">'+ic('flag',.7,2.4)+' Sinalizado</span>');
   if(r.priority)tags.push('<span class="pill danger">Prioridade '+esc(PRIO[r.priority]||'')+'</span>');
   if(tags.length)h+='<div class="chips">'+tags.join('')+'</div>';
   h+='<div class="vbox">';
@@ -2201,7 +2217,7 @@ async function saveSheet(){
   }
   const removed=sh.removed||[];sh.added=[];
   if(removed.length){const a=await getAssets();if(a)removed.forEach(id=>a.delete(id).catch(()=>{}));}
-  closeSheet();toast('Salvo');
+  closeSheet();okToast('Salvo');
 }
 async function saveCapture(d,quiet){
   const text=d.text.trim();
@@ -2211,14 +2227,14 @@ async function saveCapture(d,quiet){
     const doc=Object.assign(newRem(p.date||''),{title:p.title,time:p.time,repeat:p.repeat,repN:p.repN||1,repDays:p.repDays||[],repU:p.repU||'week',alarms:p.time&&p.date?((p.alarms&&p.alarms.length)?p.alarms.map(min=>({id:uid(),min,msg:''})):[{id:uid(),min:0,msg:''}]):[]});
     const id=await Store.put('reminders',doc);
     const wantClock=!quiet&&(d.clock===undefined?!!p.strong:!!d.clock),pc=wantClock?pickClock(doc):null;
-    toast((quiet?'Siri → ':'')+'Lembrete criado: '+p.title+(p.date?' · '+relDay(p.date,today)+(p.time?' às '+p.time:''):''),'Abrir',()=>{const r=S.reminders.find(x=>x.id===id);if(r)openRem(r);});
+    okToast((quiet?'Siri → ':'')+'Lembrete criado: '+p.title+(p.date?' · '+relDay(p.date,today)+(p.time?' às '+p.time:''):''),'Abrir',()=>{const r=S.reminders.find(x=>x.id===id);if(r)openRem(r);});
     if(pc)setTimeout(()=>{location.href=pc.url;},350);
   }else if(m==='ev'){
-    await Store.put('events',{title:p.title,date:p.date||today,time:p.time,repeat:p.repeat,repN:p.repN||1,repDays:p.repDays||[],repU:p.repU==='hour'?'day':(p.repU||'week'),createdAt:Date.now()});toast('Compromisso criado: '+p.title);
+    await Store.put('events',{title:p.title,date:p.date||today,time:p.time,repeat:p.repeat,repN:p.repN||1,repDays:p.repDays||[],repU:p.repU==='hour'?'day':(p.repU||'week'),createdAt:Date.now()});okToast('Compromisso criado: '+p.title);
   }else if(m==='note'){
-    await Store.put('notes',Object.assign(newNote(''),{title:text.split('\n')[0].slice(0,60),body:text,updatedAt:Date.now()}));toast('Nota criada em Geral');
+    await Store.put('notes',Object.assign(newNote(''),{title:text.split('\n')[0].slice(0,60),body:text,updatedAt:Date.now()}));okToast('Nota criada em Geral');
   }else{
-    await Store.put('inbox',{text,source:'digitado',createdAt:Date.now()});toast('Guardado na Caixa de entrada');
+    await Store.put('inbox',{text,source:'digitado',createdAt:Date.now()});okToast('Guardado na Caixa de entrada');
   }
 }
 async function toggleDone(id){
@@ -2228,10 +2244,10 @@ async function toggleDone(id){
   const nx=(!r.done&&repSpec(r)&&r.date)?repNext(r,new Date()):null;
   if(nx){
     await Store.put('reminders',Object.assign({},r,{date:nx.date,time:nx.time,subtasks:(r.subtasks||[]).map(s=>Object.assign({},s,{done:false}))}));
-    toast('Feito. Próxima vez: '+relDay(nx.date,today)+(nx.time?' às '+nx.time:''),'Desfazer',()=>Store.put('reminders',r));
+    okToast('Feito. Próxima vez: '+relDay(nx.date,today)+(nx.time?' às '+nx.time:''),'Desfazer',()=>Store.put('reminders',r));
   }else{
     await Store.put('reminders',Object.assign({},r,{done:!r.done,doneAt:r.done?0:Date.now()}));
-    toast(r.done?'Reaberto':'Concluído','Desfazer',()=>Store.put('reminders',r));
+    okToast(r.done?'Reaberto':'Concluído','Desfazer',()=>Store.put('reminders',r));
   }
 }
 async function deleteSheet(){
@@ -2242,21 +2258,21 @@ async function deleteSheet(){
     if(!(await ask({title:'Apagar a pasta “'+(d.name||'')+'”?',msg:'As notas e subpastas dela vão para “'+toName+'”. Nenhuma nota é apagada.',ok:'Apagar pasta',danger:true})))return;
     const dest=await deleteFolder(d.id);
     if(S.folder===d.id)S.folder=dest||null;
-    closeSheet();toast('Pasta apagada.');render();return;
+    closeSheet();okToast('Pasta apagada.');render();return;
   }
   if(sh.type==='list'){
     if(!(await ask({title:'Apagar a lista “'+(d.name||'')+'”?',msg:'Os lembretes dela vão para “Lembretes”. Nenhum lembrete é apagado.',ok:'Apagar lista',danger:true})))return;
     for(const r of (S.raw.reminders||[]).filter(x=>x.list===d.id))await Store.put('reminders',Object.assign({},r,{list:''}));
     await Store.del('lists',d.id);
     if(S.rview==='l:'+d.id)S.rview=null;
-    closeSheet();toast('Lista apagada.');render();return;
+    closeSheet();okToast('Lista apagada.');render();return;
   }
   const col={rem:'reminders',ev:'events',note:'notes'}[sh.type];
   if(!(await ask({title:'Apagar '+(sh.type==='note'?'esta nota':sh.type==='ev'?'este compromisso':'este lembrete')+'?',msg:'Vai para “Apagados recentemente”. Você pode recuperar por 30 dias.',ok:'Apagar',danger:true})))return;
   const orig=S[col].find(x=>x.id===d.id)||d;
   await softDelete(col,orig);
   closeSheet();
-  toast('Movido para Apagados recentemente','Desfazer',()=>{const t=S.trash.find(x=>x.x.id===d.id);if(t)restoreItem(t.c,t.x);});
+  okToast('Movido para Apagados recentemente','Desfazer',()=>{const t=S.trash.find(x=>x.x.id===d.id);if(t)restoreItem(t.c,t.x);});
 }
 function pickFiles(kind){
   const inp=$(kind==='cam'?'fileCam':'fileLib');inp.value='';inp.click();
@@ -2382,7 +2398,7 @@ async function removeExamples(){
       if(c==='folders')await deleteFolder(x.id);else await Store.del(c,x.id);
     }
   }
-  closeSheet();toast('Exemplos removidos');
+  closeSheet();okToast('Exemplos removidos');
 }
 function setSheetField(key,val){if(S.sheet)S.sheet.draft[key]=val;}
 function findTrash(c,id){const t=S.trash.find(x=>x.c===c&&x.x.id===id);return t?t.x:null;}
@@ -2402,7 +2418,7 @@ const A={
   'day-today':()=>{S.rview='d:'+isoDate(new Date());render();},
   'open-rem':d=>{const r=S.reminders.find(x=>x.id===d.id);if(r)openRem(r);},
   'toggle-done':d=>toggleDone(d.id),
-  'new-rem':d=>{let list=d.list||'';if(!list&&S.tab==='lembretes'&&S.rview&&S.rview.indexOf('l:')===0)list=S.rview.slice(2);const r=newRem(d.date,list);if(d.section)r.section=d.section;if(S.rview==='s:flag')r.flag=true;openSheet('rem',r);},
+  'new-rem':d=>{let list=d.list||'';if(!list&&S.tab==='lembretes'&&S.rview&&S.rview.indexOf('l:')===0)list=S.rview.slice(2);const r=newRem(d.date,list);if(d.section)r.section=d.section;openSheet('rem',r);},
   'open-ev':d=>{const e=S.events.find(x=>x.id===d.id);if(e)openSheet('ev',clone(e));},
   'new-ev':d=>openSheet('ev',{title:'',date:d.date||isoDate(new Date()),time:'',repeat:'none',repN:1,repU:'week',repDays:[],repUntil:'',createdAt:Date.now()}),
   'open-note':d=>{const n=S.notes.find(x=>x.id===d.id);if(n)openSheet('notev',clone(n));},
