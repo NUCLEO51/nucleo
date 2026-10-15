@@ -1734,7 +1734,8 @@ function sheetRem(){
     '<div class="chips" style="margin-top:.6rem"><button class="chip" data-act="qdate" data-v="0">Hoje</button><button class="chip" data-act="qdate" data-v="1">Amanhã</button><button class="chip" data-act="qdate" data-v="7">Em 1 semana</button><button class="chip" data-act="qdate" data-v="">Sem data</button></div>'+(!sh.isNew&&d.date&&!d.done?'<div style="margin-top:.8rem"><span class="lbl">Adiar para</span>'+snoozeChips()+'</div>':'')+'</div>';
   h+='<div class="block"><span class="block-t">Organizar</span><div><label class="lbl" for="f-list">Lista</label><select class="inp" id="f-list" data-bind="list" data-rerender><option value="">Lembretes</option>'+S.lists.slice().sort(byName).map(l=>'<option value="'+esc(l.id)+'"'+(remList(d,lm)===l.id?' selected':'')+'>'+esc(l.name||'Sem nome')+'</option>').join('')+'</select></div>'+
     (function(){const l=lm[remList(d,lm)];const ss=l?(l.sections||[]).filter(x=>(x.t||'').trim()):[];return ss.length?'<div><label class="lbl" for="f-sec">Seção</label><select class="inp" id="f-sec" data-bind="section"><option value="">Sem seção</option>'+ss.map(x=>'<option value="'+esc(x.id)+'"'+(d.section===x.id?' selected':'')+'>'+esc(x.t)+'</option>').join('')+'</select></div>':'';})()+'<div><span class="lbl">Prioridade (importância)</span><div class="seg" role="group">'+[[0,'Nenhuma'],[1,'Baixa !'],[2,'Média !!'],[3,'Alta !!!']].map(p=>'<button class="'+((d.priority||0)===p[0]?'on':'')+'" data-act="set-prio" data-v="'+p[0]+'" aria-pressed="'+((d.priority||0)===p[0])+'">'+p[1]+'</button>').join('')+'</div><div class="note-s" style="margin-top:.35rem">Aparece como ! no lembrete e ele vem antes dos outros do mesmo dia. “Alta” também entra em <b>Urgentes</b>.</div></div>'+
-    '<label class="check"><input type="checkbox" data-bind="pinned" '+(d.pinned?'checked':'')+'>Fixar no topo</label><div class="note-s" style="margin-top:-.5rem">Fixados ficam sempre no começo das listas, com 📌.</div></div>';
+    '<label class="check"><input type="checkbox" data-bind="pinned" '+(d.pinned?'checked':'')+'>Fixar no topo</label><div class="note-s" style="margin-top:-.5rem">Fixados ficam sempre no começo das listas, com 📌.</div>'+
+    '<label class="check"><input type="checkbox" data-bind="strong" '+(d.strong?'checked':'')+'>⏰ Alarme forte (toca no Relógio do iPhone)</label><div class="note-s" style="margin-top:-.5rem">Vale para qualquer data. O iPhone cria o alarme no Relógio sozinho, perto da hora, pelo atalho “Sincronizar Alarmes Núcleo”.</div></div>';
   h+='<div class="block"><span class="block-t">Alarmes</span>';
   if(!hasWhen)h+='<div class="note-s">Escolha data e horário para configurar os alarmes.</div>';
   else{
@@ -2031,6 +2032,7 @@ function sheetRemV(){
   const tags=[];
   if(r.done)tags.push('<span class="pill ok">Feito</span>');
   if(r.pinned)tags.push('<span class="pill">'+ic('pin',.7,2.4)+' Fixado</span>');
+  if(r.strong)tags.push('<span class="pill alarm">'+ic('bell',.7,2.4)+' Alarme forte</span>');
   if(r.priority)tags.push('<span class="pill danger">Prioridade '+esc(PRIO[r.priority]||'')+'</span>');
   if(tags.length)h+='<div class="chips">'+tags.join('')+'</div>';
   h+='<div class="vbox">';
@@ -2128,7 +2130,7 @@ function capSummary(d){
   if(onC&&m==='rem'){
     const rr={title:p.title,date:p.date,time:p.time,alarms:(p.alarms&&p.alarms.length)?p.alarms.map(min=>({min})):[{min:0}]};
     const pc=p.date&&p.time?pickClock(rr):null;
-    const extra=pc?'Vai criar também o alarme no Relógio às '+pc.hora+'.':'O Relógio só aceita alarme nas próximas 24 horas; esse fica só com o aviso do app.';
+    const extra=pc?'Vai criar também o alarme no Relógio às '+pc.hora+'.':'Fica marcado como alarme forte: o iPhone cria o alarme no Relógio sozinho, perto da hora (atalho “Sincronizar Alarmes Núcleo”).';
     note=note?note+' '+extra:extra;
   }
   return {m,what:m==='note'||m==='inbox'?d.text.trim().slice(0,70):p.title,when,note};
@@ -2231,8 +2233,9 @@ async function saveCapture(d,quiet){
   if(!quiet)closeSheet();
   if(m==='rem'){
     const doc=Object.assign(newRem(p.date||''),{title:p.title,time:p.time,repeat:p.repeat,repN:p.repN||1,repDays:p.repDays||[],repU:p.repU||'week',alarms:p.time&&p.date?((p.alarms&&p.alarms.length)?p.alarms.map(min=>({id:uid(),min,msg:''})):[{id:uid(),min:0,msg:''}]):[]});
-    const id=await Store.put('reminders',doc);
     const wantClock=!quiet&&(d.clock===undefined?!!p.strong:!!d.clock),pc=wantClock?pickClock(doc):null;
+    if(wantClock||p.strong)doc.strong=true;
+    const id=await Store.put('reminders',doc);
     okToast((quiet?'Siri → ':'')+'Lembrete criado: '+p.title+(p.date?' · '+relDay(p.date,today)+(p.time?' às '+p.time:''):''),'Abrir',()=>{const r=S.reminders.find(x=>x.id===id);if(r)openRem(r);});
     if(pc)setTimeout(()=>{location.href=pc.url;},350);
   }else if(m==='ev'){
@@ -2461,7 +2464,7 @@ const A={
   purge:async d=>{const x=findTrash(d.c,d.id);if(!x)return;if(!(await ask({title:'Apagar de vez?',msg:(x.title||'Sem título')+'. Não dá para desfazer.',ok:'Apagar de vez',danger:true})))return;await hardDelete(d.c,x);toast('Apagado de vez');},
   'empty-trash':async d=>{const cols=d.cols.split(','),items=S.trash.filter(t=>cols.indexOf(t.c)>=0);if(!items.length)return;if(!(await ask({title:'Apagar tudo de vez?',msg:items.length+' itens. Não dá para desfazer.',ok:'Apagar tudo',danger:true})))return;for(const t of items)await hardDelete(t.c,t.x);toast('Lixeira esvaziada');},
   'speak-day':()=>{const iso=S.tab==='lembretes'&&S.rview&&S.rview.indexOf('d:')===0?S.rview.slice(2):isoDate(new Date());speak(daySpeech(iso));},
-  'clock-alarm':d=>{const sh=S.sheet;if(!sh||sh.type!=='remv')return;const r=sh.draft,c=clockAlarm(r,(r.alarms||[])[+d.i]||{});if(!c.url){toast(c.erro||'Não consegui criar o alarme.');return;}location.href=c.url;},
+  'clock-alarm':d=>{const sh=S.sheet;if(!sh||sh.type!=='remv')return;const r=sh.draft,c=clockAlarm(r,(r.alarms||[])[+d.i]||{});if(!c.url){toast(c.erro||'Não consegui criar o alarme.');return;}const real=S.reminders.find(x=>x.id===r.id);if(real&&!real.strong)Store.put('reminders',Object.assign({},real,{strong:true}));location.href=c.url;},
   'speak-sheet':()=>{const sh=S.sheet;if(!sh)return;speak(sh.type==='note'||sh.type==='notev'?noteSpeech(sh.draft):remSpeech(sh.draft));},
   capture:()=>openSheet('cap',{text:'',mode:'auto'}),
   settings:()=>openSheet('set',{}),
