@@ -2,13 +2,13 @@
 // Chamada a cada minuto pelo relógio do banco (pg_cron -> public.chamar_alarmes()).
 // As chaves e o código do relógio ficam na tabela push_config (sem acesso público), não no repositório.
 // Repetição: depois do aviso, manda de novo a cada minuto (REPS vezes) até o app ser aberto,
-// que apaga as repetições (tabela alarm_repeats).
+// que apaga as repetições (tabela alarm_repeats). O primeiro aviso não tem número; as repetições são "1 de 10" a "10 de 10".
 import webpush from "npm:web-push@3.6.7";
 
 const URL_ = Deno.env.get("SUPABASE_URL")!;
 const KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const H = { apikey: KEY, Authorization: `Bearer ${KEY}`, "Content-Type": "application/json" };
-const REPS = 10; // repetições depois do primeiro aviso (cerca de 10 minutos; total 11 avisos)
+const REPS = 10; // repetições depois do primeiro aviso (cerca de 10 minutos)
 // o relógio do banco roda a cada minuto, mas com alguns milissegundos de diferença: agenda 15 s antes do minuto
 // seguinte e aceita repetições até 5 s à frente, para nenhuma ficar para o minuto depois.
 const STEP_MS = 60_000 - 15_000;
@@ -98,7 +98,7 @@ Deno.serve(async (req) => {
   const rr = await fetch(`${URL_}/rest/v1/alarm_repeats?next_at=lte.${limite}&select=*`, { headers: H });
   const reps: { id: string; owner: string; alarm_id: string | null; message: string; sent: number; total: number }[] = rr.ok ? await rr.json() : [];
   for (const p of reps) {
-    const nova = p.sent + 1;
+    const nova = p.sent + 1; // sent conta o primeiro aviso; a repetição número N é nova - 1
     const ultima = nova >= p.total;
     // reserva a vez antes de enviar, para duas execuções não repetirem o mesmo aviso
     const claim = await fetch(`${URL_}/rest/v1/alarm_repeats?id=eq.${p.id}&sent=eq.${p.sent}`, {
@@ -108,7 +108,7 @@ Deno.serve(async (req) => {
     });
     const got = claim.ok ? await claim.json() : [];
     if (!got.length) continue;
-    await enviar(p.owner, JSON.stringify({ title: "Núcleo", body: `🔔 ${p.message} (${nova} de ${p.total})`, tag: `${p.alarm_id ?? p.id}-${nova}` }));
+    await enviar(p.owner, JSON.stringify({ title: "Núcleo", body: `🔔 ${p.message} (${nova - 1} de ${p.total - 1})`, tag: `${p.alarm_id ?? p.id}-${nova}` }));
     repetidos++;
   }
 
