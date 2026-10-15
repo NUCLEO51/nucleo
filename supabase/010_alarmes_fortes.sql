@@ -2,7 +2,7 @@
 -- O Relógio não aceita data, então o iPhone chama esta função duas vezes por dia (automação do Atalhos)
 -- e cria no Relógio só os alarmes das próximas horas. Lembretes marcados com strong=true entram.
 -- Protegida pelo mesmo código secreto da Siri (guardado na tabela app_secrets, fora do repositório).
--- Retorna uma lista de textos "HH:mm|Núcleo: Título".
+-- Retorna uma lista de textos "HH:mm|Título" (o atalho Alarme Núcleo acrescenta o "Núcleo: " no nome do alarme).
 create or replace function public.alarmes_fortes(p_token text, p_horas int default 30)
 returns jsonb
 language plpgsql security definer set search_path = public
@@ -21,7 +21,7 @@ begin
         - make_interval(mins => coalesce((a.value->>'min')::int, 0)) as quando,
       to_char(((i.data->>'date') || ' ' || (i.data->>'time'))::timestamp
         - make_interval(mins => coalesce((a.value->>'min')::int, 0)), 'HH24:MI')
-        || '|Núcleo: ' || replace(left(coalesce(i.data->>'title', 'Lembrete'), 60), '|', '/') as linha
+        || '|' || replace(left(coalesce(i.data->>'title', 'Lembrete'), 60), '|', '/') as linha
     from public.items i
     cross join lateral jsonb_array_elements(
       case when jsonb_typeof(i.data->'alarms') = 'array' and jsonb_array_length(i.data->'alarms') > 0
