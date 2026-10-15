@@ -2016,13 +2016,28 @@ function sheetRemV(){
   h+=vRow('Prioridade',esc(PRIO[r.priority||0]));
   h+='</div>';
   const al=r.alarms||[];
-  h+='<div class="block"><span class="block-t">'+ic('bell',.9,2.2)+' Alarmes</span>'+(al.length&&r.date&&r.time?al.map(a=>{const f=alarmFireDate(r,a);return '<div class="valarm"><b>'+esc(minLabel(a.min))+'</b>'+(f?' · '+esc(relDay(isoDate(f),today))+' às '+pad(f.getHours())+':'+pad(f.getMinutes()):'')+(a.msg?'<div>'+esc(a.msg)+'</div>':'')+'</div>';}).join(''):'<div class="note-s">'+(al.length?'Escolha data e horário para os alarmes valerem.':'Nenhum alarme.')+'</div>')+'</div>';
+  h+='<div class="block"><span class="block-t">'+ic('bell',.9,2.2)+' Alarmes</span>'+(al.length&&r.date&&r.time?al.map((a,ix)=>{const f=alarmFireDate(r,a);return '<div class="valarm"><b>'+esc(minLabel(a.min))+'</b>'+(f?' · '+esc(relDay(isoDate(f),today))+' às '+pad(f.getHours())+':'+pad(f.getMinutes()):'')+(a.msg?'<div>'+esc(a.msg)+'</div>':'')+clockBtn(r,ix)+'</div>';}).join(''):'<div class="note-s">'+(al.length?'Escolha data e horário para os alarmes valerem.':'Nenhum alarme.')+'</div>')+'</div>';
   if((r.subtasks||[]).length)h+='<div class="block"><span class="block-t">Subtarefas</span>'+viewChecks(r.subtasks,'view-sub')+'</div>';
   if((r.notes||'').trim())h+='<div class="block"><span class="block-t">Observações</span><div class="vtext">'+esc(r.notes)+'</div></div>';
   if((r.images||[]).length)h+='<div class="block"><span class="block-t">Fotos</span>'+viewImgs(r.images)+'</div>';
   if((r.files||[]).length)h+='<div class="block"><span class="block-t">Arquivos</span><div class="flist">'+fileRows(r.files,false)+'</div></div>';
   h+='</div><div class="sheet-ft"><button class="btn" data-act="speak-sheet">'+ic('speaker',.9,2.2)+'Ouvir</button><button class="btn" data-act="view-done">'+(r.done?'Reabrir':'Concluir')+'</button><button class="btn primary grow" data-act="view-edit">'+ic('edit',1,2.2)+'Editar</button></div></div></div>';
   return h;
+}
+/* alarme forte: cria o alarme no Relógio do iPhone por um Atalho chamado "Alarme Núcleo".
+   O Relógio só aceita alarme nas próximas 24 horas (ele toca na próxima vez que der aquele horário). */
+const CLOCK_SHORTCUT='Alarme Núcleo';
+function clockAlarm(r,a,now){
+  const f=alarmFireDate(r,a);if(!f)return {erro:'Esse lembrete não tem data e hora.'};
+  const dt=f.getTime()-(now||Date.now());
+  if(dt<=0)return {erro:'Esse horário já passou.'};
+  if(dt>864e5)return {erro:'O Relógio só aceita alarme nas próximas 24 horas.'};
+  const txt=isoDate(f)+' '+pad(f.getHours())+':'+pad(f.getMinutes())+'|'+String(r.title||'Lembrete').replace(/\|/g,'/').slice(0,60);
+  return {texto:txt,url:'shortcuts://run-shortcut?name='+encodeURIComponent(CLOCK_SHORTCUT)+'&input=text&text='+encodeURIComponent(txt)};
+}
+function clockBtn(r,ix){
+  const a=(r.alarms||[])[ix];if(!a||r.done||!r.date||!r.time)return '';
+  return clockAlarm(r,a).url?'<button class="chip" style="margin-top:.5rem" data-act="clock-alarm" data-i="'+ix+'">⏰ Alarme no Relógio</button>':'';
 }
 function sheetNoteV(){
   const n=S.sheet.draft,fm=fmap(),fid=noteFolder(n,fm),ts=n.updatedAt||n.createdAt;
@@ -2403,6 +2418,7 @@ const A={
   purge:async d=>{const x=findTrash(d.c,d.id);if(!x)return;if(!(await ask({title:'Apagar de vez?',msg:(x.title||'Sem título')+'. Não dá para desfazer.',ok:'Apagar de vez',danger:true})))return;await hardDelete(d.c,x);toast('Apagado de vez');},
   'empty-trash':async d=>{const cols=d.cols.split(','),items=S.trash.filter(t=>cols.indexOf(t.c)>=0);if(!items.length)return;if(!(await ask({title:'Apagar tudo de vez?',msg:items.length+' itens. Não dá para desfazer.',ok:'Apagar tudo',danger:true})))return;for(const t of items)await hardDelete(t.c,t.x);toast('Lixeira esvaziada');},
   'speak-day':()=>{const iso=S.tab==='lembretes'&&S.rview&&S.rview.indexOf('d:')===0?S.rview.slice(2):isoDate(new Date());speak(daySpeech(iso));},
+  'clock-alarm':d=>{const sh=S.sheet;if(!sh||sh.type!=='remv')return;const r=sh.draft,c=clockAlarm(r,(r.alarms||[])[+d.i]||{});if(!c.url){toast(c.erro||'Não consegui criar o alarme.');return;}location.href=c.url;},
   'speak-sheet':()=>{const sh=S.sheet;if(!sh)return;speak(sh.type==='note'||sh.type==='notev'?noteSpeech(sh.draft):remSpeech(sh.draft));},
   capture:()=>openSheet('cap',{text:'',mode:'auto'}),
   settings:()=>openSheet('set',{}),
