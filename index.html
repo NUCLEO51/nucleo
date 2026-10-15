@@ -158,6 +158,8 @@ input,textarea,select{font:inherit;font-size:1rem;color:var(--fg)}
 .chip.on{background:var(--accent);color:var(--accent-fg)}
 .chip[disabled]{opacity:.45;cursor:default}
 .chips{display:flex;flex-wrap:wrap;gap:.5rem}
+.li-pills{display:flex;flex-wrap:wrap;gap:.4rem;margin:.3rem 0 .1rem}
+.li-main{min-width:0;overflow-wrap:anywhere}
 .actbar{display:flex;flex-wrap:wrap;gap:.6rem;margin-top:1.2rem}
 .actbar .btn{flex:1 1 9rem;min-width:0;white-space:nowrap}
 
@@ -613,7 +615,7 @@ const S={tab:'hoje',raw:{},reminders:[],notes:[],events:[],inbox:[],folders:[],l
   folder:null,rview:null,q:'',rq:'',sheet:null,rings:[],assetsOk:false,dlOk:false,bw:true,weekend:false,fired:{},fs:20,theme:'auto',conf:'all',purged:false};
 const lsGet=k=>{try{return localStorage.getItem(k);}catch(e){return null;}};
 const lsSet=(k,v)=>{try{localStorage.setItem(k,v);}catch(e){}};
-const APP_V='v26';
+const APP_V='v27';
 const ERRLOG_KEY='nucleo-errlog';
 function logErr(where,e){try{const a=JSON.parse(localStorage.getItem(ERRLOG_KEY)||'[]');a.push({t:Date.now(),w:String(where).slice(0,40),m:String((e&&e.message)||e||'').slice(0,160)});while(a.length>30)a.shift();localStorage.setItem(ERRLOG_KEY,JSON.stringify(a));}catch(x){}}
 addEventListener('error',ev=>logErr('tela',ev.message||ev.error));
@@ -894,7 +896,7 @@ const Supa={
     this.busy=true;
     try{
       const ok=await this.flush();
-      if(ok){await this.pull();this.lastOk=Date.now();this.lastErr='';logErr('nuvem',this.lastErr);this.lastHard=false;S.sync=this.dead.length?'fail':'cloud';S.ready=true;this.syncAlarms();if(!document.hidden)ackAvisos();if(!this.pushChecked){this.pushChecked=true;refreshPush();}}
+      if(ok){await this.pull();this.lastOk=Date.now();this.lastErr='';this.lastHard=false;S.sync=this.dead.length?'fail':'cloud';S.ready=true;this.syncAlarms();if(!document.hidden)ackAvisos();if(!this.pushChecked){this.pushChecked=true;refreshPush();}}
       else S.sync=this.lastHard?'retry':(this.q.length?'pend':'error');
     }catch(e){
       if(e.status===401){this.busy=false;this.loginScreen('Entre de novo.');return;}
@@ -1270,14 +1272,16 @@ function remRow(r,showDate){
   const nal=(r.alarms||[]).length,late=!r.done&&r.date&&r.date<today,rl=repSpec(r)?repLabel(r):'';
   const tg=[...new Set(((r.title||'')+' '+(r.notes||'')).match(/#[\p{L}\p{N}_-]{2,30}/gu)||[])];
   const nt=(r.notes||'').replace(/#[\p{L}\p{N}_-]{2,30}/gu,'').replace(/\s+/g,' ').trim().slice(0,90);
+  const lc=leftChip(r),al=(nal&&r.time?'<span class="pill alarm">'+ic('bell',.7,2.4)+nal+'</span>':'');
+  const pillsHtml=(lc||al)?'<div class="li-pills">'+lc+al+'</div>':'';
   return '<div class="li chkd'+(r.done?' done':'')+'" data-act="open-rem" data-id="'+esc(r.id)+'">'+
     '<button class="chk" data-act="toggle-done" data-id="'+esc(r.id)+'" aria-label="'+(r.done?'Reabrir':'Concluir')+': '+esc(r.title)+'"><span class="chk-i'+(r.done?' on':'')+'">'+(r.done?ic('check',.8,3.2):'')+'</span></button>'+
     '<div class="li-main"><div class="li-t">'+(r.pinned?'<span class="pin-m" style="display:inline-flex;vertical-align:-.1em;margin-right:.3rem;color:var(--accent)">'+ic('pin',.85,2.4)+'</span>':'')+(r.priority?'<span class="prio">'+PRI[r.priority]+'</span>':'')+esc(r.title)+'</div>'+
+      pillsHtml+
       (nt?'<div class="li-note">'+esc(nt)+'</div>':'')+
       ((bits.length||rl)?'<div class="li-s num"'+(late?' style="color:var(--danger)"':'')+'>'+bits.map(esc).join(' · ')+(rl?(bits.length?' · ':'')+'<span style="white-space:nowrap">'+ic('repeat',.75,2.4)+' '+esc(rl)+'</span>':'')+'</div>':'')+
       (tg.length?'<div class="li-tags">'+tg.map(esc).join(' ')+'</div>':'')+'</div>'+
-    leftChip(r)+
-    (nal&&r.time?'<span class="pill alarm">'+ic('bell',.7,2.4)+nal+'</span>':'')+'</div>';
+    '</div>';
 }
 function timeRow(t,title,act,id,opts){
   opts=opts||{};
