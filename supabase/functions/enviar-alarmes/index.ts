@@ -1,12 +1,15 @@
-// Núcleo: envia os avisos (notificações) dos alarmes que já chegaram na hora.
+// Núcleo: envia os avisos (notificações) dos alarmes que já chegaram na hora e repete o aviso.
 // Chamada a cada minuto pelo relógio do banco (pg_cron -> public.chamar_alarmes()).
 // As chaves e o código do relógio ficam na tabela push_config (sem acesso público), não no repositório.
-// Na primeira execução, se ainda não houver chaves, a função cria o par e guarda na tabela.
+// Repetição: depois do aviso, manda de novo a cada minuto (REPS vezes) até o app ser aberto,
+// que apaga as repetições (tabela alarm_repeats).
 import webpush from "npm:web-push@3.6.7";
 
 const URL_ = Deno.env.get("SUPABASE_URL")!;
 const KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const H = { apikey: KEY, Authorization: `Bearer ${KEY}`, "Content-Type": "application/json" };
+const REPS = 4; // repetições depois do primeiro aviso (total 5 avisos)
+const STEP_MS = 60_000; // 1 minuto entre os avisos
 
 type Cfg = { vapid_subject: string; vapid_public: string | null; vapid_private: string | null; cron_secret: string };
 
@@ -48,17 +51,19 @@ Deno.serve(async (req) => {
     method: "PATCH", headers: { ...H, Prefer: "return=representation" }, body: JSON.stringify({ fired_at: iso }),
   });
   if (!r.ok) return new Response("erro ao ler alarmes: " + (await r.text()), { status: 500 });
-  const due: { id: string; owner: string; message: string }[] = await r.json();
+  const due: { id: string; owner: string; message: string; key?: string }[] = await r.json();
 
-  let enviados = 0, removidos = 0;
+  let enviados = 0, removidos = 0, repetidos = 0;
   const subsCache: Record<string, { id: string; endpoint: string; keys: unknown }[]> = {};
-  for (const a of due) {
-    if (!subsCache[a.owner]) {
-      const s = await fetch(`${URL_}/rest/v1/push_subscriptions?owner=eq.${a.owner}&select=id,endpoint,keys`, { headers: H });
-      subsCache[a.owner] = s.ok ? await s.json() : [];
+  const subsDe = async (owner: string) => {
+    if (!subsCache[owner]) {
+      const s = await fetch(`${URL_}/rest/v1/push_subscriptions?owner=eq.${owner}&select=id,endpoint,keys`, { headers: H });
+      subsCache[owner] = s.ok ? await s.json() : [];
     }
-    const payload = JSON.stringify({ title: "Núcleo", body: a.message || "Lembrete", tag: a.id });
-    for (const sub of subsCache[a.owner]) {
+    return subsCache[owner];
+  };
+  const enviar = async (owner: string, payload: string) => {
+    for (const sub of await subsDe(owner)) {
       try {
         await webpush.sendNotification({ endpoint: sub.endpoint, keys: sub.keys as { p256dh: string; auth: string } }, payload, { TTL: 3600, urgency: "high" });
         enviados++;
@@ -71,6 +76,37 @@ Deno.serve(async (req) => {
         }
       }
     }
+  };
+
+  // 1) primeiro aviso de cada alarme que chegou na hora
+  for (const a of due) {
+    await enviar(a.owner, JSON.stringify({ title: "Núcleo", body: a.message || "Lembrete", tag: a.id }));
+    // agenda as repetições (o teste do app não repete)
+    if (!String(a.key ?? "").startsWith("teste|")) {
+      await fetch(`${URL_}/rest/v1/alarm_repeats`, {
+        method: "POST", headers: H,
+        body: JSON.stringify({ owner: a.owner, alarm_id: a.id, message: a.message || "Lembrete", next_at: new Date(now.getTime() + STEP_MS).toISOString(), sent: 1, total: REPS + 1 }),
+      });
+    }
   }
-  return new Response(JSON.stringify({ alarmes: due.length, enviados, removidos }), { headers: { "Content-Type": "application/json" } });
+
+  // 2) repetições que já estão na hora (o app apaga estas linhas quando é aberto)
+  const rr = await fetch(`${URL_}/rest/v1/alarm_repeats?next_at=lte.${iso}&select=*`, { headers: H });
+  const reps: { id: string; owner: string; alarm_id: string | null; message: string; sent: number; total: number }[] = rr.ok ? await rr.json() : [];
+  for (const p of reps) {
+    const nova = p.sent + 1;
+    const ultima = nova >= p.total;
+    // reserva a vez antes de enviar, para duas execuções não repetirem o mesmo aviso
+    const claim = await fetch(`${URL_}/rest/v1/alarm_repeats?id=eq.${p.id}&sent=eq.${p.sent}`, {
+      method: ultima ? "DELETE" : "PATCH",
+      headers: { ...H, Prefer: "return=representation" },
+      body: ultima ? undefined : JSON.stringify({ sent: nova, next_at: new Date(now.getTime() + STEP_MS).toISOString() }),
+    });
+    const got = claim.ok ? await claim.json() : [];
+    if (!got.length) continue;
+    await enviar(p.owner, JSON.stringify({ title: "Núcleo", body: `🔔 ${p.message} (${nova} de ${p.total})`, tag: `${p.alarm_id ?? p.id}-${nova}` }));
+    repetidos++;
+  }
+
+  return new Response(JSON.stringify({ alarmes: due.length, enviados, removidos, repetidos }), { headers: { "Content-Type": "application/json" } });
 });

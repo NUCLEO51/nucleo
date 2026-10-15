@@ -857,7 +857,7 @@ const Supa={
     this.busy=true;
     try{
       const ok=await this.flush();
-      if(ok){await this.pull();this.lastOk=Date.now();this.lastErr='';this.lastHard=false;S.sync=this.dead.length?'fail':'cloud';S.ready=true;this.syncAlarms();if(!this.pushChecked){this.pushChecked=true;refreshPush();}}
+      if(ok){await this.pull();this.lastOk=Date.now();this.lastErr='';this.lastHard=false;S.sync=this.dead.length?'fail':'cloud';S.ready=true;this.syncAlarms();if(!document.hidden)ackAvisos();if(!this.pushChecked){this.pushChecked=true;refreshPush();}}
       else S.sync=this.lastHard?'retry':(this.q.length?'pend':'error');
     }catch(e){
       if(e.status===401){this.busy=false;this.loginScreen('Entre de novo.');return;}
@@ -1510,6 +1510,17 @@ function pushStatus(){
   if(Notification.permission==='denied')return {t:'Os avisos foram bloqueados. Abra Ajustes do iPhone › Notificações › Núcleo e permita.',on:false,bad:true};
   if(Notification.permission==='granted'&&lsGet('nucleo-push')==='1')return {t:'Ligados neste aparelho.',on:true};
   return {t:'Desligados neste aparelho.',on:false};
+}
+/* abriu o app: para as repetições do aviso no servidor e limpa as notificações que ficaram na tela */
+let lastAck=0;
+async function ackAvisos(force){
+  if(!force&&Date.now()-lastAck<60000)return;
+  lastAck=Date.now();
+  try{
+    if(Store.mode!=='supa'||!Supa.sess)return;
+    await Supa.rest('alarm_repeats?id=not.is.null',{method:'DELETE'});
+    if('serviceWorker' in navigator){const reg=await navigator.serviceWorker.ready;const l=await reg.getNotifications();l.forEach(n=>n.close());}
+  }catch(e){}
 }
 async function savePushSub(){
   const reg=await navigator.serviceWorker.ready;
@@ -2476,7 +2487,7 @@ document.addEventListener('keydown',e=>{
   if(e.key==='Escape'){if(askDone)askDone(false);else if(!$('viewer').hidden)$('viewer').hidden=true;else if(S.sheet)cancelSheet();}
 });
 document.addEventListener('pointerdown',()=>{try{const AC=window.AudioContext||window.webkitAudioContext;if(AC&&!S.ac){S.ac=new AC();}if(S.ac&&S.ac.state==='suspended')S.ac.resume();}catch(e){}},{once:true});
-document.addEventListener('visibilitychange',()=>{if(!document.hidden)checkAlarms();});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden){checkAlarms();ackAvisos(true);}});
 
 window.__nucleo={Store:Store,Supa:Supa,S:S};
 if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost')){addEventListener('load',()=>{navigator.serviceWorker.register('sw.js').catch(()=>{});});}
