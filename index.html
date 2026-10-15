@@ -56,11 +56,31 @@ button{font:inherit;color:inherit;cursor:pointer}
 input,textarea,select{font:inherit;font-size:1rem;color:var(--fg)}
 :focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 .num{font-variant-numeric:tabular-nums}
-.rl-big{font-size:3.6rem;font-weight:800;text-align:center;margin:1.4rem 0 1rem;letter-spacing:.02em;font-variant-numeric:tabular-nums}
+.rl-ring{position:relative;width:min(60vw,16.5rem);margin:1rem auto .6rem}
+.rl-ring svg{width:100%;display:block}
+.rl-bg{fill:none;stroke:var(--surface-2);stroke-width:9}
+.rl-arc{fill:none;stroke:var(--accent);stroke-width:9;stroke-linecap:round}
+.rl-digits{position:absolute;top:0;right:0;bottom:0;left:0;display:flex;flex-direction:column;align-items:center;justify-content:center;white-space:nowrap}
+.rl-main{font-size:clamp(2.6rem,13vw,4rem);font-weight:800;line-height:1;letter-spacing:-.01em;font-variant-numeric:tabular-nums}
+.rl-main.long{font-size:clamp(2rem,10vw,3.1rem)}
+.rl-frac{font-size:clamp(1.3rem,6.5vw,2rem);font-weight:700;color:var(--muted);line-height:1.3;min-height:1.3em;font-variant-numeric:tabular-nums}
 .rl-done{text-align:center;font-size:1.6rem;font-weight:800;color:var(--danger);margin:.2rem 0 1rem}
 .rl-row{display:flex;gap:.7rem;margin:.9rem 0;flex-wrap:wrap}
 .rl-row .btn{flex:1;min-height:3.6rem;font-size:1.15rem}
-.rl-lap{display:flex;justify-content:space-between;padding:.7rem .2rem;border-bottom:1px solid var(--line);font-size:1.1rem}
+.rl-btns{display:flex;justify-content:space-around;align-items:center;margin:.8rem 0 1.2rem}
+.rl-seg{display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin:1rem 0 0}
+.rl-seg .btn{min-height:3.2rem;font-size:1.05rem}
+.rl-btn{width:6.2rem;height:6.2rem;border-radius:50%;border:0;font-size:1.05rem;font-weight:800;display:flex;align-items:center;justify-content:center;background:var(--surface-2);color:var(--fg)}
+.rl-btn.go{background:var(--ok);color:var(--ok-fg)}
+.rl-btn.stop{background:var(--danger);color:var(--danger-on)}
+.rl-btn.ghost{background:transparent;pointer-events:none}
+.rl-laps{margin-top:.4rem;border-top:1px solid var(--line)}
+.rl-lap{display:grid;grid-template-columns:3.2rem 1fr 1fr;align-items:center;padding:.8rem .3rem;border-bottom:1px solid var(--line);font-size:1.15rem}
+.rl-lap b{text-align:center}
+.rl-lap span:last-child{text-align:right;color:var(--muted)}
+.rl-lh{font-size:.85rem;color:var(--muted);font-weight:700;padding:.5rem .3rem}
+.rl-lap.best b{color:var(--ok)}
+.rl-lap.worst b{color:var(--danger)}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}
 #app{height:100%;display:flex;flex-direction:column;max-width:680px;margin-inline:auto}
 .page{flex:1;min-height:0;overflow-y:auto;padding:0 1rem 2rem;-webkit-overflow-scrolling:touch}
@@ -1517,14 +1537,15 @@ function viewNotas(){
 }
 
 /* ---------- Relógio: cronômetro e temporizador ---------- */
-const RL_KEY='nucleo-relogio';
+const RL_KEY='nucleo-relogio',RL_C=2*Math.PI*90;
 const rlSwDef=()=>({run:false,t0:0,acc:0,laps:[]}),rlTmDef=()=>({run:false,end:0,total:300000,left:300000,key:'',done:false});
 function rlLoad(){let o={};try{o=JSON.parse(lsGet(RL_KEY)||'{}')||{};}catch(e){}return {mode:o.mode==='tm'?'tm':'sw',sw:Object.assign(rlSwDef(),o.sw||{}),tm:Object.assign(rlTmDef(),o.tm||{})};}
 let RL=rlLoad();
 function rlSave(){lsSet(RL_KEY,JSON.stringify(RL));}
 const swMs=()=>RL.sw.acc+(RL.sw.run?Date.now()-RL.sw.t0:0);
 const tmLeft=()=>RL.tm.run?Math.max(0,RL.tm.end-Date.now()):RL.tm.left;
-function fmtT(ms,dec){ms=Math.max(0,ms);const t=Math.floor(ms/1000),h=Math.floor(t/3600),m=Math.floor(t%3600/60),sc=t%60;const b=(h?h+':'+pad(m):pad(m))+':'+pad(sc);return dec?b+'.'+Math.floor(ms%1000/100):b;}
+function fmtParts(ms,dec){ms=Math.max(0,ms);const t=Math.floor(ms/1000),h=Math.floor(t/3600),m=Math.floor(t%3600/60),sc=t%60;return {main:(h?h+':'+pad(m):pad(m))+':'+pad(sc),frac:dec?','+pad(Math.floor(ms%1000/10)):'',long:h>0};}
+const fmtT=(ms,dec)=>{const p=fmtParts(ms,dec);return p.main+p.frac;};
 /* com o app fechado, o aviso do temporizador vem do servidor (mesma via dos lembretes; chega em até 1 minuto depois) */
 async function rlAddAlarm(end){
   RL.tm.key='tempo|'+Date.now();rlSave();
@@ -1536,6 +1557,17 @@ async function rlDelAlarm(){
 }
 function rlWake(){try{if(navigator.wakeLock&&navigator.wakeLock.request)navigator.wakeLock.request('screen').catch(()=>{});}catch(e){}}
 function rlRing(){let n=0;const id=setInterval(()=>{beep();if(++n>=6)clearInterval(id);},700);toast('⏱ Acabou o tempo do temporizador');}
+const rlFrac=(sw,ms)=>sw?((ms%60000)/60000):(RL.tm.total>0?Math.min(1,ms/RL.tm.total):0);
+function rlPaint(){
+  if(S.tab!=='relogio')return;
+  const sw=RL.mode==='sw',ms=sw?swMs():tmLeft(),p=fmtParts(ms,sw);
+  const a=$('rlMain'),f=$('rlFrac'),arc=$('rlArc');
+  if(a){a.textContent=p.main;a.classList.toggle('long',p.long);}
+  if(f)f.textContent=p.frac;
+  if(arc)arc.setAttribute('stroke-dashoffset',(RL_C*(1-rlFrac(sw,ms))).toFixed(2));
+}
+let rlRaf=0;
+function rlLoop(){rlRaf=0;rlTick();}
 function rlTick(){
   const t=RL.tm;
   if(t.run&&Date.now()>=t.end){
@@ -1544,32 +1576,37 @@ function rlTick(){
     if(!atrasado)rlRing();
     if(S.tab==='relogio')render();
   }
-  if(S.tab==='relogio'){
-    const a=$('swTime'),b=$('tmTime');
-    if(a)a.textContent=fmtT(swMs(),true);
-    if(b)b.textContent=fmtT(tmLeft());
-  }
+  rlPaint();
+  /* números rodando suaves: redesenha a cada quadro enquanto algo está correndo na tela */
+  if(S.tab==='relogio'&&(RL.sw.run||RL.tm.run)&&!rlRaf&&typeof requestAnimationFrame==='function')rlRaf=requestAnimationFrame(rlLoop);
+}
+function rlRing_(sw,ms){
+  const p=fmtParts(ms,sw),frac=rlFrac(sw,ms);
+  return '<div class="rl-ring"><svg viewBox="0 0 200 200" aria-hidden="true"><circle class="rl-bg" cx="100" cy="100" r="90"/><circle id="rlArc" class="rl-arc"'+(!sw&&RL.tm.done?' style="stroke:var(--danger)"':'')+' cx="100" cy="100" r="90" stroke-dasharray="'+RL_C.toFixed(2)+'" stroke-dashoffset="'+(RL_C*(1-frac)).toFixed(2)+'" transform="rotate(-90 100 100)"/></svg><div class="rl-digits"><div class="rl-main num'+(p.long?' long':'')+'" id="rlMain">'+p.main+'</div><div class="rl-frac num" id="rlFrac">'+p.frac+'</div></div></div>';
 }
 function viewRelogio(){
-  const sw=RL.sw,tm=RL.tm;
+  const sw=RL.sw,tm=RL.tm,rb=(act,cls,label)=>'<button class="rl-btn '+cls+'" data-act="'+act+'">'+label+'</button>';
   let h=subHdr('Hoje','rl-back','Cronômetro e temporizador','Relógio');
-  h+='<div class="rl-row" style="margin-top:1rem"><button class="btn'+(RL.mode==='sw'?' primary':'')+'" data-act="rl-mode" data-v="sw">Cronômetro</button><button class="btn'+(RL.mode==='tm'?' primary':'')+'" data-act="rl-mode" data-v="tm">Temporizador</button></div>';
+  h+='<div class="rl-seg"><button class="btn'+(RL.mode==='sw'?' primary':'')+'" data-act="rl-mode" data-v="sw">Cronômetro</button><button class="btn'+(RL.mode==='tm'?' primary':'')+'" data-act="rl-mode" data-v="tm">Temporizador</button></div>';
   if(RL.mode==='sw'){
-    h+='<div class="rl-big" id="swTime">'+fmtT(swMs(),true)+'</div>';
-    h+='<div class="rl-row">';
-    if(sw.run)h+='<button class="btn" data-act="rl-sw-lap">Volta</button><button class="btn primary" data-act="rl-sw-start">Parar</button>';
-    else if(swMs()>0)h+='<button class="btn" data-act="rl-sw-reset">Zerar</button><button class="btn primary" data-act="rl-sw-start">Continuar</button>';
-    else h+='<button class="btn primary" data-act="rl-sw-start">Iniciar</button>';
+    h+=rlRing_(true,swMs());
+    h+='<div class="rl-btns">';
+    if(sw.run)h+=rb('rl-sw-lap','','Volta')+rb('rl-sw-start','stop','Parar');
+    else if(swMs()>0)h+=rb('rl-sw-reset','','Zerar')+rb('rl-sw-start','go','Continuar');
+    else h+='<span class="rl-btn ghost"></span>'+rb('rl-sw-start','go','Iniciar');
     h+='</div>';
-    if(sw.laps.length)h+='<div class="group">'+sw.laps.map((l,i)=>{const prev=sw.laps[i+1]?sw.laps[i+1].t:0;return '<div class="rl-lap num"><span>Volta '+(sw.laps.length-i)+'</span><b>'+fmtT(l.t-prev,true)+'</b><span>'+fmtT(l.t,true)+'</span></div>';}).join('')+'</div>';
+    if(sw.laps.length){
+      const L=sw.laps,dur=L.map((l,i)=>l.t-(L[i+1]?L[i+1].t:0)),best=Math.min.apply(null,dur),worst=Math.max.apply(null,dur);
+      h+='<div class="rl-laps"><div class="rl-lap rl-lh"><span>Volta</span><span style="text-align:center">Tempo</span><span>Total</span></div>'+L.map((l,i)=>'<div class="rl-lap num'+(L.length>1?(dur[i]===best?' best':dur[i]===worst?' worst':''):'')+'"><span>'+(L.length-i)+'</span><b>'+fmtT(dur[i],true)+'</b><span>'+fmtT(l.t,true)+'</span></div>').join('')+'</div>';
+    }
   }else{
-    h+='<div class="rl-big" id="tmTime">'+fmtT(tmLeft())+'</div>';
+    h+=rlRing_(false,tmLeft());
     if(tm.done)h+='<div class="rl-done">⏱ Acabou!</div>';
+    h+='<div class="rl-btns">'+rb('rl-tm-reset','','Zerar')+(tm.run?rb('rl-tm-start','stop','Pausar'):rb('rl-tm-start','go',tm.left>0&&tm.left<tm.total?'Continuar':'Iniciar'))+'</div>';
     if(!tm.run){
       h+='<div class="chips" style="justify-content:center">'+[1,5,10,15,30,45,60].map(m=>'<button class="chip" data-act="rl-tm-preset" data-m="'+m+'">'+(m===60?'1 h':m+' min')+'</button>').join('')+'</div>';
       h+='<div class="rl-row"><button class="btn" data-act="rl-tm-adj" data-d="-1">− 1 min</button><button class="btn" data-act="rl-tm-adj" data-d="1">+ 1 min</button></div>';
     }
-    h+='<div class="rl-row">'+(tm.run?'<button class="btn primary" data-act="rl-tm-start">Pausar</button><button class="btn" data-act="rl-tm-reset">Zerar</button>':'<button class="btn primary" data-act="rl-tm-start">'+(tm.left>0&&tm.left<tm.total?'Continuar':'Iniciar')+'</button><button class="btn" data-act="rl-tm-reset">Zerar</button>')+'</div>';
     h+='<div class="note-s" style="text-align:center">Com o app fechado, o aviso chega em até 1 minuto depois de acabar o tempo (precisa dos avisos ligados em Ajustes).</div>';
   }
   return h;
