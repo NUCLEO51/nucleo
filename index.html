@@ -2056,8 +2056,9 @@ function clockAlarm(r,a,now){
   const dt=f.getTime()-(now||Date.now());
   if(dt<=0)return {erro:'Esse horário já passou.'};
   if(dt>864e5)return {erro:'O Relógio só aceita alarme nas próximas 24 horas.'};
-  const txt=isoDate(f)+' '+pad(f.getHours())+':'+pad(f.getMinutes())+'|'+String(r.title||'Lembrete').replace(/\|/g,'/').slice(0,60);
-  return {texto:txt,url:'shortcuts://run-shortcut?name='+encodeURIComponent(CLOCK_SHORTCUT)+'&input=text&text='+encodeURIComponent(txt)};
+  /* só a hora e o título: o Relógio toca na próxima vez que der aquele horário (por isso o limite de 24 horas) */
+  const hh=pad(f.getHours())+':'+pad(f.getMinutes()),txt=hh+'|'+String(r.title||'Lembrete').replace(/\|/g,'/').slice(0,60);
+  return {texto:txt,hora:hh,quando:f.getTime(),url:'shortcuts://run-shortcut?name='+encodeURIComponent(CLOCK_SHORTCUT)+'&input=text&text='+encodeURIComponent(txt)};
 }
 function clockBtn(r,ix){
   const a=(r.alarms||[])[ix];if(!a||r.done||!r.date||!r.time)return '';
@@ -2067,7 +2068,7 @@ function pickClock(r,now){
   const arr=(r.alarms&&r.alarms.length)?r.alarms:[{min:0}];
   const ok=arr.map(a=>clockAlarm(r,a,now)).filter(x=>x.url);
   if(!ok.length)return null;
-  ok.sort((x,y)=>x.texto<y.texto?-1:1);
+  ok.sort((x,y)=>x.quando-y.quando);
   return ok[0];
 }
 function sheetNoteV(){
@@ -2127,7 +2128,7 @@ function capSummary(d){
   if(onC&&m==='rem'){
     const rr={title:p.title,date:p.date,time:p.time,alarms:(p.alarms&&p.alarms.length)?p.alarms.map(min=>({min})):[{min:0}]};
     const pc=p.date&&p.time?pickClock(rr):null;
-    const extra=pc?'Vai criar também o alarme no Relógio às '+pc.texto.slice(11,16)+'.':'O Relógio só aceita alarme nas próximas 24 horas; esse fica só com o aviso do app.';
+    const extra=pc?'Vai criar também o alarme no Relógio às '+pc.hora+'.':'O Relógio só aceita alarme nas próximas 24 horas; esse fica só com o aviso do app.';
     note=note?note+' '+extra:extra;
   }
   return {m,what:m==='note'||m==='inbox'?d.text.trim().slice(0,70):p.title,when,note};
