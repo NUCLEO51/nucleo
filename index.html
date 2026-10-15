@@ -472,6 +472,9 @@ function parseCapture(text,now){
   else if(cut(/\b(?:todos os dias|todo dia|diariamente)\b/))repeat='daily';
   else if(cut(/\b(?:toda semana|todas as semanas|semanalmente)\b/))repeat='weekly';
   else if(cut(/\b(?:todo mes|todos os meses|mensalmente)\b/))repeat='monthly';
+  /* "alarme forte", "alarme no relógio", "despertador": pede também o alarme do Relógio */
+  let strong=false;
+  if(cut(/\b(?:com\s+|e\s+)?(?:alarme forte|alarme no relogio|alarme do relogio|despertador)\b/))strong=true;
   /* avisos antes do horário: "uma hora antes", "30 minutos antes", "um dia antes", "meia hora antes" */
   const alarmsMin=[];
   {
@@ -558,14 +561,14 @@ function parseCapture(text,now){
   if(time&&!date){date=dtOf(today,time)>now?today:isoDate(addDays(now,1));}
   if(repeat==='daily'&&time&&date===today&&dtOf(today,time)<=now)date=isoDate(addDays(now,1));
   if(repeat!=='none'&&!date)date=today;
-  let title=orig.replace(/^\s*(?:me\s+)?(?:lembr(?:ar|a|e)|anotar|marcar|agendar|criar lembrete)\s*(?:de|que|para|:)?\s*[:,\-]?\s*/i,'');
+  let title=orig.replace(/^\s*(?:me\s+)?(?:lembr(?:ar|a|e)|anotar|marcar|agendar|criar lembrete)\s*(?:de|do|da|que|para|:)?\s*[:,\-]?\s*/i,'');
   for(let i=0;i<4;i++)title=title.replace(/\s+(?:as|às|a|à|de|em|para|pra|no|na|pela|pelo|da|do|dia|e|,)\s*$/i,'');
   title=title.replace(/\s*,\s*,/g,',').replace(/\s{2,}/g,' ').replace(/^[\s,.\-:;]+|[\s,.\-:;]+$/g,'');
   const semTenho=title.replace(/^(?:que\s+)?(?:eu\s+)?(?:tenho|vou ter)\s+(?:que\s+)?(?:um\s+|uma\s+|o\s+|a\s+)?/i,'');
   if(semTenho.trim())title=semTenho;
   if(!title)title=String(text||'').trim();
   title=title.charAt(0).toUpperCase()+title.slice(1);
-  return {title,date,time,repeat,repN,repU,repDays,when:!!date,alarms:alarmsMin,pmGuess};
+  return {title,date,time,repeat,repN,repU,repDays,when:!!date,alarms:alarmsMin,pmGuess,strong};
 }
 </script>
 
@@ -2039,6 +2042,13 @@ function clockBtn(r,ix){
   const a=(r.alarms||[])[ix];if(!a||r.done||!r.date||!r.time)return '';
   return clockAlarm(r,a).url?'<button class="chip" style="margin-top:.5rem" data-act="clock-alarm" data-i="'+ix+'">⏰ Alarme no Relógio</button>':'';
 }
+function pickClock(r,now){
+  const arr=(r.alarms&&r.alarms.length)?r.alarms:[{min:0}];
+  const ok=arr.map(a=>clockAlarm(r,a,now)).filter(x=>x.url);
+  if(!ok.length)return null;
+  ok.sort((x,y)=>x.texto<y.texto?-1:1);
+  return ok[0];
+}
 function sheetNoteV(){
   const n=S.sheet.draft,fm=fmap(),fid=noteFolder(n,fm),ts=n.updatedAt||n.createdAt;
   const KN={nota:'Nota',ideia:'Nota',scan:'Scan',desenho:'Desenho'};
@@ -2092,6 +2102,13 @@ function capSummary(d){
   if(m==='rem'||m==='ev'){const dd=p.date||today;when=(m==='rem'&&!p.date)?'sem data':relDay(dd,today)+(p.time?' às '+p.time:'')+(p.repeat!=='none'?' · '+repLabel(p):'');
     if(m==='rem'&&p.alarms&&p.alarms.length&&p.time&&p.date)when+=' · avisos: '+p.alarms.slice().sort((a,b)=>a-b).map(minLabel).join(', ');
     if(p.pmGuess)note='Entendi '+p.time+' (à tarde). Para madrugada, diga “da madrugada”.';}
+  const onC=d.clock===undefined?!!p.strong:!!d.clock;
+  if(onC&&m==='rem'){
+    const rr={title:p.title,date:p.date,time:p.time,alarms:(p.alarms&&p.alarms.length)?p.alarms.map(min=>({min})):[{min:0}]};
+    const pc=p.date&&p.time?pickClock(rr):null;
+    const extra=pc?'Vai criar também o alarme no Relógio às '+pc.texto.slice(11,16)+'.':'O Relógio só aceita alarme nas próximas 24 horas; esse fica só com o aviso do app.';
+    note=note?note+' '+extra:extra;
+  }
   return {m,what:m==='note'||m==='inbox'?d.text.trim().slice(0,70):p.title,when,note};
 }
 function capPreviewHtml(d){
@@ -2110,6 +2127,8 @@ function sheetCap(){
     +'<button class="btn grow" style="margin-top:.5rem;width:100%" data-act="cap-full" data-m="ev">🗓 Compromisso completo</button>'
     +'<button class="btn grow" style="margin-top:.5rem;width:100%" data-act="cap-full" data-m="note">📝 Nota completa</button>'
     +'<div class="note-s" style="margin:.4rem .2rem 0">Abre o formulário completo e leva o que você já escreveu.</div></div>';
+  {const onC=d.clock===undefined?!!(d.text&&parseCapture(d.text).strong):!!d.clock;
+  h+='<div><span class="lbl">Alarme forte</span><button class="btn grow" style="margin-top:.5rem;width:100%" data-act="cap-clock" aria-pressed="'+onC+'">'+(onC?'⏰ Alarme no Relógio: LIGADO':'⏰ Criar também no Relógio')+'</button><div class="note-s" style="margin:.4rem .2rem 0">Toca alto, como despertador. Vale para as próximas 24 horas. Você também pode falar “alarme forte” na frase.</div></div>';}
   h+='</div><div class="sheet-ft"><button class="btn primary grow" data-act="save-sheet">Salvar</button></div></div></div>';
   return h;
 }
@@ -2191,7 +2210,9 @@ async function saveCapture(d,quiet){
   if(m==='rem'){
     const doc=Object.assign(newRem(p.date||''),{title:p.title,time:p.time,repeat:p.repeat,repN:p.repN||1,repDays:p.repDays||[],repU:p.repU||'week',alarms:p.time&&p.date?((p.alarms&&p.alarms.length)?p.alarms.map(min=>({id:uid(),min,msg:''})):[{id:uid(),min:0,msg:''}]):[]});
     const id=await Store.put('reminders',doc);
+    const wantClock=!quiet&&(d.clock===undefined?!!p.strong:!!d.clock),pc=wantClock?pickClock(doc):null;
     toast((quiet?'Siri → ':'')+'Lembrete criado: '+p.title+(p.date?' · '+relDay(p.date,today)+(p.time?' às '+p.time:''):''),'Abrir',()=>{const r=S.reminders.find(x=>x.id===id);if(r)openRem(r);});
+    if(pc)setTimeout(()=>{location.href=pc.url;},350);
   }else if(m==='ev'){
     await Store.put('events',{title:p.title,date:p.date||today,time:p.time,repeat:p.repeat,repN:p.repN||1,repDays:p.repDays||[],repU:p.repU==='hour'?'day':(p.repU||'week'),createdAt:Date.now()});toast('Compromisso criado: '+p.title);
   }else if(m==='note'){
@@ -2455,6 +2476,7 @@ const A={
   'view-img':d=>{const v=$('viewer');v.innerHTML='<img src="'+imgSrc(d.id)+'" data-img="'+esc(d.id)+'" alt="Imagem ampliada"><button data-act="close-viewer" aria-label="Fechar imagem">'+ic('close',1.1)+'</button>';v.hidden=false;},
   'close-viewer':()=>{$('viewer').hidden=true;},
   'cap-mode':d=>{S.sheet.draft.mode=d.m;renderSheet();},
+  'cap-clock':()=>{const sh=S.sheet;if(!sh||sh.type!=='cap')return;const d=sh.draft,p=parseCapture(d.text||'');const on=d.clock===undefined?!!p.strong:!!d.clock;d.clock=!on;renderSheet();},
   'cap-full':d=>{const sh=S.sheet;if(!sh||sh.type!=='cap')return;const t=(sh.draft.text||'').trim(),p=t?parseCapture(t):{};
     if(d.m==='rem'){const r=Object.assign(newRem(p.date||''),{title:p.title||t.slice(0,120),time:p.time||'',repeat:p.repeat||'none',repN:p.repN||1,repDays:p.repDays||[],repU:p.repU||'week'});if(p.alarms&&p.alarms.length&&p.time&&p.date)r.alarms=p.alarms.map(min=>({id:uid(),min,msg:''}));openSheet('rem',r);}
     else if(d.m==='ev')openSheet('ev',{title:p.title||t.slice(0,120),date:p.date||isoDate(new Date()),time:p.time||'',repeat:p.repeat||'none',repN:p.repN||1,repU:p.repU||'week',repDays:p.repDays||[],repUntil:'',createdAt:Date.now()});
@@ -2485,7 +2507,7 @@ document.addEventListener('input',e=>{
   if(!S.sheet)return;
   if(t.dataset.bind!==undefined){
     setSheetField(t.dataset.bind,t.type==='checkbox'?t.checked:t.value);
-    if(S.sheet.type==='cap'){const p=$('capPrev');if(p)p.innerHTML=capPreviewHtml(S.sheet.draft);}
+    if(S.sheet.type==='cap'){const p=$('capPrev');if(p)p.innerHTML=capPreviewHtml(S.sheet.draft);const cb=document.querySelector('[data-act="cap-clock"]');if(cb){const dd=S.sheet.draft,onC=dd.clock===undefined?!!(dd.text&&parseCapture(dd.text).strong):!!dd.clock;cb.textContent=onC?'⏰ Alarme no Relógio: LIGADO':'⏰ Criar também no Relógio';cb.setAttribute('aria-pressed',String(onC));}}
   }else if(t.dataset.subText!==undefined){S.sheet.draft[t.dataset.subK][+t.dataset.subText].t=t.value;}
   else if(t.dataset.alMsg!==undefined){const a=S.sheet.draft.alarms.find(x=>x.id===t.dataset.alMsg);if(a)a.msg=t.value;}
 });
