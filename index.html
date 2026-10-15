@@ -2159,8 +2159,9 @@ function clockAlarm(r,a,now){
   const dt=f.getTime()-(now||Date.now());
   if(dt<=0)return {erro:'Esse horário já passou.'};
   if(dt>864e5)return {erro:'O Relógio só aceita alarme nas próximas 24 horas.'};
-  /* só a hora e o título: o Relógio toca na próxima vez que der aquele horário (por isso o limite de 24 horas) */
-  const hh=pad(f.getHours())+':'+pad(f.getMinutes()),txt=hh+'|'+String(r.title||'Lembrete').replace(/\|/g,'/').slice(0,60);
+  /* minutos a partir de agora + título: o atalho soma os minutos à hora atual (não depende de o iPhone entender data).
+     O Relógio toca na próxima vez que der aquele horário (por isso o limite de 24 horas). */
+  const mins=Math.max(1,Math.ceil(dt/60000)),hh=pad(f.getHours())+':'+pad(f.getMinutes()),txt=mins+'|'+String(r.title||'Lembrete').replace(/\|/g,'/').slice(0,60);
   return {texto:txt,hora:hh,quando:f.getTime(),url:'shortcuts://run-shortcut?name='+encodeURIComponent(CLOCK_SHORTCUT)+'&input=text&text='+encodeURIComponent(txt)};
 }
 function clockBtn(r,ix){
