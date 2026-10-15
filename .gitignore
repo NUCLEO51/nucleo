@@ -2,3 +2,4 @@ backup*
 *.zip
 .env
 *.key
+node_modules/
