@@ -8,8 +8,11 @@ import webpush from "npm:web-push@3.6.7";
 const URL_ = Deno.env.get("SUPABASE_URL")!;
 const KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const H = { apikey: KEY, Authorization: `Bearer ${KEY}`, "Content-Type": "application/json" };
-const REPS = 4; // repetições depois do primeiro aviso (total 5 avisos)
-const STEP_MS = 60_000; // 1 minuto entre os avisos
+const REPS = 10; // repetições depois do primeiro aviso (cerca de 10 minutos; total 11 avisos)
+// o relógio do banco roda a cada minuto, mas com alguns milissegundos de diferença: agenda 15 s antes do minuto
+// seguinte e aceita repetições até 5 s à frente, para nenhuma ficar para o minuto depois.
+const STEP_MS = 60_000 - 15_000;
+const JANELA_MS = 5_000;
 
 type Cfg = { vapid_subject: string; vapid_public: string | null; vapid_private: string | null; cron_secret: string };
 
@@ -91,7 +94,8 @@ Deno.serve(async (req) => {
   }
 
   // 2) repetições que já estão na hora (o app apaga estas linhas quando é aberto)
-  const rr = await fetch(`${URL_}/rest/v1/alarm_repeats?next_at=lte.${iso}&select=*`, { headers: H });
+  const limite = new Date(now.getTime() + JANELA_MS).toISOString();
+  const rr = await fetch(`${URL_}/rest/v1/alarm_repeats?next_at=lte.${limite}&select=*`, { headers: H });
   const reps: { id: string; owner: string; alarm_id: string | null; message: string; sent: number; total: number }[] = rr.ok ? await rr.json() : [];
   for (const p of reps) {
     const nova = p.sent + 1;
