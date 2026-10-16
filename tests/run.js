@@ -50,7 +50,7 @@ t('ícone novo no manifest e no app', /nucleo1/.test(html) && /nucleo1/.test(fs.
 
 t('notas: botão Criar a pasta Documentos foi tirado', !/make-docs/.test(html) && !/Criar a pasta Documentos/.test(html), true);
 
-t('caixa de entrada: campo rápido, selo na aba, caixa única com cartões', !/id="qcapIn"/.test(html) && /f\.focus\(\{preventScroll/.test(html) && /tab-badge/.test(html) && /inb-card/.test(html) && /'loose-del'/.test(html) && !/Organizar um por um<\/button>/.test(html), true);
+t('caixa de entrada: campo rápido, sem selo na aba, caixa única com cartões', !/id="qcapIn"/.test(html) && /f\.focus\(\{preventScroll/.test(html) && !/tab-badge/.test(html) && /inb-card/.test(html) && /'loose-del'/.test(html) && !/Organizar um por um<\/button>/.test(html), true);
 t('caixa de entrada sempre visível', /Tudo organizado ✓/.test(html), true);
 t('notas: pastas antes dos filtros', html.indexOf('id="notesFolders"') < html.indexOf('<label for="q"') && /function notesFolders\(\)/.test(html), true);
 
@@ -245,6 +245,14 @@ ev(`__NUCLEO_TEST__.S.gq='';__NUCLEO_TEST__.S.tab='hoje';`);
   const v = TT.viewNotas();
   t('notas: sem pasta Documentos, a tela inicial não oferece criar', !/Pasta Documentos/.test(v) && !/Criar a pasta/.test(v) && /Nova pasta/.test(v), true);
   ev(`__NUCLEO_TEST__.S.tab='hoje';`);
+}
+{
+  const doc = w.document;
+  ev(`const S=__NUCLEO_TEST__.S;S.ready=true;S.tab='lembretes';S.inbox=[{id:'i1',text:'a',createdAt:1},{id:'i2',text:'b',createdAt:2}];S.reminders=[];S.notes=[];S.events=[];S.folders=[];S.lists=[];`);
+  doc.getElementById('tab-hoje').click();
+  t('barra de baixo: botão Hoje sem contador mesmo com itens na caixa', !doc.querySelector('#tab-hoje .tab-badge') && !doc.querySelector('.tab-badge'), true);
+  t('barra de baixo: botão Hoje continua com ícone e nome', /Hoje/.test(doc.getElementById('tab-hoje').textContent) && !!doc.querySelector('#tab-hoje svg'), true);
+  ev(`__NUCLEO_TEST__.S.tab='hoje';__NUCLEO_TEST__.S.inbox=[];`);
 }
 console.log(ok + ' ok, ' + bad + ' falhas');
 process.exit(bad ? 1 : 0);
