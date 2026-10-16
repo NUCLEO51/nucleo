@@ -624,7 +624,7 @@ const S={tab:'hoje',raw:{},reminders:[],notes:[],events:[],inbox:[],folders:[],l
   folder:null,rview:null,q:'',rq:'',sheet:null,rings:[],assetsOk:false,dlOk:false,bw:true,weekend:false,fired:{},fs:20,theme:'auto',conf:'all',purged:false};
 const lsGet=k=>{try{return localStorage.getItem(k);}catch(e){return null;}};
 const lsSet=(k,v)=>{try{localStorage.setItem(k,v);}catch(e){}};
-const APP_V='v29';
+const APP_V='v30';
 const ERRLOG_KEY='nucleo-errlog';
 function logErr(where,e){try{const a=JSON.parse(localStorage.getItem(ERRLOG_KEY)||'[]');a.push({t:Date.now(),w:String(where).slice(0,40),m:String((e&&e.message)||e||'').slice(0,160)});while(a.length>30)a.shift();localStorage.setItem(ERRLOG_KEY,JSON.stringify(a));}catch(x){}}
 addEventListener('error',ev=>logErr('tela',ev.message||ev.error));
@@ -1536,6 +1536,13 @@ function curFolder(){
   if(f===''||f.indexOf('v:')===0||f.indexOf('t:')===0)return f;
   return fmap()[f]?f:null;
 }
+function notesFolders(){
+  const fm=fmap();let h='';
+    h+=secH('Pastas','<button class="txtbtn" data-act="new-folder" data-parent="">'+ic('folderPlus',1.1,2.2)+'Nova pasta</button>');
+    h+='<div class="group">'+folderRow('','Geral',countIn('',fm),'notas sem pasta')+kids('',fm).map(f=>folderRow(f.id,f.name||'Sem nome',countIn(f.id,fm),subLabel(f.id,fm))).join('')+'</div>';
+    if(!S.folders.some(f=>norm(f.name||'')==='documentos'))h+='<div class="group" style="margin-top:1.2rem"><div class="li static" style="flex-wrap:wrap"><div class="li-main" style="flex-basis:100%"><div class="li-t">Pasta Documentos</div><div class="li-s">Cria a pasta com uma nota para cada pessoa (CPF, RG, CNH, SUS, endereço) e uma para o carro, tudo em branco para você preencher.</div></div><button class="btn primary wide" data-act="make-docs">Criar a pasta Documentos</button></div></div>';
+  return h;
+}
 function notesBody(){
   const fm=fmap(),q=norm(S.q||'').trim();
   if(q){
@@ -1546,9 +1553,6 @@ function notesBody(){
   if(cf===null){
     const pinned=S.notes.filter(n=>n.pinned).length,scans=S.notes.filter(isScan).length,withF=S.notes.filter(n=>(n.files||[]).length).length;
     let h='';
-    h+=secH('Pastas','<button class="txtbtn" data-act="new-folder" data-parent="">'+ic('folderPlus',1.1,2.2)+'Nova pasta</button>');
-    h+='<div class="group">'+folderRow('','Geral',countIn('',fm),'notas sem pasta')+kids('',fm).map(f=>folderRow(f.id,f.name||'Sem nome',countIn(f.id,fm),subLabel(f.id,fm))).join('')+'</div>';
-    if(!S.folders.some(f=>norm(f.name||'')==='documentos'))h+='<div class="group" style="margin-top:1.2rem"><div class="li static" style="flex-wrap:wrap"><div class="li-main" style="flex-basis:100%"><div class="li-t">Pasta Documentos</div><div class="li-s">Cria a pasta com uma nota para cada pessoa (CPF, RG, CNH, SUS, endereço) e uma para o carro, tudo em branco para você preencher.</div></div><button class="btn primary wide" data-act="make-docs">Criar a pasta Documentos</button></div></div>';
     h+=secH('Ver as notas por tipo');
     h+='<div class="group">'+folderRow('v:all','Todas as notas',S.notes.length,'','note')+folderRow('v:pin','Fixadas',pinned,'','pin')+folderRow('v:scan','Scans e documentos',scans,'','scan')+folderRow('v:draw','Desenhos',S.notes.filter(isDraw).length,'','edit')+folderRow('v:files','Com arquivos',withF,'','clip')+'</div>';
     const tags=allTags();
@@ -1589,6 +1593,7 @@ function viewNotas(){
     const edit=real?'<button class="iconbtn" data-act="edit-folder" data-id="'+esc(cf)+'" aria-label="Renomear, mover ou apagar pasta">'+ic('edit',1.1,2.2)+'</button>':'';
     h+=subHdr(backTo,'folder-back',par?pathOf(par,fm).join(' › '):(isTag?'Etiqueta':''),real?(f.name||'Sem nome'):(isTag?'#'+cf.slice(2):VN[cf]),edit);
   }
+  if(cf===null)h+='<div id="notesFolders"'+(S.q?' style="display:none"':'')+'>'+notesFolders()+'</div>';
   h+='<div class="search">'+ic('search',1.05,2.2)+'<label for="q" class="sr">Buscar nas notas</label><input id="q" type="search" placeholder="Buscar em todas as notas" value="'+esc(S.q)+'" autocomplete="off"></div>';
   h+='<div id="notesBody">'+notesBody()+'</div>';
   const into=cf&&cf.indexOf('v:')!==0&&cf.indexOf('t:')!==0?cf:'';
@@ -1681,7 +1686,7 @@ function render(){
   try{const hb=$('tab-hoje');if(hb){let b=hb.querySelector('.tab-badge');const n=S.ready?inboxCount():0;if(n){if(!b){b=document.createElement('span');b.className='tab-badge';hb.appendChild(b);}b.textContent=n>99?'99+':String(n);}else if(b)b.remove();}}catch(e){}
   const active=document.activeElement;
   if(S.tab==='hoje'&&active&&active.id==='qcapIn'&&$('qcapIn'))return;
-  if(S.tab==='notas'&&active&&active.id==='q'&&$('notesBody')){$('notesBody').innerHTML=notesBody();return;}
+  if(S.tab==='notas'&&active&&active.id==='q'&&$('notesBody')){$('notesBody').innerHTML=notesBody();const nf=$('notesFolders');if(nf)nf.style.display=S.q?'none':'';return;}
   if(S.tab==='lembretes'&&active&&active.id==='rq'&&$('remBody')){renderRemBody();return;}
   const main=$('main'),st=main.scrollTop;
   main.innerHTML=({hoje:viewHoje,lembretes:viewLembretes,agenda:viewAgenda,notas:viewNotas,relogio:viewRelogio})[S.tab]();
@@ -2749,7 +2754,7 @@ document.addEventListener('click',e=>{
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target&&e.target.id==='qcapIn'){e.preventDefault();qcapSave();}});
 document.addEventListener('input',e=>{
   const t=e.target;
-  if(t.id==='q'){S.q=t.value;const b=$('notesBody');if(b)b.innerHTML=notesBody();return;}
+  if(t.id==='q'){S.q=t.value;const b=$('notesBody');if(b)b.innerHTML=notesBody();const nf=$('notesFolders');if(nf)nf.style.display=S.q?'none':'';return;}
   if(t.id==='rq'){S.rq=t.value;renderRemBody();return;}
   if(!S.sheet)return;
   if(t.dataset.bind!==undefined){
