@@ -353,5 +353,53 @@ ev(`__NUCLEO_TEST__.S.gq='';__NUCLEO_TEST__.S.tab='hoje';`);
   t('hoje: continua igual (sem bolinhas neon, números dos botões como antes)', !/class="cnt/.test(hoje) && /class="tile-n num"/.test(hoje), true);
 }
 
+
+// --- página de lista em Lembretes: seções no começo e recolhíveis, botões no topo, número da bolinha preto (v47) ---
+{
+  const doc = w.document, clickAct = (el) => el.dispatchEvent(new w.MouseEvent('click', { bubbles: true, cancelable: true }));
+  const q = (sel) => doc.querySelector(sel);
+  const TT = w.__NUCLEO_TEST__;
+  ev(`const S=__NUCLEO_TEST__.S;S.ready=true;S.tab='hoje';S.sheet=null;S.lc={};S.rq='';S.rfromHoje=0;S.rfromPlan=0;
+    S.lists=[{id:'l1',name:'Contas e dinheiro',color:'#B5584E',sections:[{id:'s1',t:'Atrasadas',done:false},{id:'s2',t:'Do mês',done:false}]}];
+    S.reminders=[
+      {id:'r1',title:'Pagar o MEI',notes:'',date:'',time:'',done:false,list:'l1',section:'s1',subtasks:[],files:[]},
+      {id:'r2',title:'Boleto atrasado',notes:'',date:'',time:'',done:false,list:'l1',section:'s1',subtasks:[],files:[]},
+      {id:'r3',title:'Sem seção aqui',notes:'',date:'',time:'',done:false,list:'l1',subtasks:[],files:[]},
+      {id:'r4',title:'Conta de luz paga',notes:'',date:'',time:'',done:true,list:'l1',section:'s2',subtasks:[],files:[]}];
+    S.events=[];S.notes=[];S.folders=[];S.inbox=[];S.rview='l:l1';`);
+  try { w.localStorage.removeItem('nucleo-hidedone'); } catch (e) {}
+  const pg = TT.viewLembretes();
+  const iA = pg.indexOf('Atrasadas'), iM = pg.indexOf('Do mês'), iSS = pg.indexOf('Sem seção'), iC = pg.indexOf('Concluídos'), iT = pg.indexOf('class="notes-tools"');
+  t('lista: botões no topo e depois as seções, na ordem (Atrasadas, Do mês, Sem seção, Concluídos)', iT > 0 && iT < iA && iA < iM && iM < iSS && iSS < iC, true);
+  t('lista: Novo lembrete, Ocultar concluídos e editar são botões no topo com nome', /data-act="new-rem" data-list="l1" aria-label="Novo lembrete"/.test(pg) && /data-act="toggle-done-list" data-id="l1"[^>]*aria-label="Ocultar concluídos \(1\)"/.test(pg) && /data-act="edit-list" data-id="l1"/.test(pg), true);
+  t('lista: saíram a faixa de Ocultar concluídos e as linhas "Novo lembrete" de dentro', !/class="actbar" style="margin-top:\.8rem"/.test(pg) && !/Novo lembrete aqui/.test(pg) && !/class="sec-lh"/.test(pg), true);
+  t('lista: cada seção tem setinha e a contagem na bolinha', /data-act="lc-toggle" data-id="l1:s1"/.test(pg) && /Atrasadas <span class="cnt sm num">2</.test(pg) && /Do mês <span class="cnt sm zero num">0</.test(pg), true);
+  t('bolinha neon: número PRETO em todas (cheia, planner e cabeçalho de seção)', /\.cnt\{[^}]*background:#39FF14;color:#000;/.test(html) && /\.pb-d\.has b\{[^}]*color:#000/.test(html) && /\.sec-h \.cnt\{color:#000\}/.test(html) && !/\.sec-lh \.cnt/.test(html) && !/#04230A/.test(html), true);
+  // fluxo: recolher e abrir uma seção; ocultar concluídos
+  ev(`__NUCLEO_TEST__.S.tab='hoje';__NUCLEO_TEST__.S.rview='l:l1';`);
+  clickAct(q('#tab-lembretes'));
+  t('fluxo lista: entra na página da lista', !!q('#main [data-act="lc-toggle"][data-id="l1:s1"]') && /Pagar o MEI/.test(q('#main').innerHTML), true);
+  clickAct(q('#main [data-act="lc-toggle"][data-id="l1:s1"]'));
+  const rec = q('#main').innerHTML;
+  t('fluxo lista: recolher esconde os lembretes da seção e mantém o título e a contagem', !/Pagar o MEI/.test(rec) && /Atrasadas/.test(rec) && /aria-expanded="false"/.test(rec) && /Sem seção aqui/.test(rec), true);
+  clickAct(q('#main [data-act="lc-toggle"][data-id="l1:s1"]'));
+  t('fluxo lista: abrir de novo mostra os lembretes', /Pagar o MEI/.test(q('#main').innerHTML), true);
+  clickAct(q('#main [data-act="toggle-done-list"]'));
+  const oc = q('#main').innerHTML;
+  t('fluxo lista: ocultar concluídos tira a seção Concluídos e o botão avisa (pressionado)', !/Conta de luz paga/.test(oc) && !/>Concluídos </.test(oc) && /aria-pressed="true"[^>]*aria-label="Mostrar concluídos \(1\)"/.test(oc), true);
+  clickAct(q('#main [data-act="toggle-done-list"]'));
+  t('fluxo lista: mostrar concluídos traz de volta', /Conta de luz paga/.test(q('#main').innerHTML), true);
+  // sair de Lembretes zera as setinhas
+  clickAct(q('#main [data-act="lc-toggle"][data-id="l1:s2"]'));
+  t('lista: estado das setinhas guardado enquanto está em Lembretes', ev('__NUCLEO_TEST__.S.lc["l1:s2"]') === 1 && ev('!!__NUCLEO_TEST__.S.lc["l1:s1"]') === false, true);
+  clickAct(q('#tab-hoje'));
+  t('sair de Lembretes: setinhas voltam todas abertas e a lista volta ao início', ev('JSON.stringify(__NUCLEO_TEST__.S.lc)') === '{}' && ev('__NUCLEO_TEST__.S.rview') === null, true);
+  // lista sem seções continua simples, com botão para criar seções
+  ev(`const S=__NUCLEO_TEST__.S;S.lists=[{id:'l2',name:'Quando der',color:'#8A8A8E',sections:[]}];S.reminders=[{id:'x1',title:'Algo solto',notes:'',date:'',time:'',done:false,list:'l2',subtasks:[],files:[]}];S.rview='l:l2';S.tab='lembretes';`);
+  const sem = TT.viewLembretes();
+  t('lista sem seções: mostra os lembretes direto e o botão Criar seções', /Algo solto/.test(sem) && /Criar seções nesta lista/.test(sem) && !/lc-toggle/.test(sem), true);
+  ev(`__NUCLEO_TEST__.S.tab='hoje';__NUCLEO_TEST__.S.rview=null;__NUCLEO_TEST__.S.lc={};`);
+}
+
 console.log(ok + ' ok, ' + bad + ' falhas');
 process.exit(bad ? 1 : 0);

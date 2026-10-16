@@ -105,6 +105,8 @@ input,textarea,select{font:inherit;font-size:1rem;color:var(--fg)}
 /* seções e listas agrupadas */
 .sec-h{display:flex;align-items:center;justify-content:space-between;gap:.5rem;margin:1.4rem .2rem .5rem;min-height:2.2rem}
 .sec-h h2{margin:0;font-size:1.1rem;font-weight:700;display:flex;align-items:center;gap:.5rem}
+.sec-h .cnt{color:#000}
+.cnt.zero{color:var(--fg)}
 .sec-h .hint{font-size:.75rem;color:var(--muted);font-weight:500}
 .group{background:var(--surface);border-radius:1rem;overflow:hidden}
 .li{position:relative;display:flex;align-items:center;gap:.75rem;min-height:3.3rem;padding:.6rem 1rem;cursor:pointer;width:100%;border:0;background:none;text-align:left}
@@ -118,7 +120,7 @@ input,textarea,select{font:inherit;font-size:1rem;color:var(--fg)}
 .li-t{font-size:1rem;font-weight:500;overflow-wrap:anywhere}
 .li-s{font-size:.8rem;color:var(--muted);margin-top:.1rem;overflow-wrap:anywhere}
 .li-n{color:var(--muted);font-size:1rem;flex:none}
-.cnt{display:inline-flex;align-items:center;justify-content:center;min-width:2rem;height:2rem;padding:0 .5rem;border-radius:999px;background:#39FF14;color:#04230A;font-size:1rem;font-weight:800;line-height:1;flex:none;box-shadow:0 0 0 1px #39FF14,0 0 .6rem rgba(57,255,20,.8)}
+.cnt{display:inline-flex;align-items:center;justify-content:center;min-width:2rem;height:2rem;padding:0 .5rem;border-radius:999px;background:#39FF14;color:#000;font-size:1rem;font-weight:800;line-height:1;flex:none;box-shadow:0 0 0 1px #39FF14,0 0 .6rem rgba(57,255,20,.8)}
 .cnt.sm{min-width:1.7rem;height:1.7rem;padding:0 .4rem;font-size:.85rem}
 .cnt.zero{background:transparent;color:var(--fg);box-shadow:inset 0 0 0 2px #39FF14,0 0 .45rem rgba(57,255,20,.45)}
 .li-chev{color:var(--muted);flex:none;display:flex}
@@ -179,7 +181,7 @@ input,textarea,select{font:inherit;font-size:1rem;color:var(--fg)}
 .pb-d{display:flex;flex-direction:column;align-items:center;gap:.25rem;min-width:2rem}
 .pb-d i{font-style:normal;font-size:.8rem;font-weight:700;color:var(--muted)}
 .pb-d b{width:1.7rem;height:1.7rem;border-radius:50%;border:2px solid var(--line);background:transparent;display:flex;align-items:center;justify-content:center;font-size:.85rem;font-weight:800;font-style:normal;color:var(--accent-fg)}
-.pb-d.has b{background:#39FF14;border-color:#39FF14;color:#04230A;box-shadow:0 0 .5rem rgba(57,255,20,.8)}
+.pb-d.has b{background:#39FF14;border-color:#39FF14;color:#000;box-shadow:0 0 .5rem rgba(57,255,20,.8)}
 .pb-d.now i{color:var(--fg)}
 .pb-d.now b{box-shadow:0 0 0 3px var(--accent-soft)}
 .pb-d.now.has b{box-shadow:0 0 0 3px var(--accent-soft),0 0 .5rem rgba(57,255,20,.8)}
@@ -344,9 +346,6 @@ textarea.inp{min-height:5.5rem;resize:vertical;line-height:1.45}
 .li.dayrow.today{background:var(--accent-soft)}
 .mini{width:2.4rem;height:2.4rem;border-radius:50%;border:0;background:var(--surface-2);color:var(--link);display:flex;align-items:center;justify-content:center;padding:0;flex:none}
 .flag{color:var(--flag);display:inline-flex;flex:none}
-.sec-lh{display:flex;align-items:center;justify-content:space-between;gap:.5rem;margin:1.5rem .2rem .45rem}
-.sec-lh h2{margin:0;font-size:1.3rem;font-weight:800;letter-spacing:.01em;overflow-wrap:anywhere}
-.sec-lh .cnt{color:var(--muted);font-weight:700;font-size:.95rem}
 .li-tags{color:var(--link);font-weight:700;font-size:.8rem;margin-top:.1rem;overflow-wrap:anywhere}
 .li-note{font-size:.8rem;color:var(--muted);margin-top:.1rem;overflow-wrap:anywhere}
 .prio{color:var(--flag);font-weight:800;margin-right:.2rem}
@@ -688,10 +687,10 @@ const LS='meu-sistema-v1';
 const DAY=864e5;
 const S={tab:'hoje',raw:{},reminders:[],notes:[],events:[],inbox:[],folders:[],lists:[],trash:[],loaded:{},ready:false,sync:'boot',pending:0,
   weekStart:mondayOf(new Date()),month:{y:new Date().getFullYear(),m:new Date().getMonth()},selDay:isoDate(new Date()),
-  folder:null,rview:null,q:'',rq:'',sheet:null,rings:[],assetsOk:false,dlOk:false,bw:true,weekend:false,fired:{},fs:20,theme:'auto',conf:'all',purged:false,gq:'',nsOpen:false,nx:{},nn:{}};
+  folder:null,rview:null,q:'',rq:'',sheet:null,rings:[],assetsOk:false,dlOk:false,bw:true,weekend:false,fired:{},fs:20,theme:'auto',conf:'all',purged:false,gq:'',nsOpen:false,nx:{},nn:{},lc:{}};
 const lsGet=k=>{try{return localStorage.getItem(k);}catch(e){return null;}};
 const lsSet=(k,v)=>{try{localStorage.setItem(k,v);}catch(e){}};
-const APP_V='v46';
+const APP_V='v47';
 const ERRLOG_KEY='nucleo-errlog';
 function logErr(where,e){try{const a=JSON.parse(localStorage.getItem(ERRLOG_KEY)||'[]');a.push({t:Date.now(),w:String(where).slice(0,40),m:String((e&&e.message)||e||'').slice(0,160)});while(a.length>30)a.shift();localStorage.setItem(ERRLOG_KEY,JSON.stringify(a));}catch(x){}}
 addEventListener('error',ev=>logErr('tela',ev.message||ev.error));
@@ -722,6 +721,8 @@ const P={
   plus:'<path d="M12 5v14M5 12h14"/>',
   bell:'<path d="M6 16V11a6 6 0 1112 0v5l1.5 2h-15z"/><path d="M10 21h4"/>',
   scan:'<path d="M4 8V5h3M17 5h3v3M20 16v3h-3M7 19H4v-3"/><path d="M4 12h16"/>',
+  eye:'<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+  eyeoff:'<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/><path d="M4 4l16 16"/>',
   noteplus:'<path d="M6 3h9l4 4v14H6z"/><path d="M12.5 11v6M9.5 14h6"/>',
   brush:'<path d="M20 4l-9 9"/><path d="M9.5 12.5c-2.5 0-4 1.6-4 4 0 1.2-.6 2.2-1.5 3 3 .8 7-.5 7-4a2.5 2.5 0 00-1.5-3z"/>',
   trash:'<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
@@ -1556,19 +1557,26 @@ function remSub(){
     const id=v.slice(2),l=lm[id],real=!!l,col=real?lcol(l.color):LCOL[0];
     const list=S.reminders.filter(r=>remList(r,lm)===id).sort(byDT);
     const open=list.filter(r=>!r.done),done=list.filter(r=>r.done);
-    const edit=real?'<button class="iconbtn" data-act="edit-list" data-id="'+esc(id)+'" aria-label="Renomear, cor, seções ou apagar lista">'+ic('edit',1.1,2.2)+'</button>':'';
-    let h=subHdr('Lembretes','rview-back','Lista',real?(l.name||'Sem nome'):'Lembretes',edit,col);
     const hd=hiddenDone()[id]===1;
-    h+='<div class="actbar" style="margin-top:.8rem"><button class="btn grow" data-act="toggle-done-list" data-id="'+esc(id)+'" aria-pressed="'+(!hd)+'">'+(hd?'Mostrar concluídos':'Ocultar concluídos')+' ('+done.length+')</button></div>';
+    let h=subHdr('Lembretes','rview-back','Lista',real?(l.name||'Sem nome'):'Lembretes','',col);
+    h+='<div class="notes-tools">'
+      +'<button class="iconbtn" data-act="new-rem" data-list="'+esc(id)+'" aria-label="Novo lembrete">'+ic('plus',1.2,2.4)+'</button>'
+      +'<button class="iconbtn'+(hd?' on':'')+'" data-act="toggle-done-list" data-id="'+esc(id)+'" aria-pressed="'+hd+'" aria-label="'+(hd?'Mostrar':'Ocultar')+' concluídos ('+done.length+')">'+ic(hd?'eyeoff':'eye',1.2,2.2)+'</button>'
+      +(real?'<button class="iconbtn" data-act="edit-list" data-id="'+esc(id)+'" aria-label="Renomear, cor, seções ou apagar lista">'+ic('edit',1.1,2.2)+'</button>':'')
+      +'</div>';
     const secs=real?(l.sections||[]).filter(x=>(x.t||'').trim()):[];
     const ids=new Set(secs.map(x=>x.id));
     const noSec=open.filter(r=>!r.section||!ids.has(r.section));
-    h+='<div class="group" style="margin-top:1rem">'+noSec.map(r=>remRow(r,true)).join('')+addRow('new-rem','Novo lembrete',' data-list="'+esc(id)+'"')+'</div>';
-    secs.forEach(sc=>{
-      const its=open.filter(r=>r.section===sc.id);
-      h+='<div class="sec-lh"><h2>'+esc(sc.t)+'</h2><span class="cnt num">'+its.length+'</span></div><div class="group">'+its.map(r=>remRow(r,true)).join('')+addRow('new-rem','Novo lembrete aqui',' data-list="'+esc(id)+'" data-section="'+esc(sc.id)+'"')+'</div>';
-    });
-    if(done.length&&!hd)h+='<div class="sec-lh"><h2>Concluídos</h2><span class="cnt num">'+done.length+'</span></div><div class="group">'+done.map(r=>remRow(r,true)).join('')+'</div>';
+    /* cada parte (seção, sem seção, concluídos) abre e recolhe com a setinha */
+    const head=(key,title,n)=>{const o=!S.lc[key];return '<div class="sec-h"><button class="sec-tog'+(o?' open':'')+'" data-act="lc-toggle" data-id="'+esc(key)+'" aria-expanded="'+o+'" aria-label="'+(o?'Recolher ':'Abrir ')+esc(title)+'">'+ic('right',1.05,2.6)+'<h2>'+esc(title)+' '+cnt(n,1)+'</h2></button></div>';};
+    const body=(key,items,empty)=>S.lc[key]?'':'<div class="group">'+(items.length?items.map(r=>remRow(r,true)).join(''):emptyRow('',empty))+'</div>';
+    secs.forEach(sc=>{const its=open.filter(r=>r.section===sc.id),key=id+':'+sc.id;h+=head(key,sc.t,its.length)+body(key,its,'Nada nesta seção.');});
+    if(secs.length){
+      if(noSec.length){const key=id+':_sem';h+=head(key,'Sem seção',noSec.length)+body(key,noSec,'');}
+    }else{
+      h+='<div class="group" style="margin-top:1rem">'+(noSec.length?noSec.map(r=>remRow(r,true)).join(''):emptyRow('Lista vazia.','Toque no + lá em cima para criar um lembrete.'))+'</div>';
+    }
+    if(done.length&&!hd){const key=id+':_done';h+=head(key,'Concluídos',done.length)+body(key,done,'');}
     if(real&&!secs.length)h+='<div class="actbar"><button class="btn grow" data-act="edit-list" data-id="'+esc(id)+'">'+ic('plus',1,2.4)+'Criar seções nesta lista</button></div>';
     return h;
   }
@@ -2820,7 +2828,7 @@ const A={
   tab:d=>go(()=>{S.rfromHoje=0;
     /* ao sair de Notas ou de Lembretes (ou tocar na aba em que já está), eles voltam para a página inicial */
     if(S.tab==='notas'){S.folder=null;S.q='';S.nsOpen=false;S.nx={};S.nn={};}
-    if(S.tab==='lembretes'){S.rview=null;S.rq='';S.rfromPlan=0;}
+    if(S.tab==='lembretes'){S.rview=null;S.rq='';S.rfromPlan=0;S.lc={};}
     S.tab=d.tab;}),
   'fin-open':()=>{location.href='fin/';},
   'fin-send':()=>finSend(),
@@ -2833,6 +2841,7 @@ const A={
   rview:d=>go(()=>{S.rfromHoje=0;S.rview=d.v;S.rq='';S.rfromPlan=0;}),
   'plan-day':d=>go(()=>{S.rview='d:'+d.v;S.rq='';S.rfromPlan=1;}),
   'rview-back':()=>go(()=>{if(S.rview&&S.rview.indexOf('d:')===0&&S.rfromPlan){S.rview='plan';S.rfromPlan=0;}else{S.rview=null;S.rfromPlan=0;}}),
+  'lc-toggle':d=>{S.lc[d.id]=S.lc[d.id]?0:1;render();},
   'toggle-done-list':d=>{const m=hiddenDone();if(m[d.id])delete m[d.id];else m[d.id]=1;try{lsSet(HD_KEY,JSON.stringify(m));}catch(e){}render();},
   'day-prev':()=>{const iso=S.rview.slice(2);S.rview='d:'+isoDate(addDays(parseISO(iso),-1));render();},
   'day-next':()=>{const iso=S.rview.slice(2);S.rview='d:'+isoDate(addDays(parseISO(iso),1));render();},
@@ -3015,7 +3024,7 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden){checkAlar
 window.__nucleo={Store:Store,Supa:Supa,S:S};
 if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost')){addEventListener('load',()=>{navigator.serviceWorker.register('sw.js').catch(()=>{});});}
 /* gancho só para os testes (no uso normal a marca não existe) */
-try{if(window.__NUCLEO_TEST__)window.__NUCLEO_TEST__={S,gsFind,gsBody,viewBusca,viewHoje,viewCaixa,viewNotas,planView,planBtn,smart};}catch(e){}
+try{if(window.__NUCLEO_TEST__)window.__NUCLEO_TEST__={S,gsFind,gsBody,viewBusca,viewHoje,viewCaixa,viewNotas,planView,planBtn,smart,viewLembretes};}catch(e){}
 buildTabs();render();Store.init();
 getAssets().then(a=>{S.assetsOk=!!a;});
 getDl().then(d=>{S.dlOk=!!d;});
