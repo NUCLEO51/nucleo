@@ -157,14 +157,9 @@ input,textarea,select{font:inherit;font-size:1rem;color:var(--fg)}
 .chip{min-height:2.4rem;padding:0 .85rem;border-radius:999px;border:0;background:var(--surface-2);font-weight:700;font-size:.85rem;display:inline-flex;align-items:center;gap:.35rem}
 .inb-list{display:flex;flex-direction:column;gap:.9rem}
 .inb-card{background:var(--surface);border-radius:1.1rem;padding:1rem 1.1rem 1.1rem;border-left:7px solid var(--accent)}
-.inb-card.l{border-left-color:#3B9CFF}
-.inb-tag{display:inline-block;font-size:.8rem;font-weight:800;letter-spacing:.03em;padding:.2rem .7rem;border-radius:999px;margin-bottom:.5rem}
-.inb-tag.a{background:var(--accent-soft);color:var(--link)}
-.inb-tag.l{background:rgba(59,156,255,.18);color:#3B9CFF}
 .inb-card .li-t{font-size:1.1rem;font-weight:600}
 .inb-card .chip{min-height:2.8rem;font-size:.95rem}
-.chip.danger{background:transparent;color:var(--muted);font-weight:600;font-size:.85rem;padding:0 .5rem}
-.inb-card .chip.danger{min-height:2.4rem;font-size:.85rem}
+.chip.danger{color:var(--muted)}
 .chip.on{background:var(--accent);color:var(--accent-fg)}
 .chip[disabled]{opacity:.45;cursor:default}
 .chips{display:flex;flex-wrap:wrap;gap:.5rem}
@@ -634,7 +629,7 @@ const S={tab:'hoje',raw:{},reminders:[],notes:[],events:[],inbox:[],folders:[],l
   folder:null,rview:null,q:'',rq:'',sheet:null,rings:[],assetsOk:false,dlOk:false,bw:true,weekend:false,fired:{},fs:20,theme:'auto',conf:'all',purged:false};
 const lsGet=k=>{try{return localStorage.getItem(k);}catch(e){return null;}};
 const lsSet=(k,v)=>{try{localStorage.setItem(k,v);}catch(e){}};
-const APP_V='v33';
+const APP_V='v34';
 const ERRLOG_KEY='nucleo-errlog';
 function logErr(where,e){try{const a=JSON.parse(localStorage.getItem(ERRLOG_KEY)||'[]');a.push({t:Date.now(),w:String(where).slice(0,40),m:String((e&&e.message)||e||'').slice(0,160)});while(a.length>30)a.shift();localStorage.setItem(ERRLOG_KEY,JSON.stringify(a));}catch(x){}}
 addEventListener('error',ev=>logErr('tela',ev.message||ev.error));
@@ -1368,10 +1363,10 @@ function viewHoje(){
     h+=secH('Caixa de entrada'+(nIn?' <span class="pill danger">'+nIn+'</span>':''),'<span class="hint">'+(nIn?'decida o destino':'tudo organizado')+'</span>','sec-inbox');
     if(!nIn)h+='<div class="group">'+emptyRow('Tudo organizado ✓','Nada solto para decidir. O que você anotar rápido cai aqui.')+'</div>';
     else{
-      const card=(cls,tag,title,sub,btns)=>'<div class="inb-card '+cls+'"><span class="inb-tag '+cls+'">'+tag+'</span><div class="li-t">'+esc(title)+'</div>'+(sub?'<div class="li-s">'+esc(sub)+'</div>':'')+'<div class="chips" style="padding-top:.75rem">'+btns+'</div></div>';
+      const card=(cls,tag,title,sub,btns)=>'<div class="inb-card"><div class="li-t">'+esc(title)+'</div>'+(sub?'<div class="li-s">'+esc(sub)+'</div>':'')+'<div class="chips" style="padding-top:.75rem">'+btns+'</div></div>';
       const bt=(act,id,txt,cls)=>'<button class="chip'+(cls?' '+cls:'')+'" data-act="'+act+'" data-id="'+esc(id)+'">'+txt+'</button>';
       h+='<div class="inb-list">'+S.inbox.slice().sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)).map(i=>
-        card('a','Anotação rápida',i.text,i.source?'via '+i.source:'',bt('inbox-rem',i.id,'Virar lembrete')+bt('inbox-note',i.id,'Virar nota')+bt('inbox-del',i.id,'Descartar','danger'))).join('')
+        card('a','Anotação rápida',i.text,i.source?'via '+i.source:'',bt('inbox-rem',i.id,'Dar data')+bt('inbox-note',i.id,'Virar nota')+bt('inbox-del',i.id,'Descartar','danger'))).join('')
       +looseRems().map(r=>{const simples=!(r.subtasks||[]).length&&!(r.images||[]).length&&!(r.files||[]).length;
         return card('l','Lembrete sem data',r.title,'',bt('open-rem',r.id,'Dar data')+(simples?bt('loose-note',r.id,'Virar nota'):'')+bt('loose-keep',r.id,'Deixar assim')+bt('loose-del',r.id,'Descartar','danger'));}).join('')+'</div>';
     }
