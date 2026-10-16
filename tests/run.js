@@ -192,5 +192,52 @@ ev(`__NUCLEO_TEST__.S.gq='';__NUCLEO_TEST__.S.tab='hoje';`);
   ev(`__NUCLEO_TEST__.S.folder=null;__NUCLEO_TEST__.S.tab='hoje';`);
 }
 
+
+// --- Notas em cartões separados + voltar ao início ao sair (v42) ---
+{
+  const doc = w.document, clickAct = (el) => el.dispatchEvent(new w.MouseEvent('click', { bubbles: true, cancelable: true }));
+  const q = (sel) => doc.querySelector(sel);
+  const TT = w.__NUCLEO_TEST__;
+  ev(`const S=__NUCLEO_TEST__.S;S.ready=true;S.tab='notas';S.q='';S.sheet=null;S.rview=null;S.rq='';S.rfromHoje=0;
+    S.folders=[{id:'f1',name:'Documentos'},{id:'f2',name:'Vazia'}];S.lists=[];S.reminders=[];S.events=[];S.inbox=[];
+    S.notes=[
+      {id:'n1',title:'Nota comum',body:'texto',folder:'f1',checklist:[],files:[],images:[],createdAt:1},
+      {id:'n2',title:'Documento escaneado',body:'',folder:'f1',kind:'scan',checklist:[],files:[],images:[],createdAt:2},
+      {id:'n3',title:'Compras',body:'',folder:'f1',checklist:[{t:'pão',done:false}],files:[],images:[],createdAt:3},
+      {id:'n4',title:'Rabisco',body:'',folder:'f1',kind:'desenho',checklist:[],files:[],images:[],createdAt:4}];`);
+  ev(`__NUCLEO_TEST__.S.folder='f1';`);
+  const pasta = TT.viewNotas();
+  t('notas: dentro da pasta, cada nota é um cartão separado', (pasta.match(/class="li note/g) || []).length === 4 && /class="notes-cards"/.test(pasta), true);
+  t('notas: cartões com cor por tipo (scan, desenho, lista)', /li note k-scan/.test(pasta) && /li note k-draw/.test(pasta) && /li note k-list/.test(pasta), true);
+  t('notas: a lista de notas não usa mais o bloco colado (group)', !/<div class="group"><div class="li note/.test(pasta), true);
+  t('notas: CSS dos cartões tem espaço, borda colorida e letra maior só neles', /\.notes-cards\{display:flex;flex-direction:column;gap:\.75rem\}/.test(html) && /border-left:7px solid var\(--accent\)/.test(html) && /\.notes-cards \.li\.note \.li-t\{font-size:1\.15rem/.test(html) && /\.notes-cards \.li\.note \.li-s\{font-size:\.95rem/.test(html), true);
+  t('notas: a letra do resto do app não mudou (.li-t 1rem, .li-s .8rem)', /\n\.li-t\{font-size:1rem;font-weight:500/.test(html) && /\n\.li-s\{font-size:\.8rem/.test(html), true);
+  ev(`__NUCLEO_TEST__.S.folder='f2';`);
+  t('notas: pasta vazia continua mostrando o aviso', /Pasta vazia\./.test(TT.viewNotas()) && !/notes-cards/.test(TT.viewNotas()), true);
+  ev(`__NUCLEO_TEST__.S.folder=null;__NUCLEO_TEST__.S.q='compras';`);
+  t('notas: resultados da busca também em cartões', /notes-cards/.test(ev('__NUCLEO_TEST__.viewNotas()')) && /Compras/.test(ev('__NUCLEO_TEST__.viewNotas()')), true);
+
+  // sair de Notas volta para a página inicial de Notas
+  ev(`__NUCLEO_TEST__.S.q='';__NUCLEO_TEST__.S.tab='notas';__NUCLEO_TEST__.S.folder='f1';`);
+  clickAct(q('#tab-lembretes'));
+  t('sair de Notas: a pasta aberta volta para o início', ev('__NUCLEO_TEST__.S.tab') === 'lembretes' && ev('__NUCLEO_TEST__.S.folder') === null, true);
+  clickAct(q('#tab-notas'));
+  t('voltar para Notas: abre a página inicial (pastas)', ev('__NUCLEO_TEST__.S.folder') === null && !!q('#main #notesFolders'), true);
+  // sair de Lembretes volta para a página inicial de Lembretes
+  clickAct(q('#tab-lembretes'));
+  ev(`__NUCLEO_TEST__.S.rview='s:late';__NUCLEO_TEST__.S.rq='abc';__NUCLEO_TEST__.S.rfromPlan=1;`);
+  clickAct(q('#tab-notas'));
+  t('sair de Lembretes: a página aberta volta para o início', ev('__NUCLEO_TEST__.S.rview') === null && ev('__NUCLEO_TEST__.S.rq') === '' && ev('__NUCLEO_TEST__.S.rfromPlan') === 0, true);
+  // dentro de uma pasta E de uma nota aberta, trocar de aba ainda volta ao início
+  ev(`__NUCLEO_TEST__.S.tab='notas';__NUCLEO_TEST__.S.folder='f1';`);
+  clickAct(q('#tab-hoje'));
+  t('sair de Notas para Hoje também volta ao início', ev('__NUCLEO_TEST__.S.folder') === null && ev('__NUCLEO_TEST__.S.tab') === 'hoje', true);
+  // tocar de novo na aba em que já está também volta ao início (como antes)
+  ev(`__NUCLEO_TEST__.S.tab='notas';__NUCLEO_TEST__.S.folder='f1';`);
+  clickAct(q('#tab-notas'));
+  t('tocar na aba Notas estando numa pasta volta ao início', ev('__NUCLEO_TEST__.S.folder') === null && ev('__NUCLEO_TEST__.S.tab') === 'notas', true);
+  ev(`__NUCLEO_TEST__.S.tab='hoje';__NUCLEO_TEST__.S.folder=null;__NUCLEO_TEST__.S.rview=null;`);
+}
+
 console.log(ok + ' ok, ' + bad + ' falhas');
 process.exit(bad ? 1 : 0);
