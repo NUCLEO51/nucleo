@@ -116,5 +116,51 @@ ev(`__NUCLEO_TEST__.S.gq='';__NUCLEO_TEST__.S.tab='hoje';`);
   t('fluxo: Voltar leva para Hoje e limpa a busca', ev('__NUCLEO_TEST__.S.tab') === 'hoje' && ev('__NUCLEO_TEST__.S.gq') === '', true);
 }
 
+
+// --- tela Hoje só com botões (v40) ---
+{
+  const doc = w.document, clickAct = (el) => el.dispatchEvent(new w.MouseEvent('click', { bubbles: true, cancelable: true }));
+  const q = (sel) => doc.querySelector(sel);
+  const TT = w.__NUCLEO_TEST__, today = ev(`isoDate(new Date())`);
+  ev(`const S=__NUCLEO_TEST__.S;S.ready=true;S.tab='hoje';S.rview=null;S.gq='';
+    S.reminders=[
+      {id:'a1',title:'Atrasado antigo',notes:'',date:'2020-01-01',time:'',done:false,list:'l1',subtasks:[],files:[]},
+      {id:'h1',title:'Lembrete de hoje',notes:'',date:'${today}',time:'23:59',done:false,list:'l1',subtasks:[],files:[]},
+      {id:'f1',title:'Lembrete futuro',notes:'',date:'2099-01-01',time:'',done:false,list:'l1',subtasks:[],files:[]}];
+    S.events=[];S.notes=[];S.folders=[];S.lists=[{id:'l1',name:'Mercado'}];
+    S.inbox=[{id:'i1',text:'pagar IPVA',source:'siri',createdAt:1}];`);
+  const hoje = TT.viewHoje();
+  t('hoje: não mostra mais as listas de baixo', !/Lembretes de hoje<\/h2>/.test(hoje) && !/Agenda de hoje/.test(hoje) && !/inb-card/.test(hoje) && !/sec-today|sec-inbox|sec-late/.test(hoje), true);
+  t('hoje: tem os 4 botões + FIN', ['s:hojeso', 'go-agenda', 's:late', 'go-caixa', 'fin-send', 'fin-open'].every(k => hoje.indexOf(k) > 0), true);
+  t('hoje: cronômetro é o último', hoje.indexOf('rl-open') > hoje.indexOf('fin-open') && hoje.indexOf('rl-open') > hoje.indexOf('go-caixa'), true);
+  t('hoje: data grande (dia da semana e data em linhas próprias)', /class="dateW"/.test(hoje) && /class="dateD"/.test(hoje) && /\.dateW\{font-size:1\.9rem/.test(html) && /\.dateD\{font-size:1\.5rem/.test(html), true);
+  t('hoje: continua com busca, ouvir e ajustes', hoje.indexOf('gs-open') > 0 && hoje.indexOf('gs-open') < hoje.indexOf('speak-day') && hoje.indexOf('speak-day') < hoje.indexOf('data-act="settings"'), true);
+  // Atrasados: abre página inteira, só com atrasados, e Voltar leva para Hoje
+  doc.getElementById('tab-hoje').click();
+  clickAct(q('#main [data-act="go-rem"][data-v="s:late"]'));
+  const m1 = q('#main').innerHTML;
+  t('atrasados: abre a página com os atrasados', /Atrasado antigo/.test(m1) && !/Lembrete futuro/.test(m1) && !/Lembrete de hoje/.test(m1.replace(/Lembretes de hoje/g, '')), true);
+  t('atrasados: botão Voltar é "Hoje" e tem Passar para hoje', /data-act="hj-back"/.test(m1) && /data-act="late-today"/.test(m1), true);
+  clickAct(q('#main [data-act="hj-back"]'));
+  t('atrasados: Voltar leva para a tela Hoje', ev('__NUCLEO_TEST__.S.tab') === 'hoje' && !!q('#main [data-act="go-caixa"]'), true);
+  // Lembretes hoje: só os de hoje
+  clickAct(q('#main [data-act="go-rem"][data-v="s:hojeso"]'));
+  const m2 = q('#main').innerHTML;
+  t('lembretes hoje: página só com os de hoje', /Lembrete de hoje/.test(m2) && !/Atrasado antigo/.test(m2) && !/Lembrete futuro/.test(m2), true);
+  clickAct(q('#main [data-act="hj-back"]'));
+  // Caixa de entrada: página própria
+  clickAct(q('#main [data-act="go-caixa"]'));
+  const m3 = q('#main').innerHTML;
+  t('caixa: abre página inteira com os itens e botões', /Caixa de entrada/.test(m3) && /pagar IPVA/.test(m3) && /inb-card/.test(m3) && /data-act="inbox-rem"/.test(m3) && /data-act="cx-back"/.test(m3), true);
+  t('caixa: aba Hoje continua acesa', q('#tab-hoje').classList.contains('on'), true);
+  clickAct(q('#main [data-act="cx-back"]'));
+  t('caixa: Voltar leva para Hoje', ev('__NUCLEO_TEST__.S.tab') === 'hoje', true);
+  // entrar em Lembretes pela aba não herda o "voltar para Hoje"
+  clickAct(q('#main [data-act="go-rem"][data-v="s:late"]'));
+  clickAct(q('#tab-lembretes'));
+  t('aba Lembretes: não fica preso ao voltar de Hoje', ev('__NUCLEO_TEST__.S.rfromHoje') === 0, true);
+  ev(`const S=__NUCLEO_TEST__.S;S.tab='hoje';S.rview=null;S.rfromHoje=0;`);
+}
+
 console.log(ok + ' ok, ' + bad + ' falhas');
 process.exit(bad ? 1 : 0);

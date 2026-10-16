@@ -89,6 +89,10 @@ input,textarea,select{font:inherit;font-size:1rem;color:var(--fg)}
 .hd{display:flex;align-items:flex-end;justify-content:space-between;gap:.6rem;padding:1rem 0 .4rem}
 .hd h1{margin:.1rem 0 0;font-size:2rem;line-height:1.1;letter-spacing:-.02em;font-weight:700;overflow-wrap:anywhere}
 .eyebrow{font-size:.8rem;color:var(--muted);font-weight:600}
+.dateW{font-size:1.9rem;font-weight:800;line-height:1.1;letter-spacing:-.01em}
+.dateW::first-letter{text-transform:uppercase}
+.dateD{font-size:1.5rem;font-weight:600;line-height:1.2;margin:.1rem 0 .15rem}
+.dateBlock{padding:1rem 0 0}
 .eyebrow::first-letter{text-transform:uppercase}
 .eyebrow .st{color:var(--alarm)}
 .eyebrow .st.bad{color:var(--danger)}
@@ -662,7 +666,7 @@ const S={tab:'hoje',raw:{},reminders:[],notes:[],events:[],inbox:[],folders:[],l
   folder:null,rview:null,q:'',rq:'',sheet:null,rings:[],assetsOk:false,dlOk:false,bw:true,weekend:false,fired:{},fs:20,theme:'auto',conf:'all',purged:false,gq:''};
 const lsGet=k=>{try{return localStorage.getItem(k);}catch(e){return null;}};
 const lsSet=(k,v)=>{try{localStorage.setItem(k,v);}catch(e){}};
-const APP_V='v39';
+const APP_V='v40';
 const ERRLOG_KEY='nucleo-errlog';
 function logErr(where,e){try{const a=JSON.parse(localStorage.getItem(ERRLOG_KEY)||'[]');a.push({t:Date.now(),w:String(where).slice(0,40),m:String((e&&e.message)||e||'').slice(0,160)});while(a.length>30)a.shift();localStorage.setItem(ERRLOG_KEY,JSON.stringify(a));}catch(x){}}
 addEventListener('error',ev=>logErr('tela',ev.message||ev.error));
@@ -1240,6 +1244,7 @@ function smart(){
   return {
     todos:open,
     hoje:open.filter(r=>r.date&&r.date<=today),
+    hojeso:open.filter(r=>r.date===today),
     prog:open.filter(r=>r.date),
     pin:open.filter(r=>r.pinned),
     late:open.filter(r=>r.date&&(r.time?dtOf(r.date,r.time)<new Date():r.date<today)),
@@ -1289,6 +1294,10 @@ function syncNote(){
 }
 function hdr(eyebrow,title,extra,small){
   return '<header class="hd"><div style="min-width:0"><div class="eyebrow">'+esc(eyebrow)+syncNote()+'</div><h1'+(small?' class="sm"':'')+'>'+esc(title)+'</h1></div><div class="hd-r">'+(extra||'')+'<button class="iconbtn" data-act="settings" aria-label="Ajustes">'+ic('gear',1.2)+'</button></div></header>';
+}
+function hdrHoje(weekday,dateStr,extra){
+  const sn=syncNote().replace(/^ · /,'');
+  return '<div class="dateBlock"><div class="dateW">'+esc(weekday)+'</div><div class="dateD">'+esc(dateStr)+'</div>'+(sn?'<div class="eyebrow">'+sn+'</div>':'')+'</div><header class="hd" style="padding-top:.5rem"><div style="min-width:0"><h1>Hoje</h1></div><div class="hd-r">'+(extra||'')+'<button class="iconbtn" data-act="settings" aria-label="Ajustes">'+ic('gear',1.2)+'</button></div></header>';
 }
 function subHdr(back,act,eyebrow,title,extra,color){
   return '<button class="back" data-act="'+act+'">'+ic('left',1.15,2.6)+esc(back)+'</button><header class="hd" style="padding-top:.2rem"><div style="min-width:0">'+(eyebrow?'<div class="eyebrow">'+esc(eyebrow)+'</div>':'')+'<h1'+(color?' style="color:'+esc(color)+'"':'')+'>'+esc(title)+'</h1></div><div class="hd-r">'+(extra||'')+'</div></header>';
@@ -1375,39 +1384,35 @@ function triPaint(mode){
 }
 function triCur(){const left=triItems().filter(x=>!(S.triSkip||{})[x.k+x.id]);return left[0]||null;}
 function viewHoje(){
-  const now=new Date(),today=isoDate(now),R=S.reminders;
-  const overdue=R.filter(r=>!r.done&&r.date&&r.date<today).sort(byDT);
-  const todayR=R.filter(r=>r.date===today).sort(byDT);
+  const now=new Date(),today=isoDate(now),sm=smart();
   const ag=agendaItems(today).filter(x=>x.kind==='ev');
-  let h=hdr(DOWF[now.getDay()]+', '+now.getDate()+' de '+MESES[now.getMonth()],'Hoje',searchBtn()+speakBtn('speak-day','Ouvir meu dia'));
+  let h=hdrHoje(DOWF[now.getDay()],now.getDate()+' de '+MESES[now.getMonth()],searchBtn()+speakBtn('speak-day','Ouvir meu dia'));
   if(!S.ready)return h+'<div class="empty">Carregando…</div>';
+  const nLate=sm.late.length;
   h+='<div class="tiles">'+
-    tile('go-rem','s:hoje','today','t-blue',todayR.filter(r=>!r.done).length,'Lembretes hoje')+
+    tile('go-rem','s:hojeso','today','t-blue',sm.hojeso.length,'Lembretes hoje')+
     tile('go-agenda','hoje','cal','t-green',ag.length,'Agenda hoje')+
-    tile('go-rem','s:prog','alert',overdue.length?'t-red t-late':'t-red',overdue.length,'Atrasados')+
-    tile('jump','sec-inbox','inbox','t-orange',inboxCount(),'Caixa de entrada')+'</div>';
-  h+='<div class="actbar"><button class="btn grow" data-act="rl-open">⏱ Cronômetro e temporizador</button></div>';
+    tile('go-rem','s:late','alert',nLate?'t-red t-late':'t-red',nLate,'Atrasados')+
+    tile('go-caixa','','inbox','t-orange',inboxCount(),'Caixa de entrada')+'</div>';
   h+='<div class="tiles">'+tile('fin-send','','inbox','t-green','+','Enviar ao FIN')+tile('fin-open','','calgrid','t-cyan','→','Abrir o FIN')+'</div>';
-  h+=secH('Lembretes de hoje','<button class="txtbtn" data-act="new-rem" data-date="'+today+'">'+ic('plus',1,2.4)+'Novo</button>','sec-today');
-  h+='<div class="group">'+(todayR.length?todayR.map(r=>remRow(r,false)).join(''):emptyRow('Nada para hoje.','Toque no + azul para anotar.'))+'</div>';
-  h+=secH('Agenda de hoje','<span class="hint">só consulta</span>','sec-agenda');
-  h+='<div class="group">'+(ag.length?ag.map(x=>timeRow(x.time,x.title,'open-ev',x.id)).join(''):emptyRow('','Nenhum compromisso hoje.'))+'</div>';
-  if(overdue.length){h+=secH('Atrasados <span class="pill danger">'+overdue.length+'</span>','<button class="txtbtn" data-act="late-today">Passar para hoje</button>','sec-late');h+='<div class="group">'+overdue.map(r=>remRow(r,true)).join('')+'</div>';}
-  else h+='<div id="sec-late"></div>';
-  {
-    const nIn=inboxCount();
-    h+=secH('Caixa de entrada'+(nIn?' <span class="pill danger">'+nIn+'</span>':''),'<span class="hint">'+(nIn?'decida o destino':'tudo organizado')+'</span>','sec-inbox');
-    if(!nIn)h+='<div class="group">'+emptyRow('Tudo organizado ✓','Nada solto para decidir. O que você anotar rápido cai aqui.')+'</div>';
-    else{
-      const card=(cls,tag,title,sub,btns)=>'<div class="inb-card"><div class="li-t">'+esc(title)+'</div>'+(sub?'<div class="li-s">'+esc(sub)+'</div>':'')+'<div class="chips" style="padding-top:.75rem">'+btns+'</div></div>';
-      const bt=(act,id,txt,cls)=>'<button class="chip'+(cls?' '+cls:'')+'" data-act="'+act+'" data-id="'+esc(id)+'">'+txt+'</button>';
-      h+='<div class="inb-list">'+S.inbox.slice().sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)).map(i=>
-        card('a','Anotação rápida',i.text,i.source?'via '+i.source:'',bt('inbox-rem',i.id,'Dar data')+bt('inbox-note',i.id,'Virar nota')+bt('inbox-del',i.id,'Descartar','danger'))).join('')
-      +looseRems().map(r=>{const simples=!(r.subtasks||[]).length&&!(r.images||[]).length&&!(r.files||[]).length;
-        return card('l','Lembrete sem data',r.title,'',bt('open-rem',r.id,'Dar data')+(simples?bt('loose-note',r.id,'Virar nota'):'')+bt('loose-keep',r.id,'Deixar assim')+bt('loose-del',r.id,'Descartar','danger'));}).join('')+'</div>';
-    }
-  }
+  h+='<div class="actbar"><button class="btn grow" data-act="rl-open">⏱ Cronômetro e temporizador</button></div>';
   return h;
+}
+function inboxHtml(){
+  const nIn=inboxCount();
+  if(!nIn)return '<div class="group">'+emptyRow('Tudo organizado ✓','Nada solto para decidir. O que você anotar rápido cai aqui.')+'</div>';
+  const card=(cls,tag,title,sub,btns)=>'<div class="inb-card"><div class="li-t">'+esc(title)+'</div>'+(sub?'<div class="li-s">'+esc(sub)+'</div>':'')+'<div class="chips" style="padding-top:.75rem">'+btns+'</div></div>';
+  const bt=(act,id,txt,cls)=>'<button class="chip'+(cls?' '+cls:'')+'" data-act="'+act+'" data-id="'+esc(id)+'">'+txt+'</button>';
+  return '<div class="inb-list">'+S.inbox.slice().sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)).map(i=>
+    card('a','Anotação rápida',i.text,i.source?'via '+i.source:'',bt('inbox-rem',i.id,'Dar data')+bt('inbox-note',i.id,'Virar nota')+bt('inbox-del',i.id,'Descartar','danger'))).join('')
+  +looseRems().map(r=>{const simples=!(r.subtasks||[]).length&&!(r.images||[]).length&&!(r.files||[]).length;
+    return card('l','Lembrete sem data',r.title,'',bt('open-rem',r.id,'Dar data')+(simples?bt('loose-note',r.id,'Virar nota'):'')+bt('loose-keep',r.id,'Deixar assim')+bt('loose-del',r.id,'Descartar','danger'));}).join('')+'</div>';
+}
+function viewCaixa(){
+  const nIn=S.ready?inboxCount():0;
+  let h=subHdr('Hoje','cx-back',nIn?(nIn+(nIn===1?' item para decidir':' itens para decidir')):'tudo organizado','Caixa de entrada');
+  if(!S.ready)return h+'<div class="empty">Carregando…</div>';
+  return h+inboxHtml();
 }
 
 /* ---------- Lembretes (estilo Apple) com PLANNER ---------- */
@@ -1487,7 +1492,7 @@ function remHomeBody(sm,lm,today,ws,cur){
 function listRow(id,name,color,n){
   return '<div class="li ic" data-act="rview" data-v="l:'+esc(id)+'"><span class="sq round" style="background:'+esc(color)+'">'+ic('list',1,2.4)+'</span><div class="li-main"><div class="li-t">'+esc(name)+'</div></div><span class="li-n num">'+n+'</span>'+chev()+'</div>';
 }
-const SMART={todos:'Todos',hoje:'Hoje',prog:'Programados',late:'Atrasados',pin:'Fixados',urg:'Urgentes',done:'Concluídos'};
+const SMART={todos:'Todos',hoje:'Hoje',hojeso:'Lembretes de hoje',prog:'Programados',late:'Atrasados',pin:'Fixados',urg:'Urgentes',done:'Concluídos'};
 function remSub(){
   const v=S.rview,today=isoDate(new Date()),lm=lmap();
   if(v==='trash')return trashView(['reminders','events'],'Lembretes','rview-back');
@@ -1507,15 +1512,16 @@ function remSub(){
   if(v.indexOf('s:')===0){
     const k=v.slice(2),sm=smart(),list=sm[k].slice();
     if(k==='done')list.sort((a,b)=>(b.doneAt||0)-(a.doneAt||0));else list.sort(byDT);
-    let h=subHdr('Lembretes','rview-back','',SMART[k]);
+    let h=S.rfromHoje?subHdr('Hoje','hj-back','',SMART[k]):subHdr('Lembretes','rview-back','',SMART[k]);
+    if(k==='late'){const antigos=S.reminders.filter(r=>!r.done&&r.date&&r.date<isoDate(new Date())).length;if(antigos)h+='<div class="actbar" style="margin-top:.8rem"><button class="btn grow" data-act="late-today">Passar '+(antigos===1?'o atrasado':'os '+antigos+' atrasados')+' para hoje</button></div>';}
     if(k==='prog'){
       const by={};list.forEach(r=>{(by[r.date]=by[r.date]||[]).push(r);});
       const ks=Object.keys(by).sort();
       h+=ks.length?ks.map(dk=>{const dd=parseISO(dk);return secH(cap1(relDay(dk,today))+(dk<today?' <span class="pill danger">atrasado</span>':'')+'<span class="hint" style="margin-left:.3rem">'+(Math.abs((dd-parseISO(today))/DAY)>1?'':pad(dd.getDate())+'/'+pad(dd.getMonth()+1))+'</span>')+'<div class="group">'+by[dk].map(r=>remRow(r,false)).join('')+'</div>';}).join(''):'<div class="group" style="margin-top:1rem">'+emptyRow('','Nada programado.')+'</div>';
       return h;
     }
-    h+='<div class="group" style="margin-top:1rem">'+(list.length?list.map(r=>remRow(r,true)).join(''):emptyRow('',{todos:'Tudo em dia.',hoje:'Nada para hoje.',flag:'Nenhum lembrete sinalizado. Abra um lembrete e toque em Sinalizar.',urg:'Nenhum lembrete com prioridade alta.',done:'Nada concluído ainda.'}[k]))+
-      (k==='done'||k==='urg'||k==='late'||k==='pin'?'':addRow('new-rem','Novo lembrete',k==='hoje'?' data-date="'+today+'"':''))+'</div>';
+    h+='<div class="group" style="margin-top:1rem">'+(list.length?list.map(r=>remRow(r,true)).join(''):emptyRow('',{todos:'Tudo em dia.',hoje:'Nada para hoje.',hojeso:'Nada para hoje.',late:'Nada atrasado ✓',flag:'Nenhum lembrete sinalizado. Abra um lembrete e toque em Sinalizar.',urg:'Nenhum lembrete com prioridade alta.',done:'Nada concluído ainda.'}[k]))+
+      (k==='done'||k==='urg'||k==='late'||k==='pin'?'':addRow('new-rem','Novo lembrete',(k==='hoje'||k==='hojeso')?' data-date="'+today+'"':''))+'</div>';
     return h;
   }
   if(v.indexOf('l:')===0){
@@ -1821,7 +1827,7 @@ function buildTabs(){
   $('tabs').innerHTML=t('hoje','today','Hoje')+t('lembretes','list','Lembretes')+'<button class="fab" data-act="capture" aria-label="Anotar rápido">'+ic('plus',1.5,2.4)+'</button>'+t('agenda','cal','Agenda')+t('notas','note','Notas');
 }
 function render(){
-  ['hoje','lembretes','agenda','notas'].forEach(id=>{const b=$('tab-'+id);if(b)b.classList.toggle('on',S.tab===id);});
+  ['hoje','lembretes','agenda','notas'].forEach(id=>{const b=$('tab-'+id);if(b)b.classList.toggle('on',S.tab===id||(id==='hoje'&&S.tab==='caixa'));});
   renderRings();
   try{const hb=$('tab-hoje');if(hb){let b=hb.querySelector('.tab-badge');const n=S.ready?inboxCount():0;if(n){if(!b){b=document.createElement('span');b.className='tab-badge';hb.appendChild(b);}b.textContent=n>99?'99+':String(n);}else if(b)b.remove();}}catch(e){}
   const active=document.activeElement;
@@ -1830,7 +1836,7 @@ function render(){
   if(S.tab==='lembretes'&&active&&active.id==='rq'&&$('remBody')){renderRemBody();return;}
   if(S.tab==='busca'&&active&&active.id==='gq'&&$('gsBody')){$('gsBody').innerHTML=gsBody();return;}
   const main=$('main'),st=main.scrollTop;
-  main.innerHTML=({hoje:viewHoje,lembretes:viewLembretes,agenda:viewAgenda,notas:viewNotas,relogio:viewRelogio,busca:viewBusca})[S.tab]();
+  main.innerHTML=({hoje:viewHoje,lembretes:viewLembretes,agenda:viewAgenda,notas:viewNotas,relogio:viewRelogio,busca:viewBusca,caixa:viewCaixa})[S.tab]();
   main.scrollTop=st;
 }
 function renderRemBody(){const b=$('remBody');if(!b)return;const ws=S.weekStart;b.innerHTML=remHomeBody(smart(),lmap(),isoDate(new Date()),ws,isoDate(ws)===isoDate(mondayOf(new Date())));}
@@ -2740,13 +2746,16 @@ function setSheetField(key,val){if(S.sheet)S.sheet.draft[key]=val;}
 function findTrash(c,id){const t=S.trash.find(x=>x.c===c&&x.x.id===id);return t?t.x:null;}
 
 const A={
-  tab:d=>go(()=>{if(S.tab===d.tab){if(d.tab==='notas'){S.folder=null;S.q='';}if(d.tab==='lembretes'){S.rview=null;S.rq='';}}S.tab=d.tab;}),
+  tab:d=>go(()=>{S.rfromHoje=0;if(S.tab===d.tab){if(d.tab==='notas'){S.folder=null;S.q='';}if(d.tab==='lembretes'){S.rview=null;S.rq='';}}S.tab=d.tab;}),
   'fin-open':()=>{location.href='fin/';},
   'fin-send':()=>finSend(),
-  'go-rem':d=>go(()=>{S.tab='lembretes';S.rview=d.v;S.rq='';S.rfromPlan=0;}),
+  'go-rem':d=>go(()=>{S.rfromHoje=S.tab==='hoje'?1:0;S.tab='lembretes';S.rview=d.v;S.rq='';S.rfromPlan=0;}),
+  'go-caixa':()=>go(()=>{S.tab='caixa';}),
+  'cx-back':()=>go(()=>{S.tab='hoje';}),
+  'hj-back':()=>go(()=>{S.tab='hoje';S.rview=null;S.rfromHoje=0;S.rfromPlan=0;}),
   'go-agenda':()=>go(()=>{S.tab='agenda';S.selDay=isoDate(new Date());}),
   jump:d=>{const el=$(d.to);if(el&&el.offsetHeight)el.scrollIntoView({behavior:'smooth',block:'start'});else toast('Nada aqui por enquanto.');},
-  rview:d=>go(()=>{S.rview=d.v;S.rq='';S.rfromPlan=0;}),
+  rview:d=>go(()=>{S.rfromHoje=0;S.rview=d.v;S.rq='';S.rfromPlan=0;}),
   'plan-day':d=>go(()=>{S.rview='d:'+d.v;S.rq='';S.rfromPlan=1;}),
   'rview-back':()=>go(()=>{if(S.rview&&S.rview.indexOf('d:')===0&&S.rfromPlan){S.rview='plan';S.rfromPlan=0;}else{S.rview=null;S.rfromPlan=0;}}),
   'toggle-done-list':d=>{const m=hiddenDone();if(m[d.id])delete m[d.id];else m[d.id]=1;try{lsSet(HD_KEY,JSON.stringify(m));}catch(e){}render();},
@@ -2865,7 +2874,7 @@ const A={
   'gs-open':()=>{go(()=>{S.tab='busca';S.gq='';});const i=$('gq');if(i)try{i.focus();}catch(e){}},
   'gs-back':()=>go(()=>{S.tab='hoje';S.gq='';}),
   'gs-folder':d=>go(()=>{S.tab='notas';S.folder=d.id;S.q='';}),
-  'gs-inbox':()=>{go(()=>{S.tab='hoje';});setTimeout(()=>{const el=$('sec-inbox');if(el&&el.offsetHeight)el.scrollIntoView({block:'start'});},60);},
+  'gs-inbox':()=>go(()=>{S.tab='caixa';}),
   'rl-mode':d=>{RL.mode=d.v==='tm'?'tm':'sw';rlSave();render();},
   'rl-sw-start':()=>{const sw=RL.sw;if(sw.run){sw.acc=swMs();sw.run=false;}else{sw.t0=Date.now();sw.run=true;rlWake();}rlSave();render();},
   'rl-sw-lap':()=>{if(!RL.sw.run)return;RL.sw.laps.unshift({t:swMs()});rlSave();render();},
@@ -2938,7 +2947,7 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden){checkAlar
 window.__nucleo={Store:Store,Supa:Supa,S:S};
 if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost')){addEventListener('load',()=>{navigator.serviceWorker.register('sw.js').catch(()=>{});});}
 /* gancho só para os testes (no uso normal a marca não existe) */
-try{if(window.__NUCLEO_TEST__)window.__NUCLEO_TEST__={S,gsFind,gsBody,viewBusca,viewHoje};}catch(e){}
+try{if(window.__NUCLEO_TEST__)window.__NUCLEO_TEST__={S,gsFind,gsBody,viewBusca,viewHoje,viewCaixa};}catch(e){}
 buildTabs();render();Store.init();
 getAssets().then(a=>{S.assetsOk=!!a;});
 getDl().then(d=>{S.dlOk=!!d;});
