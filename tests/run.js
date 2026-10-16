@@ -52,7 +52,7 @@ t('notas: botão Criar a pasta Documentos foi tirado', !/make-docs/.test(html) &
 
 t('caixa de entrada: campo rápido, sem selo na aba, caixa única com cartões', !/id="qcapIn"/.test(html) && /f\.focus\(\{preventScroll/.test(html) && !/tab-badge/.test(html) && /inb-card/.test(html) && /'loose-del'/.test(html) && !/Organizar um por um<\/button>/.test(html), true);
 t('caixa de entrada sempre visível', /Tudo organizado ✓/.test(html), true);
-t('notas: pastas antes dos filtros', html.indexOf('id="notesFolders"') < html.indexOf('<label for="q"') && /function notesFolders\(\)/.test(html), true);
+t('notas: pastas na tela inicial e busca só quando o botão é tocado', /function notesFolders\(\)/.test(html) && /if\(S\.nsOpen\)h\+='<div class="search">/.test(html), true);
 
 t('arquivos: não apagar anexo usado por outro item', /usado\.has\(id\)/.test(html) && /Este arquivo não está mais guardado/.test(html), true);
 
@@ -214,7 +214,7 @@ ev(`__NUCLEO_TEST__.S.gq='';__NUCLEO_TEST__.S.tab='hoje';`);
   t('notas: a letra do resto do app não mudou (.li-t 1rem, .li-s .8rem)', /\n\.li-t\{font-size:1rem;font-weight:500/.test(html) && /\n\.li-s\{font-size:\.8rem/.test(html), true);
   ev(`__NUCLEO_TEST__.S.folder='f2';`);
   t('notas: pasta vazia continua mostrando o aviso', /Pasta vazia\./.test(TT.viewNotas()) && !/notes-cards/.test(TT.viewNotas()), true);
-  ev(`__NUCLEO_TEST__.S.folder=null;__NUCLEO_TEST__.S.q='compras';`);
+  ev(`__NUCLEO_TEST__.S.folder=null;__NUCLEO_TEST__.S.nsOpen=true;__NUCLEO_TEST__.S.q='compras';`);
   t('notas: resultados da busca também em cartões', /notes-cards/.test(ev('__NUCLEO_TEST__.viewNotas()')) && /Compras/.test(ev('__NUCLEO_TEST__.viewNotas()')), true);
 
   // sair de Notas volta para a página inicial de Notas
@@ -254,5 +254,70 @@ ev(`__NUCLEO_TEST__.S.gq='';__NUCLEO_TEST__.S.tab='hoje';`);
   t('barra de baixo: botão Hoje continua com ícone e nome', /Hoje/.test(doc.getElementById('tab-hoje').textContent) && !!doc.querySelector('#tab-hoje svg'), true);
   ev(`__NUCLEO_TEST__.S.tab='hoje';__NUCLEO_TEST__.S.inbox=[];`);
 }
+
+// --- Pasta em árvore: notas primeiro, subpastas que abrem/recolhem, Nova subpasta e Buscar no topo (v45) ---
+{
+  const doc = w.document, clickAct = (el) => el.dispatchEvent(new w.MouseEvent('click', { bubbles: true, cancelable: true }));
+  const q = (sel) => doc.querySelector(sel);
+  const TT = w.__NUCLEO_TEST__;
+  ev(`const S=__NUCLEO_TEST__.S;S.ready=true;S.tab='notas';S.folder='f1';S.q='';S.sheet=null;S.nsOpen=false;S.nx={};S.nn={};
+    S.folders=[{id:'f1',name:'Elisa'},{id:'f2',name:'Documentos',parent:'f1'},{id:'f3',name:'Fotos',parent:'f1'},{id:'f4',name:'RG',parent:'f2'},{id:'f5',name:'Outra pasta'}];
+    S.notes=[
+      {id:'n1',title:'Nota da Elisa',body:'',folder:'f1',checklist:[],files:[],images:[],createdAt:1},
+      {id:'n2',title:'CNH da Elisa',body:'validade 2031',folder:'f2',checklist:[],files:[],images:[],createdAt:2},
+      {id:'n3',title:'RG frente',body:'',folder:'f4',checklist:[],files:[],images:[],createdAt:3},
+      {id:'n4',title:'CNH fora da Elisa',body:'',folder:'f5',checklist:[],files:[],images:[],createdAt:4}];
+    S.reminders=[];S.events=[];S.inbox=[];S.lists=[];`);
+  ev(`__NUCLEO_TEST__.S.folder='f1';`);
+  const pg = TT.viewNotas();
+  t('pasta: primeiro as notas da pasta, depois as subpastas', pg.indexOf('Nota da Elisa') > 0 && pg.indexOf('Nota da Elisa') < pg.indexOf('Subpastas'), true);
+  t('pasta: sem o botão "Nova subpasta" dentro da lista e sem barra de busca fixa', !/txtbtn[^>]*new-folder/.test(pg) && !/Nova subpasta<\/button>/.test(pg) && !/id="q"/.test(pg), true);
+  t('pasta: botões Nova subpasta e Buscar no topo, ao lado dos outros', (() => { const a = pg.indexOf('data-act="draw-new"'), b = pg.indexOf('data-act="new-folder" data-parent="f1"'), c = pg.indexOf('data-act="ns-toggle"'), d = pg.indexOf('data-act="edit-folder"'); return a > 0 && a < b && b < c && c < d; })(), true);
+  t('pasta: botões novos têm nome para leitura', /aria-label="Nova subpasta"/.test(pg) && /aria-label="Buscar nas notas"/.test(pg), true);
+  t('pasta: cada subpasta mostra quantas notas tem dentro (inclui as de dentro dela)', /Documentos<\/div>[^]*?aria-label="2 notas">2</.test(pg) && /Fotos<\/div>[^]*?aria-label="0 notas">0</.test(pg), true);
+  t('pasta: subpastas começam recolhidas', !/class="sub-body"/.test(pg), true);
+
+  // abrir/recolher uma subpasta com a setinha (desenha a pasta de verdade no #main)
+  ev(`const S=__NUCLEO_TEST__.S;S.tab='lembretes';S.folder='f1';S.nx={};S.nn={};S.nsOpen=false;S.q='';`);
+  clickAct(q('#tab-notas'));
+  t('pasta aparece na tela depois de entrar em Notas', !!q('#main [data-act="nx-sub"][data-id="f2"]'), true);
+  clickAct(q('#main [data-act="nx-sub"][data-id="f2"]'));
+  const aberta = q('#main').innerHTML;
+  t('setinha: abre a subpasta e mostra as notas dela e as subpastas de dentro', /CNH da Elisa/.test(aberta) && /class="sub-body"/.test(aberta) && /data-act="nx-sub" data-id="f4"/.test(aberta) && /aria-expanded="true"/.test(aberta), true);
+  clickAct(q('#main [data-act="nx-sub"][data-id="f4"]'));
+  t('setinha: abre também a sub-subpasta ("assim sucessivamente")', /RG frente/.test(q('#main').innerHTML), true);
+  clickAct(q('#main [data-act="nx-sub"][data-id="f2"]'));
+  t('setinha: recolhe a subpasta de novo', !/CNH da Elisa/.test(q('#main').innerHTML), true);
+  // recolher as notas da pasta e ficar só com as subpastas
+  clickAct(q('#main [data-act="nx-notes"][data-id="f1"]'));
+  const so = q('#main').innerHTML;
+  t('recolher notas: some a lista de notas e ficam só as subpastas', !/Nota da Elisa/.test(so) && /Subpastas/.test(so) && /data-act="nx-sub" data-id="f2"/.test(so), true);
+  clickAct(q('#main [data-act="nx-notes"][data-id="f1"]'));
+  t('recolher notas: abre de novo', /Nota da Elisa/.test(q('#main').innerHTML), true);
+  t('tocar no nome da subpasta abre a pasta', /data-act="open-folder" data-id="f2"/.test(q('#main').innerHTML), true);
+
+  // buscar: botão do topo abre o campo; procura só dentro da pasta e das subpastas
+  clickAct(q('#main [data-act="ns-toggle"]'));
+  t('buscar: o botão abre o campo de busca', !!q('#q') && ev('__NUCLEO_TEST__.S.nsOpen') === true, true);
+  t('buscar: campo diz onde procura', /placeholder="Buscar em Elisa"/.test(q('#main').innerHTML), true);
+  const inp = q('#q'); inp.value = 'cnh'; inp.dispatchEvent(new w.Event('input', { bubbles: true }));
+  const rb = q('#notesBody').innerHTML;
+  t('buscar: acha dentro da pasta e das subpastas, e não acha fora dela', /CNH da Elisa/.test(rb) && !/CNH fora da Elisa/.test(rb), true);
+  t('buscar: campo continua o mesmo (teclado não fecha)', q('#q') === inp, true);
+  clickAct(q('#main [data-act="ns-toggle"]'));
+  t('buscar: fechar limpa a busca e some o campo', !q('#q') && ev('__NUCLEO_TEST__.S.q') === '' && ev('__NUCLEO_TEST__.S.nsOpen') === false, true);
+
+  // ao sair de Notas, tudo volta ao início (inclui setinhas e busca)
+  ev(`const S=__NUCLEO_TEST__.S;S.nx={f2:1};S.nn={f1:1};S.nsOpen=true;S.q='x';S.folder='f1';`);
+  clickAct(q('#tab-hoje'));
+  t('sair de Notas: fecha busca, recolhe setinhas e volta ao início', ev('__NUCLEO_TEST__.S.nsOpen') === false && ev('JSON.stringify(__NUCLEO_TEST__.S.nx)') === '{}' && ev('JSON.stringify(__NUCLEO_TEST__.S.nn)') === '{}' && ev('__NUCLEO_TEST__.S.folder') === null, true);
+
+  // início de Notas: botão Buscar no topo, sem barra fixa
+  ev(`__NUCLEO_TEST__.S.tab='notas';__NUCLEO_TEST__.S.folder=null;`);
+  const raiz2 = TT.viewNotas();
+  t('início de Notas: Buscar virou botão no topo e a barra fixa saiu', /data-act="ns-toggle"/.test(raiz2) && !/id="q"/.test(raiz2), true);
+  ev(`__NUCLEO_TEST__.S.tab='hoje';__NUCLEO_TEST__.S.folder=null;__NUCLEO_TEST__.S.nsOpen=false;`);
+}
+
 console.log(ok + ' ok, ' + bad + ' falhas');
 process.exit(bad ? 1 : 0);
