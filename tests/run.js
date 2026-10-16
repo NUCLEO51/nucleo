@@ -162,5 +162,35 @@ ev(`__NUCLEO_TEST__.S.gq='';__NUCLEO_TEST__.S.tab='hoje';`);
   ev(`const S=__NUCLEO_TEST__.S;S.tab='hoje';S.rview=null;S.rfromHoje=0;`);
 }
 
+
+// --- Notas: botões Escanear, Nova nota e Desenhar no topo (v41) ---
+{
+  const doc = w.document, clickAct = (el) => el.dispatchEvent(new w.MouseEvent('click', { bubbles: true, cancelable: true }));
+  const q = (sel) => doc.querySelector(sel);
+  const TT = w.__NUCLEO_TEST__;
+  ev(`const S=__NUCLEO_TEST__.S;S.ready=true;S.tab='notas';S.folder=null;S.q='';S.sheet=null;
+    S.folders=[{id:'f1',name:'Documentos'}];S.notes=[];S.reminders=[];S.events=[];S.inbox=[];S.lists=[];`);
+  const raiz = TT.viewNotas();
+  const iS = raiz.indexOf('data-act="scan-new"'), iN = raiz.indexOf('data-act="new-note"'), iD = raiz.indexOf('data-act="draw-new"'), iA = raiz.indexOf('data-act="settings"');
+  t('notas: Escanear, Nova nota e Desenhar no topo, antes do Ajustes', iS > 0 && iS < iN && iN < iD && iD < iA, true);
+  t('notas: botões têm nome para leitura (aria-label)', /aria-label="Escanear"/.test(raiz) && /aria-label="Nova nota"/.test(raiz) && /aria-label="Desenhar"/.test(raiz), true);
+  t('notas: a barra de baixo com os 3 botões saiu', !/class="actbar"/.test(raiz) && (raiz.match(/data-act="scan-new"/g) || []).length === 1 && (raiz.match(/data-act="new-note"/g) || []).length === 1, true);
+  t('notas: Nova nota e Desenhar não repetem o mesmo ícone', /noteplus:/.test(html) && /brush:/.test(html), true);
+  // toque em Nova nota abre o formulário de nota
+  doc.getElementById('tab-notas').click();
+  clickAct(q('#main [data-act="new-note"]'));
+  t('notas: tocar em Nova nota abre o formulário', ev('__NUCLEO_TEST__.S.sheet&&__NUCLEO_TEST__.S.sheet.type') === 'note', true);
+  ev('__NUCLEO_TEST__.S.sheet=null');
+  // dentro de uma pasta, os botões continuam no topo e criam dentro dela
+  ev(`__NUCLEO_TEST__.S.folder='f1';`);
+  const pasta = TT.viewNotas();
+  t('notas: dentro da pasta os botões também estão no topo e usam a pasta', /data-act="new-note" data-folder="f1"/.test(pasta) && /data-act="scan-new" data-folder="f1"/.test(pasta) && /data-act="draw-new" data-folder="f1"/.test(pasta) && !/class="actbar"/.test(pasta), true);
+  t('notas: dentro da pasta o lápis de renomear continua', /data-act="edit-folder"/.test(pasta), true);
+  // em "Todas as notas" (não é pasta real) cria sem pasta
+  ev(`__NUCLEO_TEST__.S.folder='v:all';`);
+  t('notas: em Todas as notas cria sem pasta', /data-act="new-note" data-folder=""/.test(TT.viewNotas()), true);
+  ev(`__NUCLEO_TEST__.S.folder=null;__NUCLEO_TEST__.S.tab='hoje';`);
+}
+
 console.log(ok + ' ok, ' + bad + ' falhas');
 process.exit(bad ? 1 : 0);

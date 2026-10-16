@@ -666,7 +666,7 @@ const S={tab:'hoje',raw:{},reminders:[],notes:[],events:[],inbox:[],folders:[],l
   folder:null,rview:null,q:'',rq:'',sheet:null,rings:[],assetsOk:false,dlOk:false,bw:true,weekend:false,fired:{},fs:20,theme:'auto',conf:'all',purged:false,gq:''};
 const lsGet=k=>{try{return localStorage.getItem(k);}catch(e){return null;}};
 const lsSet=(k,v)=>{try{localStorage.setItem(k,v);}catch(e){}};
-const APP_V='v40';
+const APP_V='v41';
 const ERRLOG_KEY='nucleo-errlog';
 function logErr(where,e){try{const a=JSON.parse(localStorage.getItem(ERRLOG_KEY)||'[]');a.push({t:Date.now(),w:String(where).slice(0,40),m:String((e&&e.message)||e||'').slice(0,160)});while(a.length>30)a.shift();localStorage.setItem(ERRLOG_KEY,JSON.stringify(a));}catch(x){}}
 addEventListener('error',ev=>logErr('tela',ev.message||ev.error));
@@ -697,6 +697,8 @@ const P={
   plus:'<path d="M12 5v14M5 12h14"/>',
   bell:'<path d="M6 16V11a6 6 0 1112 0v5l1.5 2h-15z"/><path d="M10 21h4"/>',
   scan:'<path d="M4 8V5h3M17 5h3v3M20 16v3h-3M7 19H4v-3"/><path d="M4 12h16"/>',
+  noteplus:'<path d="M6 3h9l4 4v14H6z"/><path d="M12.5 11v6M9.5 14h6"/>',
+  brush:'<path d="M20 4l-9 9"/><path d="M9.5 12.5c-2.5 0-4 1.6-4 4 0 1.2-.6 2.2-1.5 3 3 .8 7-.5 7-4a2.5 2.5 0 00-1.5-3z"/>',
   trash:'<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
   close:'<path d="M6 6l12 12M18 6L6 18"/>',
   left:'<path d="M15 5l-7 7 7 7"/>',
@@ -1293,7 +1295,7 @@ function syncNote(){
   return m?' · <span class="st '+m[1]+'">'+m[0]+'</span>':'';
 }
 function hdr(eyebrow,title,extra,small){
-  return '<header class="hd"><div style="min-width:0"><div class="eyebrow">'+esc(eyebrow)+syncNote()+'</div><h1'+(small?' class="sm"':'')+'>'+esc(title)+'</h1></div><div class="hd-r">'+(extra||'')+'<button class="iconbtn" data-act="settings" aria-label="Ajustes">'+ic('gear',1.2)+'</button></div></header>';
+  return '<header class="hd"><div style="min-width:0"><div class="eyebrow">'+(eyebrow?esc(eyebrow)+syncNote():syncNote().replace(/^ · /,''))+'</div><h1'+(small?' class="sm"':'')+'>'+esc(title)+'</h1></div><div class="hd-r">'+(extra||'')+'<button class="iconbtn" data-act="settings" aria-label="Ajustes">'+ic('gear',1.2)+'</button></div></header>';
 }
 function hdrHoje(weekday,dateStr,extra){
   const sn=syncNote().replace(/^ · /,'');
@@ -1657,23 +1659,28 @@ function notesBody(){
   h+='<div class="group">'+(list.length?list.map(n=>noteRow(n,fm,!real&&cf!=='')).join(''):emptyRow('Pasta vazia.','Crie uma nota ou escaneie um documento.'))+'</div>';
   return h;
 }
+function notesTools(into){
+  const f=' data-folder="'+esc(into||'')+'"';
+  return '<button class="iconbtn" data-act="scan-new"'+f+' aria-label="Escanear">'+ic('scan',1.2,2.2)+'</button>'
+    +'<button class="iconbtn" data-act="new-note"'+f+' aria-label="Nova nota">'+ic('noteplus',1.2,2.2)+'</button>'
+    +'<button class="iconbtn" data-act="draw-new"'+f+' aria-label="Desenhar">'+ic('brush',1.2,2.2)+'</button>';
+}
 function viewNotas(){
   const fm=fmap(),cf=curFolder();
   if(cf==='v:trash')return trashView(['notes'],'Pastas','folder-back');
   let h='';
-  if(cf===null)h+=hdr('Notas e scans','Notas');
+  if(cf===null)h+=hdr('','Notas',notesTools(''));
   else{
     const VN={'':'Geral','v:all':'Todas as notas','v:pin':'Fixadas','v:scan':'Scans e documentos','v:draw':'Desenhos','v:files':'Com arquivos'};
     const isTag=cf.indexOf('t:')===0,real=cf&&cf.indexOf('v:')!==0&&!isTag,f=real?fm[cf]:null,par=real?parentOf(f,fm):'';
     const backTo=par?(fm[par].name||'Sem nome'):'Pastas';
     const edit=real?'<button class="iconbtn" data-act="edit-folder" data-id="'+esc(cf)+'" aria-label="Renomear, mover ou apagar pasta">'+ic('edit',1.1,2.2)+'</button>':'';
-    h+=subHdr(backTo,'folder-back',par?pathOf(par,fm).join(' › '):(isTag?'Etiqueta':''),real?(f.name||'Sem nome'):(isTag?'#'+cf.slice(2):VN[cf]),edit);
+    const into0=cf&&cf.indexOf('v:')!==0&&cf.indexOf('t:')!==0?cf:'';
+    h+=subHdr(backTo,'folder-back',par?pathOf(par,fm).join(' › '):(isTag?'Etiqueta':''),real?(f.name||'Sem nome'):(isTag?'#'+cf.slice(2):VN[cf]),notesTools(into0)+edit);
   }
   if(cf===null)h+='<div id="notesFolders"'+(S.q?' style="display:none"':'')+'>'+notesFolders()+'</div>';
   h+='<div class="search">'+ic('search',1.05,2.2)+'<label for="q" class="sr">Buscar nas notas</label><input id="q" type="search" placeholder="Buscar em todas as notas" value="'+esc(S.q)+'" autocomplete="off"></div>';
   h+='<div id="notesBody">'+notesBody()+'</div>';
-  const into=cf&&cf.indexOf('v:')!==0&&cf.indexOf('t:')!==0?cf:'';
-  h+='<div class="actbar"><button class="btn primary grow" data-act="scan-new" data-folder="'+esc(into)+'">'+ic('scan',1.1,2.2)+'Escanear</button><button class="btn grow" data-act="new-note" data-folder="'+esc(into)+'">'+ic('edit',1.05,2.2)+'Nova nota</button><button class="btn grow" data-act="draw-new" data-folder="'+esc(into)+'">'+ic('edit',1.05,2.2)+'Desenhar</button></div>';
   return h;
 }
 
@@ -2947,7 +2954,7 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden){checkAlar
 window.__nucleo={Store:Store,Supa:Supa,S:S};
 if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost')){addEventListener('load',()=>{navigator.serviceWorker.register('sw.js').catch(()=>{});});}
 /* gancho só para os testes (no uso normal a marca não existe) */
-try{if(window.__NUCLEO_TEST__)window.__NUCLEO_TEST__={S,gsFind,gsBody,viewBusca,viewHoje,viewCaixa};}catch(e){}
+try{if(window.__NUCLEO_TEST__)window.__NUCLEO_TEST__={S,gsFind,gsBody,viewBusca,viewHoje,viewCaixa,viewNotas};}catch(e){}
 buildTabs();render();Store.init();
 getAssets().then(a=>{S.assetsOk=!!a;});
 getDl().then(d=>{S.dlOk=!!d;});
