@@ -470,4 +470,7 @@ global.__pend.push((async () => {
   ev(`const S=__NUCLEO_TEST__.S;S.sheet=null;S.tab='hoje';S.folder=null;S.rview=null;S.conf='all';`);
 })());
 
+
+// --- Enviar ao FIN: Voltar também no topo (v49) ---
+t('Enviar ao FIN: tem botão Voltar no topo, além do de baixo', /id="finTop"/.test(html) && /querySelector\('#finTop'\)\.onclick/.test(html) && /id="finNo"/.test(html), true);
 Promise.all(global.__pend || []).then(() => { console.log(ok + ' ok, ' + bad + ' falhas'); process.exit(bad ? 1 : 0); });

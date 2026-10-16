@@ -1,6 +1,10 @@
 {
   "name": "nucleo-testes",
   "private": true,
-  "scripts": { "test": "node run.js" },
-  "devDependencies": { "jsdom": "^24.1.0" }
+  "scripts": {
+    "test": "node run.js && node run_fin.js"
+  },
+  "devDependencies": {
+    "jsdom": "^24.1.0"
+  }
 }

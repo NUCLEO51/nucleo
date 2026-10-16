@@ -697,7 +697,7 @@ const S={tab:'hoje',raw:{},reminders:[],notes:[],events:[],inbox:[],folders:[],l
   folder:null,rview:null,q:'',rq:'',sheet:null,rings:[],assetsOk:false,dlOk:false,bw:true,weekend:false,fired:{},fs:20,theme:'auto',conf:'all',purged:false,gq:'',nsOpen:false,nx:{},nn:{},lc:{}};
 const lsGet=k=>{try{return localStorage.getItem(k);}catch(e){return null;}};
 const lsSet=(k,v)=>{try{localStorage.setItem(k,v);}catch(e){}};
-const APP_V='v48';
+const APP_V='v49';
 const ERRLOG_KEY='nucleo-errlog';
 function logErr(where,e){try{const a=JSON.parse(localStorage.getItem(ERRLOG_KEY)||'[]');a.push({t:Date.now(),w:String(where).slice(0,40),m:String((e&&e.message)||e||'').slice(0,160)});while(a.length>30)a.shift();localStorage.setItem(ERRLOG_KEY,JSON.stringify(a));}catch(x){}}
 addEventListener('error',ev=>logErr('tela',ev.message||ev.error));
@@ -1194,7 +1194,7 @@ function finSend(){
   let el=document.getElementById('finSend');if(el)el.remove();
   el=document.createElement('div');el.id='finSend';
   el.style.cssText='position:fixed;inset:0;z-index:80;background:var(--bg);color:var(--fg);display:flex;flex-direction:column;gap:.8rem;padding:calc(1rem + env(safe-area-inset-top,0px)) 1rem calc(1rem + env(safe-area-inset-bottom,0px));overflow:auto;font-size:1rem';
-  el.innerHTML='<h1 style="font-size:1.9rem;margin:0">Enviar ao FIN</h1>'
+  el.innerHTML='<button id="finTop" type="button" style="align-self:flex-start;font:inherit;font-size:1.2rem;font-weight:800;min-height:3.2rem;padding:0 1.2rem;border:0;border-radius:1rem;background:var(--surface-2);color:var(--fg);cursor:pointer">← Voltar</button><h1 style="font-size:1.9rem;margin:0">Enviar ao FIN</h1>'
     +'<p style="margin:0;font-size:1.1rem">Escreva ou cole. <b>Cada linha</b> vira um pendente no FIN. Exemplos:</p>'
     +'<div style="background:var(--surface);border-radius:.8rem;padding:.7rem .9rem;font-size:1rem;line-height:1.5">Mercado 230,50 no cartão Bradesco<br>Tênis 6x 349,99 cartão Santander<br>Conta de luz vence dia 10<br>Dívida Itaú 16000</div>'
     +'<textarea id="finTx" rows="8" style="font:inherit;font-size:1.15rem;padding:.9rem;border-radius:.8rem;border:2px solid var(--line);background:var(--surface);color:var(--fg);width:100%;box-sizing:border-box"></textarea>'
@@ -1204,6 +1204,7 @@ function finSend(){
     +'<p style="margin:0;font-size:.95rem;color:var(--muted)">Nada é cadastrado sozinho: no FIN você confere e confirma. Foto de extrato ainda não: por enquanto é texto.</p>';
   document.body.appendChild(el);
   el.querySelector('#finNo').onclick=()=>el.remove();
+  el.querySelector('#finTop').onclick=()=>el.remove();
   el.querySelector('#finGo').onclick=async()=>{
     const lines=el.querySelector('#finTx').value.split(/\n+/).map(x=>x.trim()).filter(Boolean).slice(0,40);
     const err=el.querySelector('#finErr');err.textContent='';

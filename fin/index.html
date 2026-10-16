@@ -44,6 +44,7 @@ h2{font-size:1.25rem;margin:1.2rem 1rem .4rem}
 .wrap{padding:0 .8rem}
 .card{background:var(--surface);border-radius:1rem;padding:.9rem 1rem;margin:.5rem 0;border:1px solid var(--line)}
 .row{display:flex;justify-content:space-between;align-items:baseline;gap:.6rem}
+.row b{white-space:nowrap}
 .big{font-size:1.5rem;font-weight:800}
 .mut{color:var(--muted);font-size:.9rem}
 .tag{display:inline-block;border-radius:.5rem;padding:.1rem .5rem;font-size:.85rem;font-weight:700;background:var(--surface-2)}
@@ -63,6 +64,8 @@ nav.tabs button.on{color:var(--accent)}
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:50;display:flex;align-items:flex-end;justify-content:center}
 .sheet{background:var(--bg);width:100%;max-width:34rem;max-height:92vh;overflow:auto;border-radius:1.2rem 1.2rem 0 0;padding:1rem 1rem calc(1rem + env(safe-area-inset-bottom,0px))}
 .sheet h3{margin:.2rem 0 .6rem;font-size:1.4rem}
+.mbar{position:sticky;top:0;z-index:3;background:var(--bg);margin:-1rem -1rem .9rem;padding:.8rem 1rem .5rem}
+.mback{font:inherit;font-size:1.2rem;font-weight:800;min-height:3.2rem;padding:0 1.2rem;border:0;border-radius:1rem;background:var(--accent-soft);color:var(--accent);cursor:pointer}
 label.f{display:block;font-weight:800;margin:.8rem 0 .25rem}
 .in{width:100%;min-height:3.4rem;border-radius:.9rem;border:2px solid var(--line);background:var(--surface);padding:.6rem .8rem;font-size:1.1rem}
 .chk{display:flex;align-items:center;gap:.7rem;min-height:3.4rem;font-weight:700}
@@ -179,8 +182,15 @@ const Api={
 
 /* ---------- janelas: confirmação e formulário ---------- */
 function modal(html){
-  const m=document.createElement('div');m.className='modal';m.innerHTML='<div class="sheet" role="dialog" aria-modal="true">'+html+'</div>';
-  document.body.appendChild(m);return m;
+  const m=document.createElement('div');m.className='modal';
+  m.innerHTML='<div class="sheet" role="dialog" aria-modal="true"><div class="mbar"><button type="button" class="mback" aria-label="Voltar">← Voltar</button></div>'+html+'</div>';
+  document.body.appendChild(m);
+  /* o Voltar do topo faz o mesmo que o botão de sair que a janela já tem lá embaixo */
+  m.querySelector('.mback').onclick=()=>{
+    for(const q of ['#f-no','#cf-no','#b-no','#p-no','#c0','#no','#ok']){const c=m.querySelector(q);if(c){c.click();return;}}
+    m.remove();
+  };
+  return m;
 }
 function confirmBox(title,lines,okLabel,bad){
   return new Promise(res=>{
@@ -480,22 +490,10 @@ function vHome(){
     h+='<h2>Próximos vencimentos (30 dias)</h2>';
     up.forEach(u=>{h+='<div class="card"><div class="row"><span class="t" style="font-weight:800">'+esc(u.name)+'</span><b>'+money(u.c)+'</b></div><div class="row"><span class="mut">'+u.kind+' · '+brDate(u.dt)+'</span>'+(u.late?'<span class="tag bad">Em atraso</span>':'')+'</div></div>';});
   }
-  const cards=byKind('card').filter(c=>mine(c.data));
-  if(cards.length){
-    h+='<h2>Cartões</h2>';
-    let tot=0,totKnown=true;
-    cards.forEach(cr=>{
-      const k=cardCalc(cr),c=cr.data;tot+=k.used;if(c.limitC==null)totKnown=false;
-      const pct=c.limitC?Math.min(100,Math.max(0,Math.round(k.used*100/c.limitC))):0;
-      const cur=k.inv[k.openYm],due=dueDateFor(c,k.openYm);
-      h+='<button class="item" data-act="card" data-id="'+cr.id+'"><div class="row"><span class="t">'+esc(c.name)+'</span><span class="mut">final '+esc(c.last4||'—')+'</span></div>'
-        +'<div class="bar"><i class="'+(pct>=80?'hi':'')+'" style="width:'+pct+'%"></i></div>'
-        +'<div class="row"><span class="mut">Usado</span><b>'+money(k.used)+'</b></div>'
-        +'<div class="row"><span class="mut">Pode usar</span><b>'+money(k.avail)+'</b></div>'
-        +'<div class="row"><span class="mut">Fatura atual</span><b>'+money(cur.totalC)+'</b></div>'
-        +'<div class="row"><span class="mut">Vence</span><b>'+brDate(due)+'</b></div></button>';
-    });
-    h+='<div class="card"><div class="row"><span class="mut">Total usado nos cartões</span><b>'+money(tot)+'</b></div></div>';
+  const cardsH=byKind('card').filter(c=>mine(c.data));
+  if(cardsH.length){
+    let totH=0;cardsH.forEach(cr=>{totH+=cardCalc(cr).used;});
+    h+='<h2>Cartões</h2><button class="item" data-act="tab" data-v="cards"><div class="row"><span class="mut">Total usado ('+cardsH.length+(cardsH.length===1?' cartão':' cartões')+')</span><b>'+money(totH)+'</b></div><div class="mut">Toque para ver cada cartão, a fatura e o limite.</div></button>';
   }
   const debts=byKind('debt').filter(d=>d.data.status!=='PAGA'&&mine(d.data));
   if(debts.length){
@@ -503,7 +501,7 @@ function vHome(){
     h+='<h2>Dívidas</h2><div class="card"><div class="row"><span class="mut">Saldo conhecido ('+debts.length+')</span><b>'+money(sum)+'</b></div>'+(miss?'<div class="mut">Algum saldo está “Não informado”.</div>':'')+'</div>';
   }
   h+='<div class="note">Projeção parcial não é dinheiro disponível. O FIN só organiza e lembra: quem paga é você.</div>';
-  h+=hasDemo()?'<button class="btn sec" data-act="demo-off">Apagar os exemplos de teste</button>':'<button class="btn sec" data-act="demo-on">Carregar exemplos de teste</button>';
+  h+=hasDemo()?'<button class="btn sec" data-act="demo-off">Apagar os exemplos de teste</button>':(S.recs.length?'':'<button class="btn sec" data-act="demo-on">Carregar exemplos de teste</button>');
   h+='<button class="btn" data-act="tab" data-v="stmt">📄 Extratos do banco</button>';
   h+='<button class="btn" data-act="chat">🤝 Chat financeiro</button>';
   h+=backupBlock();
@@ -511,36 +509,52 @@ function vHome(){
   h+='<p class="hint" style="text-align:center"><a class="lnk" href="../">Abrir o Núcleo</a></p></div>';
   return h;
 }
+function billRow(x){
+  const st=billState(x),b=x.bill.data;
+  return '<button class="item" data-act="bill-open" data-id="'+x.r.id+'"><div class="row"><span class="t">'+esc(b.name)+'</span><span class="tag '+st.c+'">'+st.t+'</span></div>'
+    +'<div class="row"><span class="mut">'+(x.r.data.paidAt?'Paga em '+brDate(x.r.data.paidAt):'Vence '+brDate(billDue(x)))+'</span><b>'+money(x.r.data.amountC)+'</b></div>'
+    +(b.holder?'<div class="mut">De '+esc(pname(b.holder))+(b.account?' · paga pela conta '+esc(b.account):'')+'</div>':'<div class="mut">Sem dono definido</div>')+'</button>';
+}
 function vBills(){
   const ym=ymOf(todayIso()),rows=monthRows(ym).filter(x=>mine(x.bill.data));
   let h=header('Contas do mês','')+'<p class="sub">'+esc(ymLabel(ym))+'</p>'+whoBar()+'<div class="wrap">';
   h+='<button class="btn" data-act="bill-new">+ Nova conta</button>';
+  const order={'Em atraso':0,'Sem valor':1,'A pagar':2};
+  const topay=rows.filter(x=>!x.r.data.paidAt).sort((a,b)=>order[billState(a).t]-order[billState(b).t]||a.bill.data.dueDay-b.bill.data.dueDay);
+  const paid=rows.filter(x=>x.r.data.paidAt).sort((a,b)=>a.r.data.paidAt<b.r.data.paidAt?1:-1);
   if(!rows.length)h+='<div class="card mut">Nenhuma conta neste mês. Toque em “Nova conta”. Contas que mudam todo mês (luz, água) entram sem valor e o app cobra o valor de você.</div>';
-  const order={'Em atraso':0,'Sem valor':1,'A pagar':2,'Paga':3};
-  rows.sort((a,b)=>order[billState(a).t]-order[billState(b).t]||a.bill.data.dueDay-b.bill.data.dueDay);
-  rows.forEach(x=>{
-    const st=billState(x);
-    h+='<button class="item" data-act="bill-open" data-id="'+x.r.id+'"><div class="row"><span class="t">'+esc(x.bill.data.name)+'</span><span class="tag '+st.c+'">'+st.t+'</span></div>'
-      +'<div class="row"><span class="mut">Vence '+brDate(billDue(x))+'</span><b>'+money(x.r.data.amountC)+'</b></div>'+(x.bill.data.holder?'<div class="mut">De '+esc(pname(x.bill.data.holder))+(x.bill.data.account?' · paga pela conta '+esc(x.bill.data.account):'')+'</div>':'<div class="mut">Sem dono definido</div>')+'</button>';
-  });
-  const pend=rows.filter(x=>!x.r.data.paidAt);
-  if(rows.length){
-    const total=rows.reduce((a,x)=>a+(x.r.data.amountC||0),0),paid=rows.filter(x=>x.r.data.paidAt).reduce((a,x)=>a+(x.r.data.amountC||0),0);
-    h+='<div class="card"><div class="row"><span class="mut">Total conhecido do mês</span><b>'+money(total)+'</b></div><div class="row"><span class="mut">Já pago</span><b>'+money(paid)+'</b></div><div class="row"><span class="mut">Faltam pagar</span><b>'+money(total-paid)+'</b></div>'+(pend.some(x=>x.r.data.amountC==null)?'<div class="mut">Contas sem valor não entram na soma.</div>':'')+'</div>';
+  else{
+    const total=rows.reduce((a,x)=>a+(x.r.data.amountC||0),0),pg=paid.reduce((a,x)=>a+(x.r.data.amountC||0),0);
+    h+='<div class="card"><div class="row"><span class="mut">Total conhecido do mês</span><b>'+money(total)+'</b></div><div class="row"><span class="mut">Já pago</span><b>'+money(pg)+'</b></div><div class="row"><span class="mut">Faltam pagar</span><b>'+money(total-pg)+'</b></div>'+(topay.some(x=>x.r.data.amountC==null)?'<div class="mut">Contas sem valor não entram na soma.</div>':'')+'</div>';
+    h+='<h2>Para pagar ('+topay.length+')</h2>'+(topay.length?topay.map(billRow).join(''):'<div class="card mut">Nada a pagar neste mês ✓</div>');
+    if(paid.length)h+='<h2>Pagas ('+paid.length+')</h2>'+paid.map(billRow).join('');
   }
-  const bills=byKind('bill').filter(b=>mine(b.data));
-  if(bills.length){h+='<h2>Contas cadastradas</h2>';bills.forEach(b=>{h+='<button class="item" data-act="bill-edit" data-id="'+b.id+'"><div class="row"><span class="t">'+esc(b.data.name)+'</span><span class="mut">dia '+b.data.dueDay+'</span></div><div class="mut">'+(b.data.recurring?'Todo mês':'Só em '+ymShort(b.data.startYm))+' · '+(b.data.variable?'valor muda':money(b.data.amountC))+'</div></button>';});}
+  /* só aparecem aqui as contas que NÃO estão na lista do mês (a mesma conta nunca aparece duas vezes) */
+  const shown=new Set(rows.map(x=>x.bill.id));
+  const outras=byKind('bill').filter(b=>mine(b.data)&&!shown.has(b.id));
+  if(outras.length){
+    h+='<h2>Outras contas cadastradas</h2><div class="hint" style="margin:0 1rem .3rem">Não vencem neste mês.</div>';
+    outras.forEach(b=>{h+='<button class="item" data-act="bill-edit" data-id="'+b.id+'"><div class="row"><span class="t">'+esc(b.data.name)+'</span><span class="mut">dia '+b.data.dueDay+'</span></div><div class="mut">'+(b.data.recurring?'Todo mês':'Só em '+ymShort(b.data.startYm))+' · '+(b.data.variable?'valor muda':money(b.data.amountC))+'</div></button>';});
+  }
   return h+'</div>';
 }
 function vCards(){
   const cards=byKind('card').filter(c=>mine(c.data));
   let h=header('Cartões')+whoBar()+'<div class="wrap"><button class="btn" data-act="card-new">+ Novo cartão</button>';
   if(!cards.length)h+='<div class="card mut">Cadastre cada cartão uma vez: apelido, últimos 4 dígitos, limite, dia do fechamento e dia do vencimento. Nunca coloque o número completo, validade ou código de segurança.</div>';
+  let tot=0;
   cards.forEach(cr=>{
-    const k=cardCalc(cr),c=cr.data;
+    const k=cardCalc(cr),c=cr.data;tot+=k.used;
+    const pct=c.limitC?Math.min(100,Math.max(0,Math.round(k.used*100/c.limitC))):0;
+    const cur=k.inv[k.openYm],due=dueDateFor(c,k.openYm);
     h+='<button class="item" data-act="card" data-id="'+cr.id+'"><div class="row"><span class="t">'+esc(c.name)+'</span><span class="mut">final '+esc(c.last4||'—')+'</span></div><div class="mut">Titular: '+esc(pname(c.holder))+'</div>'
-      +'<div class="row"><span class="mut">Pode usar</span><b>'+money(k.avail)+'</b></div><div class="row"><span class="mut">Melhor dia de compra</span><b>dia '+bestDay(c)+'</b></div></button>';
+      +'<div class="bar"><i class="'+(pct>=80?'hi':'')+'" style="width:'+pct+'%"></i></div>'
+      +'<div class="row"><span class="mut">Usado</span><b>'+money(k.used)+'</b></div>'
+      +'<div class="row"><span class="mut">Pode usar</span><b>'+money(k.avail)+'</b></div>'
+      +'<div class="row"><span class="mut">Fatura atual</span><b>'+money(cur.totalC)+'</b></div>'
+      +'<div class="row"><span class="mut">Vence</span><b>'+brDate(due)+'</b></div></button>';
   });
+  if(cards.length>1)h+='<div class="card"><div class="row"><span class="mut">Total usado nos cartões</span><b>'+money(tot)+'</b></div></div>';
   return h+'</div>';
 }
 function vCard(){
@@ -578,11 +592,22 @@ function vCard(){
   h+='<p class="hint">'+mn+' compra(s) neste cartão.</p>';
   return h+'</div>';
 }
+const DST={ATIVA:'Ativa',ATRASADA:'Atrasada',PAGA:'Paga',DESCONHECIDA:'Não sei'};
+function debtRow(d){
+  const x=d.data;
+  return '<button class="item" data-act="debt-edit" data-id="'+d.id+'"><div class="row"><span class="t">'+esc(x.creditor)+'</span><span class="tag '+(x.status==='PAGA'?'ok':(x.status==='ATRASADA'?'bad':''))+'">'+esc(DST[x.status]||x.status)+'</span></div><div class="row"><span class="mut">Saldo</span><b>'+money(x.balanceC)+'</b></div><div class="row"><span class="mut">Parcela</span><b>'+money(x.installC)+'</b></div><div class="mut">Devedor no contrato: '+esc(pname(x.holder))+(x.payer?' · paga hoje: '+esc(pname(x.payer)):'')+(x.kindD?' · '+esc(x.kindD):'')+(x.rateBp!=null?' · juros '+(x.rateBp/100).toFixed(2).replace('.',',')+'% ao mês':'')+(x.account?' · conta '+esc(x.account):'')+'</div>'+(x.dueDay?'<div class="mut">Vence dia '+x.dueDay+'</div>':'')+(x.note?'<div class="mut">'+esc(x.note)+'</div>':'')+'</button>';
+}
 function vDebts(){
   const ds=byKind('debt').filter(d=>mine(d.data));
+  const open=ds.filter(d=>d.data.status!=='PAGA'),paid=ds.filter(d=>d.data.status==='PAGA');
   let h=header('Dívidas')+whoBar()+'<div class="wrap"><button class="btn" data-act="debt-new">+ Nova dívida</button>';
   if(!ds.length)h+='<div class="card mut">Nenhuma dívida cadastrada.</div>';
-  ds.forEach(d=>{const x=d.data;h+='<button class="item" data-act="debt-edit" data-id="'+d.id+'"><div class="row"><span class="t">'+esc(x.creditor)+'</span><span class="tag '+(x.status==='PAGA'?'ok':(x.status==='ATRASADA'?'bad':''))+'">'+esc(x.status)+'</span></div><div class="row"><span class="mut">Saldo</span><b>'+money(x.balanceC)+'</b></div><div class="row"><span class="mut">Parcela</span><b>'+money(x.installC)+'</b></div><div class="mut">Devedor no contrato: '+esc(pname(x.holder))+(x.payer?' · paga hoje: '+esc(pname(x.payer)):'')+(x.kindD?' · '+esc(x.kindD):'')+(x.rateBp!=null?' · juros '+(x.rateBp/100).toFixed(2).replace('.',',')+'% ao mês':'')+(x.account?' · conta '+esc(x.account):'')+'</div>'+(x.dueDay?'<div class="mut">Vence dia '+x.dueDay+'</div>':'')+'</button>';});
+  if(open.length){
+    const sum=open.reduce((a,d)=>a+(d.data.balanceC||0),0),inst=open.reduce((a,d)=>a+(d.data.installC||0),0),miss=open.some(d=>d.data.balanceC==null);
+    h+='<div class="card"><div class="row"><span class="mut">Saldo conhecido ('+open.length+' em aberto)</span><b>'+money(sum)+'</b></div><div class="row"><span class="mut">Soma das parcelas por mês</span><b>'+money(inst)+'</b></div>'+(miss?'<div class="mut">Algum saldo está “Não informado”.</div>':'')+'</div>';
+    h+='<h2>Em aberto ('+open.length+')</h2>'+open.map(debtRow).join('');
+  }
+  if(paid.length)h+='<h2>Pagas ('+paid.length+')</h2>'+paid.map(debtRow).join('');
   return h+'</div>';
 }
 
