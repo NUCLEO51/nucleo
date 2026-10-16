@@ -155,6 +155,7 @@ input,textarea,select{font:inherit;font-size:1rem;color:var(--fg)}
 .btn.sm{min-height:2.6rem;padding:0 .9rem;font-size:.9rem}
 .txtbtn{min-height:2.4rem;padding:0 .3rem;border:0;background:none;font-weight:700;color:var(--link);font-size:.95rem;display:inline-flex;align-items:center;gap:.3rem}
 .chip{min-height:2.4rem;padding:0 .85rem;border-radius:999px;border:0;background:var(--surface-2);font-weight:700;font-size:.85rem;display:inline-flex;align-items:center;gap:.35rem}
+.chip.danger{background:#FF3B30;color:#fff}
 .chip.on{background:var(--accent);color:var(--accent-fg)}
 .chip[disabled]{opacity:.45;cursor:default}
 .chips{display:flex;flex-wrap:wrap;gap:.5rem}
@@ -624,7 +625,7 @@ const S={tab:'hoje',raw:{},reminders:[],notes:[],events:[],inbox:[],folders:[],l
   folder:null,rview:null,q:'',rq:'',sheet:null,rings:[],assetsOk:false,dlOk:false,bw:true,weekend:false,fired:{},fs:20,theme:'auto',conf:'all',purged:false};
 const lsGet=k=>{try{return localStorage.getItem(k);}catch(e){return null;}};
 const lsSet=(k,v)=>{try{localStorage.setItem(k,v);}catch(e){}};
-const APP_V='v30';
+const APP_V='v31';
 const ERRLOG_KEY='nucleo-errlog';
 function logErr(where,e){try{const a=JSON.parse(localStorage.getItem(ERRLOG_KEY)||'[]');a.push({t:Date.now(),w:String(where).slice(0,40),m:String((e&&e.message)||e||'').slice(0,160)});while(a.length>30)a.shift();localStorage.setItem(ERRLOG_KEY,JSON.stringify(a));}catch(x){}}
 addEventListener('error',ev=>logErr('tela',ev.message||ev.error));
@@ -1325,7 +1326,7 @@ function triPaint(mode){
     h+='<div class="tri-card" style="text-align:center">'+(all.length?'Você pulou '+all.length+(all.length===1?' item.':' itens.'):'Tudo organizado ✓')+'</div>'+(all.length?'<button class="btn primary wide" data-act="tri-reset">Ver os pulados de novo</button>':'')+'<button class="btn wide" data-act="tri-close">Fechar</button>';
   }else{
     h+='<div class="note-s">Faltam '+left.length+(left.length===1?' item':' itens')+'</div><div class="tri-card">'+esc(it.text)+'</div>'+(it.src?'<div class="note-s">'+esc(it.src)+'</div>':'')+'<div class="tri-btns">';
-    if(it.k==='i')h+='<button class="btn primary" data-act="tri-rem">Lembrete</button><button class="btn primary" data-act="tri-note">Nota</button><button class="btn primary" data-act="tri-list">Lista</button><button class="btn danger" data-act="tri-del">Descartar</button>';
+    if(it.k==='i')h+='<button class="btn primary" data-act="tri-rem">Lembrete</button><button class="btn primary" data-act="tri-note">Nota</button><button class="btn primary" data-act="tri-list">Lista</button><button class="btn danger" data-act="tri-del">Excluir</button>';
     else{const r=S.reminders.find(x=>x.id===it.id)||{};const simples=!(r.subtasks||[]).length&&!(r.images||[]).length&&!(r.files||[]).length;h+='<button class="btn primary" data-act="tri-rem">Dar data</button>'+(simples?'<button class="btn primary" data-act="tri-note">Virar nota</button>':'')+'<button class="btn primary" data-act="tri-keep">Deixar assim</button>';}
     h+='</div><button class="btn wide" data-act="tri-skip">Pular por agora</button>';
   }
@@ -1360,9 +1361,9 @@ function viewHoje(){
     else{
       h+='<div class="group">'+S.inbox.slice().sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)).map(i=>
       '<div class="li static" style="flex-wrap:wrap"><div class="li-main" style="flex-basis:100%"><div class="li-t">'+esc(i.text)+'</div>'+(i.source?'<div class="li-s">via '+esc(i.source)+'</div>':'')+'</div>'+
-      '<div class="chips" style="padding:.2rem 0 .2rem"><button class="chip" data-act="inbox-rem" data-id="'+esc(i.id)+'">Virar lembrete</button><button class="chip" data-act="inbox-note" data-id="'+esc(i.id)+'">Virar nota</button><button class="chip" data-act="inbox-del" data-id="'+esc(i.id)+'">Descartar</button></div></div>').join('')+'</div>';
+      '<div class="chips" style="padding:.2rem 0 .2rem"><button class="chip" data-act="inbox-rem" data-id="'+esc(i.id)+'">Virar lembrete</button><button class="chip" data-act="inbox-note" data-id="'+esc(i.id)+'">Virar nota</button><button class="chip danger" data-act="inbox-del" data-id="'+esc(i.id)+'">Excluir</button></div></div>').join('')+'</div>';
       const lr=looseRems();
-      if(lr.length)h+=secH('Lembretes sem data <span class="pill">'+lr.length+'</span>','<span class="hint">decida o destino</span>')+'<div class="group">'+lr.map(r=>{const simples=!(r.subtasks||[]).length&&!(r.images||[]).length&&!(r.files||[]).length;return '<div class="li static" style="flex-wrap:wrap"><div class="li-main" style="flex-basis:100%"><div class="li-t">'+esc(r.title)+'</div></div><div class="chips" style="padding:.2rem 0 .2rem"><button class="chip" data-act="open-rem" data-id="'+esc(r.id)+'">Dar data</button>'+(simples?'<button class="chip" data-act="loose-note" data-id="'+esc(r.id)+'">Virar nota</button>':'')+'<button class="chip" data-act="loose-keep" data-id="'+esc(r.id)+'">Deixar assim</button></div></div>';}).join('')+'</div>';
+      if(lr.length)h+=secH('Lembretes sem data <span class="pill">'+lr.length+'</span>','<span class="hint">decida o destino</span>')+'<div class="group">'+lr.map(r=>{const simples=!(r.subtasks||[]).length&&!(r.images||[]).length&&!(r.files||[]).length;return '<div class="li static" style="flex-wrap:wrap"><div class="li-main" style="flex-basis:100%"><div class="li-t">'+esc(r.title)+'</div></div><div class="chips" style="padding:.2rem 0 .2rem"><button class="chip" data-act="open-rem" data-id="'+esc(r.id)+'">Dar data</button>'+(simples?'<button class="chip" data-act="loose-note" data-id="'+esc(r.id)+'">Virar nota</button>':'')+'<button class="chip" data-act="loose-keep" data-id="'+esc(r.id)+'">Deixar assim</button><button class="chip danger" data-act="loose-del" data-id="'+esc(r.id)+'">Excluir</button></div></div>';}).join('')+'</div>';
     }
   }
   return h;
@@ -2643,10 +2644,11 @@ const A={
   'tri-pick':async d=>{const it=triCur();if(!it||it.k!=='i')return;const l=S.lists.find(x=>x.id===d.lid);if(!l)return;
     if(!(await ask({title:'Mandar para a lista “'+(l.name||'Lista')+'”?',msg:it.text,ok:'Mandar'})))return;
     await Store.put('reminders',Object.assign(newRem('',l.id),{title:parseCapture(it.text).title||it.text}));await Store.del('inbox',it.id);triPaint();},
-  'tri-del':async()=>{const it=triCur();if(!it||it.k!=='i')return;if(!(await ask({title:'Descartar da caixa de entrada?',msg:it.text,ok:'Descartar',danger:true})))return;await Store.del('inbox',it.id);triPaint();},
+  'tri-del':async()=>{const it=triCur();if(!it||it.k!=='i')return;if(!(await ask({title:'Excluir da caixa de entrada?',msg:it.text,ok:'Excluir',danger:true})))return;await Store.del('inbox',it.id);triPaint();},
   'tri-rem':()=>{const it=triCur();if(!it)return;triClose();if(it.k==='i')A['inbox-rem']({id:it.id});else{const r=S.reminders.find(x=>x.id===it.id);if(r)openRem(r);}},
   'tri-note':()=>{const it=triCur();if(!it)return;if(it.k==='i'){triClose();A['inbox-note']({id:it.id});}else A['loose-note']({id:it.id}).then(()=>triPaint());},
   'tri-keep':()=>A['loose-keep']({id:(triCur()||{}).id}).then(()=>triPaint()),
+  'loose-del':async d=>{const r=S.reminders.find(x=>x.id===d.id);if(!r)return;if(!(await ask({title:'Excluir este lembrete?',msg:r.title,ok:'Excluir',danger:true})))return;await softDelete('reminders',r);toast('Excluído');},
   'loose-keep':async d=>{const r=S.reminders.find(x=>x.id===d.id);if(!r)return;
     if(!(await ask({title:'Deixar sem data?',msg:r.title+'\nEle sai da caixa de entrada e continua em Lembretes.',ok:'Deixar assim'})))return;
     await Store.put('reminders',Object.assign({},r,{noInbox:true}));},
@@ -2733,7 +2735,7 @@ const A={
     else openSheet('note',Object.assign(newNote(''),{title:t.slice(0,60),body:t}));},
   'inbox-rem':d=>{const i=S.inbox.find(x=>x.id===d.id);if(!i)return;const p=parseCapture(i.text);openSheet('rem',Object.assign(newRem(p.date||''),{title:p.title,time:p.time,repeat:p.repeat,repN:p.repN||1,repDays:p.repDays||[],repU:p.repU||'week'}),{fromInbox:i.id});},
   'inbox-note':d=>{const i=S.inbox.find(x=>x.id===d.id);if(!i)return;openSheet('note',Object.assign(newNote(''),{title:i.text.slice(0,60),body:i.text}),{fromInbox:i.id});},
-  'inbox-del':async d=>{const i=S.inbox.find(x=>x.id===d.id);if(!i)return;if(!(await ask({title:'Descartar da caixa de entrada?',msg:i.text,ok:'Descartar',danger:true})))return;await Store.del('inbox',d.id);toast('Descartado');},
+  'inbox-del':async d=>{const i=S.inbox.find(x=>x.id===d.id);if(!i)return;if(!(await ask({title:'Excluir da caixa de entrada?',msg:i.text,ok:'Excluir',danger:true})))return;await Store.del('inbox',d.id);toast('Excluído');},
   'ring-open':d=>{const r=S.rings[+d.i];S.rings.splice(+d.i,1);renderRings();const rem=S.reminders.find(x=>x.id===r.rid);if(rem)openRem(rem);},
   'ring-close':d=>{S.rings.splice(+d.i,1);renderRings();},
   export:()=>exportAll(),
