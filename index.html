@@ -171,10 +171,11 @@ input,textarea,select{font:inherit;font-size:1rem;color:var(--fg)}
 .pb-dots{display:flex;justify-content:space-between;margin-top:.8rem;padding:0 .3rem}
 .pb-d{display:flex;flex-direction:column;align-items:center;gap:.25rem;min-width:2rem}
 .pb-d i{font-style:normal;font-size:.8rem;font-weight:700;color:var(--muted)}
-.pb-d b{width:.7rem;height:.7rem;border-radius:50%;border:2px solid var(--line);background:transparent}
+.pb-d b{width:1.7rem;height:1.7rem;border-radius:50%;border:2px solid var(--line);background:transparent;display:flex;align-items:center;justify-content:center;font-size:.85rem;font-weight:800;font-style:normal;color:var(--accent-fg)}
 .pb-d.has b{background:var(--accent);border-color:var(--accent)}
 .pb-d.now i{color:var(--fg)}
 .pb-d.now b{box-shadow:0 0 0 3px var(--accent-soft)}
+.pb-d.now.has b{box-shadow:0 0 0 3px var(--accent-soft)}
 .pl-card{background:var(--surface);border-radius:1.1rem;padding:.9rem 1.05rem 1rem;margin-bottom:.8rem}
 .pl-card.today{box-shadow:inset 0 0 0 2px var(--accent)}
 .pl-top{display:flex;align-items:center;justify-content:space-between;gap:.6rem}
@@ -659,7 +660,7 @@ const S={tab:'hoje',raw:{},reminders:[],notes:[],events:[],inbox:[],folders:[],l
   folder:null,rview:null,q:'',rq:'',sheet:null,rings:[],assetsOk:false,dlOk:false,bw:true,weekend:false,fired:{},fs:20,theme:'auto',conf:'all',purged:false};
 const lsGet=k=>{try{return localStorage.getItem(k);}catch(e){return null;}};
 const lsSet=(k,v)=>{try{localStorage.setItem(k,v);}catch(e){}};
-const APP_V='v37';
+const APP_V='v38';
 const ERRLOG_KEY='nucleo-errlog';
 function logErr(where,e){try{const a=JSON.parse(localStorage.getItem(ERRLOG_KEY)||'[]');a.push({t:Date.now(),w:String(where).slice(0,40),m:String((e&&e.message)||e||'').slice(0,160)});while(a.length>30)a.shift();localStorage.setItem(ERRLOG_KEY,JSON.stringify(a));}catch(x){}}
 addEventListener('error',ev=>logErr('tela',ev.message||ev.error));
@@ -1426,45 +1427,31 @@ function planBtn(sm,today){
     const m0=mondayOf(new Date()),nHoje=dayCount(today),nLate=sm.late.length;
     let dots='';
     for(let i=0;i<7;i++){const d=addDays(m0,i),iso=isoDate(d),n=dayCount(iso);
-      dots+='<span class="pb-d'+(iso===today?' now':'')+(n?' has':'')+'"><i>'+DLET[d.getDay()]+'</i><b></b></span>';}
+      dots+='<span class="pb-d'+(iso===today?' now':'')+(n?' has':'')+'"><i>'+DLET[d.getDay()]+'</i><b class="num">'+(n?(n>99?'99+':n):'')+'</b></span>';}
     return '<button class="plan-btn" data-act="rview" data-v="plan"><span class="pb-top"><span class="pb-ic">'+ic('stack',1.3,2)+'</span><span class="pb-main"><span class="pb-t">Planner</span><span class="pb-s">'+esc(weekTitle(m0))+'</span></span>'
       +'<span class="pb-cnt"><span class="pb-hoje">Hoje <b class="num">'+nHoje+'</b></span>'+(nLate?'<span class="pb-late">'+nLate+(nLate===1?' atrasado':' atrasados')+'</span>':'')+'</span>'+chev()+'</span><span class="pb-dots">'+dots+'</span></button>';
   }catch(e){logErr('planner-botao',e);return '<button class="plan-btn" data-act="rview" data-v="plan"><span class="pb-top"><span class="pb-main"><span class="pb-t">Planner</span></span>'+chev()+'</span></button>';}
 }
-function planDay(d,today){
-  const iso=isoDate(d),isT=iso===today,items=dayItems(iso).filter(it=>it.kind==='ev'||(it.kind==='rem'&&!it.r.done)),show=items.slice(0,3),more=items.length-show.length;
-  let h='<div class="pl-card'+(isT?' today':'')+'" data-act="plan-day" data-v="'+iso+'"><div class="pl-top"><div class="pl-nm"><span class="pl-name">'+DNAME[d.getDay()]+'</span><span class="pl-date num">'+pad(d.getDate())+'/'+pad(d.getMonth()+1)+(isT?' · hoje':'')+'</span></div>'
-    +'<button class="mini" data-act="new-rem" data-date="'+iso+'" aria-label="Novo lembrete neste dia">'+ic('plus',1,2.6)+'</button></div>';
-  if(!items.length)h+='<div class="pl-free">Livre</div>';
-  else{
-    h+=show.map(it=>{const t=it.kind==='ev'?it.e.title:it.r.title;return '<div class="pl-item">'+(it.t?'<span class="pl-t num">'+esc(it.t)+'</span>':'')+'<span class="pl-tt">'+esc(t||'')+'</span></div>';}).join('');
-    if(more>0)h+='<div class="pl-more">+ '+more+(more===1?' item':' itens')+'</div>';
-  }
-  return h+'</div>';
+function planDayRow(d,today){
+  const iso=isoDate(d),isT=iso===today;
+  return '<div class="li ic dayrow'+(isT?' today':'')+'" data-act="plan-day" data-v="'+iso+'"><span class="li-ic">'+ic('list',1.3,2)+'</span><div class="li-main"><div class="li-t">'+DNAME[d.getDay()]+'</div><div class="li-s num">'+pad(d.getDate())+'/'+pad(d.getMonth()+1)+(isT?' · hoje':'')+'</div></div><span class="li-n num">'+dayCount(iso)+'</span>'+chev()+'</div>';
 }
 function planView(){
   try{
     const today=isoDate(new Date()),ws=S.weekStart,cur=isoDate(ws)===isoDate(mondayOf(new Date())),sm=smart();
     let h=subHdr('Lembretes','rview-back','Planner',weekTitle(ws));
     h+=navRow('week-prev','week-today','week-next',(cur?'Esta semana':'Ir para esta semana'),'Semana anterior','Próxima semana');
-    return h+planBody(ws,today,sm);
+    return h+planBody(ws,today);
   }catch(e){logErr('planner',e);return subHdr('Lembretes','rview-back','Planner','Planner')+'<div class="empty">Não consegui montar o planner agora.</div>';}
 }
-function planBody(ws,today,sm){
+function planBody(ws,today){
   let h='';
-  const late=sm.late.slice().sort(byDT);
-  if(late.length){
-    const movable=late.filter(r=>!r.repeat||r.repeat==='none').length;
-    h+='<div class="pl-late"><div class="pl-lh"><span>'+late.length+(late.length===1?' atrasado':' atrasados')+'</span>'+(movable?'<button class="chip" data-act="plan-late-today">Passar para hoje</button>':'')+'</div>'
-      +late.slice(0,3).map(r=>'<div class="pl-item" data-act="open-rem" data-id="'+esc(r.id)+'"><span class="pl-t num">'+esc(r.date?pad(parseISO(r.date).getDate())+'/'+pad(parseISO(r.date).getMonth()+1):'')+'</span><span class="pl-tt">'+esc(r.title||'')+'</span></div>').join('')
-      +(late.length>3?'<button class="pl-more lk" data-act="rview" data-v="s:late">Ver todos os '+late.length+'</button>':'')+'</div>';
-  }
   for(let i=0;i<7;i++){
     const d=addDays(ws,i),iso=isoDate(d);
-    if(i>=5&&!dayCount(iso)&&iso!==today)continue;
-    h+=planDay(d,today);
+    if(i>=5&&!dayCount(iso))continue;
+    h+=planDayRow(d,today);
   }
-  return h;
+  return '<div class="group" style="margin-top:.9rem">'+h+'</div>';
 }
 function remHome(){
   const sm=smart(),lm=lmap(),today=isoDate(new Date()),ws=S.weekStart;
@@ -2688,10 +2675,6 @@ const A={
   jump:d=>{const el=$(d.to);if(el&&el.offsetHeight)el.scrollIntoView({behavior:'smooth',block:'start'});else toast('Nada aqui por enquanto.');},
   rview:d=>go(()=>{S.rview=d.v;S.rq='';S.rfromPlan=0;}),
   'plan-day':d=>go(()=>{S.rview='d:'+d.v;S.rq='';S.rfromPlan=1;}),
-  'plan-late-today':async()=>{const today=isoDate(new Date()),list=smart().late.filter(r=>!r.repeat||r.repeat==='none');if(!list.length)return;
-    if(!(await ask({title:'Passar '+list.length+(list.length===1?' atrasado':' atrasados')+' para hoje?',msg:'A data muda para hoje. Se a hora já passou, a hora é tirada.',ok:'Passar para hoje'})))return;
-    const now=new Date();let n=0;for(const r of list){const keep=r.time&&dtOf(today,r.time)>now;await Store.put('reminders',Object.assign({},r,{date:today,time:keep?r.time:'',updatedAt:Date.now()}));n++;}
-    toast(n+(n===1?' lembrete passou':' lembretes passaram')+' para hoje');},
   'rview-back':()=>go(()=>{if(S.rview&&S.rview.indexOf('d:')===0&&S.rfromPlan){S.rview='plan';S.rfromPlan=0;}else{S.rview=null;S.rfromPlan=0;}}),
   'toggle-done-list':d=>{const m=hiddenDone();if(m[d.id])delete m[d.id];else m[d.id]=1;try{lsSet(HD_KEY,JSON.stringify(m));}catch(e){}render();},
   'day-prev':()=>{const iso=S.rview.slice(2);S.rview='d:'+isoDate(addDays(parseISO(iso),-1));render();},
