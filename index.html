@@ -629,7 +629,7 @@ const S={tab:'hoje',raw:{},reminders:[],notes:[],events:[],inbox:[],folders:[],l
   folder:null,rview:null,q:'',rq:'',sheet:null,rings:[],assetsOk:false,dlOk:false,bw:true,weekend:false,fired:{},fs:20,theme:'auto',conf:'all',purged:false};
 const lsGet=k=>{try{return localStorage.getItem(k);}catch(e){return null;}};
 const lsSet=(k,v)=>{try{localStorage.setItem(k,v);}catch(e){}};
-const APP_V='v35';
+const APP_V='v36';
 const ERRLOG_KEY='nucleo-errlog';
 function logErr(where,e){try{const a=JSON.parse(localStorage.getItem(ERRLOG_KEY)||'[]');a.push({t:Date.now(),w:String(where).slice(0,40),m:String((e&&e.message)||e||'').slice(0,160)});while(a.length>30)a.shift();localStorage.setItem(ERRLOG_KEY,JSON.stringify(a));}catch(x){}}
 addEventListener('error',ev=>logErr('tela',ev.message||ev.error));
@@ -985,7 +985,11 @@ async function softDelete(c,x){await Store.put(c,Object.assign({},x,{deletedAt:D
 async function restoreItem(c,x){const d=Object.assign({},x);delete d.deletedAt;await Store.put(c,d);}
 async function hardDelete(c,x){
   await Store.del(c,x.id);
-  const ids=(x.images||[]).concat((x.files||[]).map(f=>f.id),Object.values(x.drawSrc||{}));
+  let ids=(x.images||[]).concat((x.files||[]).map(f=>f.id),Object.values(x.drawSrc||{}));
+  /* nunca apagar um arquivo que outro item (ativo ou na lixeira) ainda usa */
+  const usado=new Set();
+  COLS.forEach(c=>(S.raw[c]||[]).forEach(o=>{if(o.id===x.id)return;(o.images||[]).forEach(i=>usado.add(i));(o.files||[]).forEach(f=>usado.add(f.id));Object.values(o.drawSrc||{}).forEach(i=>usado.add(i));}));
+  ids=ids.filter(id=>!usado.has(id));
   if(ids.length){const a=await getAssets();if(a)ids.forEach(id=>a.delete(id).catch(()=>{}));}
 }
 function purgeOld(){
@@ -2563,7 +2567,8 @@ async function openFile(f){
     else prev='<div class="fv-none">'+ic('file',3,1.6)+'<b>'+esc(f.name)+'</b><span class="note-s">'+esc(fmtSize(f.size))+' · este tipo de arquivo abre em outro app.</span></div>';
     el.querySelector('.fv-none').outerHTML=prev+'<div class="sheet-ft"><button class="btn primary grow" data-fv="share">'+ic('share',1,2.2)+'Abrir em outro app / salvar</button></div>';
   }catch(e){
-    const n=el.querySelector('.fv-none');if(n)n.innerHTML='<b>Não consegui abrir o arquivo.</b><span class="note-s">Confira a internet e tente de novo.</span>';
+    const perdido=/arquivo (400|404)/.test(String(e&&e.message));
+    const n=el.querySelector('.fv-none');if(n)n.innerHTML=perdido?'<b>Este arquivo não está mais guardado.</b><span class="note-s">Foi apagado do servidor. Toque em Editar, tire este arquivo e anexe de novo.</span>':'<b>Não consegui abrir o arquivo.</b><span class="note-s">Confira a internet e tente de novo.</span>';
   }
 }
 async function exportAll(){

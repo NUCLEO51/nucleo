@@ -54,5 +54,7 @@ t('caixa de entrada: campo rápido, selo na aba, caixa única com cartões', !/i
 t('caixa de entrada sempre visível', /Tudo organizado ✓/.test(html), true);
 t('notas: pastas antes dos filtros', html.indexOf('id="notesFolders"') < html.indexOf('<label for="q"') && /function notesFolders\(\)/.test(html), true);
 
+t('arquivos: não apagar anexo usado por outro item', /usado\.has\(id\)/.test(html) && /Este arquivo não está mais guardado/.test(html), true);
+
 console.log(ok + ' ok, ' + bad + ' falhas');
 process.exit(bad ? 1 : 0);
