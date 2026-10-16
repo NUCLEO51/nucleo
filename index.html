@@ -118,6 +118,9 @@ input,textarea,select{font:inherit;font-size:1rem;color:var(--fg)}
 .li-t{font-size:1rem;font-weight:500;overflow-wrap:anywhere}
 .li-s{font-size:.8rem;color:var(--muted);margin-top:.1rem;overflow-wrap:anywhere}
 .li-n{color:var(--muted);font-size:1rem;flex:none}
+.cnt{display:inline-flex;align-items:center;justify-content:center;min-width:2rem;height:2rem;padding:0 .5rem;border-radius:999px;background:#39FF14;color:#04230A;font-size:1rem;font-weight:800;line-height:1;flex:none;box-shadow:0 0 0 1px #39FF14,0 0 .6rem rgba(57,255,20,.8)}
+.cnt.sm{min-width:1.7rem;height:1.7rem;padding:0 .4rem;font-size:.85rem}
+.cnt.zero{background:transparent;color:var(--fg);box-shadow:inset 0 0 0 2px #39FF14,0 0 .45rem rgba(57,255,20,.45)}
 .li-chev{color:var(--muted);flex:none;display:flex}
 .li.done .li-t{text-decoration:line-through;color:var(--muted)}
 .li.add{color:var(--link);font-weight:600}
@@ -176,10 +179,10 @@ input,textarea,select{font:inherit;font-size:1rem;color:var(--fg)}
 .pb-d{display:flex;flex-direction:column;align-items:center;gap:.25rem;min-width:2rem}
 .pb-d i{font-style:normal;font-size:.8rem;font-weight:700;color:var(--muted)}
 .pb-d b{width:1.7rem;height:1.7rem;border-radius:50%;border:2px solid var(--line);background:transparent;display:flex;align-items:center;justify-content:center;font-size:.85rem;font-weight:800;font-style:normal;color:var(--accent-fg)}
-.pb-d.has b{background:var(--accent);border-color:var(--accent)}
+.pb-d.has b{background:#39FF14;border-color:#39FF14;color:#04230A;box-shadow:0 0 .5rem rgba(57,255,20,.8)}
 .pb-d.now i{color:var(--fg)}
 .pb-d.now b{box-shadow:0 0 0 3px var(--accent-soft)}
-.pb-d.now.has b{box-shadow:0 0 0 3px var(--accent-soft)}
+.pb-d.now.has b{box-shadow:0 0 0 3px var(--accent-soft),0 0 .5rem rgba(57,255,20,.8)}
 .pl-card{background:var(--surface);border-radius:1.1rem;padding:.9rem 1.05rem 1rem;margin-bottom:.8rem}
 .pl-card.today{box-shadow:inset 0 0 0 2px var(--accent)}
 .pl-top{display:flex;align-items:center;justify-content:space-between;gap:.6rem}
@@ -688,7 +691,7 @@ const S={tab:'hoje',raw:{},reminders:[],notes:[],events:[],inbox:[],folders:[],l
   folder:null,rview:null,q:'',rq:'',sheet:null,rings:[],assetsOk:false,dlOk:false,bw:true,weekend:false,fired:{},fs:20,theme:'auto',conf:'all',purged:false,gq:'',nsOpen:false,nx:{},nn:{}};
 const lsGet=k=>{try{return localStorage.getItem(k);}catch(e){return null;}};
 const lsSet=(k,v)=>{try{localStorage.setItem(k,v);}catch(e){}};
-const APP_V='v45';
+const APP_V='v46';
 const ERRLOG_KEY='nucleo-errlog';
 function logErr(where,e){try{const a=JSON.parse(localStorage.getItem(ERRLOG_KEY)||'[]');a.push({t:Date.now(),w:String(where).slice(0,40),m:String((e&&e.message)||e||'').slice(0,160)});while(a.length>30)a.shift();localStorage.setItem(ERRLOG_KEY,JSON.stringify(a));}catch(x){}}
 addEventListener('error',ev=>logErr('tela',ev.message||ev.error));
@@ -1327,6 +1330,7 @@ function subHdr(back,act,eyebrow,title,extra,color){
   return '<button class="back" data-act="'+act+'">'+ic('left',1.15,2.6)+esc(back)+'</button><header class="hd" style="padding-top:.2rem"><div style="min-width:0">'+(eyebrow?'<div class="eyebrow">'+esc(eyebrow)+'</div>':'')+'<h1'+(color?' style="color:'+esc(color)+'"':'')+'>'+esc(title)+'</h1></div><div class="hd-r">'+(extra||'')+'</div></header>';
 }
 function secH(title,right,id){return '<div class="sec-h"'+(id?' id="'+id+'"':'')+'><h2>'+title+'</h2>'+(right||'')+'</div>';}
+const cnt=(n,sm,label)=>'<span class="cnt'+(sm?' sm':'')+(+n?'':' zero')+' num"'+(label?' aria-label="'+label+'"':'')+'>'+n+'</span>';
 const chev=()=>'<span class="li-chev">'+ic('right',1,2.4)+'</span>';
 const PRI=['','!','!!','!!!'];
 /* quanto falta (ou quanto está atrasado) para o lembrete */
@@ -1448,7 +1452,7 @@ function weekTitle(ws){
 const DNAME=['DOMINGO','SEGUNDA','TERÇA','QUARTA','QUINTA','SEXTA','SÁBADO'];
 function dayRow(d,today){
   const iso=isoDate(d),isT=iso===today;
-  return '<div class="li ic dayrow'+(isT?' today':'')+'" data-act="rview" data-v="d:'+iso+'"><span class="li-ic">'+ic('list',1.3,2)+'</span><div class="li-main"><div class="li-t">'+DNAME[d.getDay()]+'</div><div class="li-s num">'+pad(d.getDate())+'/'+pad(d.getMonth()+1)+(isT?' · hoje':'')+'</div></div><span class="li-n num">'+dayCount(iso)+'</span>'+chev()+'</div>';
+  return '<div class="li ic dayrow'+(isT?' today':'')+'" data-act="rview" data-v="d:'+iso+'"><span class="li-ic">'+ic('list',1.3,2)+'</span><div class="li-main"><div class="li-t">'+DNAME[d.getDay()]+'</div><div class="li-s num">'+pad(d.getDate())+'/'+pad(d.getMonth()+1)+(isT?' · hoje':'')+'</div></div>'+cnt(dayCount(iso))+chev()+'</div>';
 }
 
 /* ---------- botão e página do Planner ---------- */
@@ -1460,12 +1464,12 @@ function planBtn(sm,today){
     for(let i=0;i<7;i++){const d=addDays(m0,i),iso=isoDate(d),n=dayCount(iso);
       dots+='<span class="pb-d'+(iso===today?' now':'')+(n?' has':'')+'"><i>'+DLET[d.getDay()]+'</i><b class="num">'+(n?(n>99?'99+':n):'')+'</b></span>';}
     return '<button class="plan-btn" data-act="rview" data-v="plan"><span class="pb-top"><span class="pb-ic">'+ic('stack',1.3,2)+'</span><span class="pb-main"><span class="pb-t">Planner</span><span class="pb-s">'+esc(weekTitle(m0))+'</span></span>'
-      +'<span class="pb-cnt"><span class="pb-hoje">Hoje <b class="num">'+nHoje+'</b></span>'+(nLate?'<span class="pb-late">'+nLate+(nLate===1?' atrasado':' atrasados')+'</span>':'')+'</span>'+chev()+'</span><span class="pb-dots">'+dots+'</span></button>';
+      +'<span class="pb-cnt"><span class="pb-hoje">Hoje '+cnt(nHoje,1)+'</span>'+(nLate?'<span class="pb-late">'+nLate+(nLate===1?' atrasado':' atrasados')+'</span>':'')+'</span>'+chev()+'</span><span class="pb-dots">'+dots+'</span></button>';
   }catch(e){logErr('planner-botao',e);return '<button class="plan-btn" data-act="rview" data-v="plan"><span class="pb-top"><span class="pb-main"><span class="pb-t">Planner</span></span>'+chev()+'</span></button>';}
 }
 function planDayRow(d,today){
   const iso=isoDate(d),isT=iso===today;
-  return '<div class="li ic dayrow'+(isT?' today':'')+'" data-act="plan-day" data-v="'+iso+'"><span class="li-ic">'+ic('list',1.3,2)+'</span><div class="li-main"><div class="li-t">'+DNAME[d.getDay()]+'</div><div class="li-s num">'+pad(d.getDate())+'/'+pad(d.getMonth()+1)+(isT?' · hoje':'')+'</div></div><span class="li-n num">'+dayCount(iso)+'</span>'+chev()+'</div>';
+  return '<div class="li ic dayrow'+(isT?' today':'')+'" data-act="plan-day" data-v="'+iso+'"><span class="li-ic">'+ic('list',1.3,2)+'</span><div class="li-main"><div class="li-t">'+DNAME[d.getDay()]+'</div><div class="li-s num">'+pad(d.getDate())+'/'+pad(d.getMonth()+1)+(isT?' · hoje':'')+'</div></div>'+cnt(dayCount(iso))+chev()+'</div>';
 }
 function planView(){
   try{
@@ -1632,7 +1636,7 @@ const isDraw=n=>n.kind==='desenho'||Object.keys(n.drawSrc||{}).length>0;
 const isScan=n=>n.kind==='scan'||((n.images||[]).length>Object.keys(n.drawSrc||{}).length&&n.kind!=='desenho');
 const noteSort=(a,b)=>(b.pinned?1:0)-(a.pinned?1:0)||(b.updatedAt||b.createdAt||0)-(a.updatedAt||a.createdAt||0);
 function folderRow(id,name,count,sub,icn,color){
-  return '<div class="li ic" data-act="open-folder" data-id="'+esc(id)+'"><span class="li-ic'+(icn?'':' folder')+'"'+(color?' style="color:'+color+'"':'')+'>'+ic(icn||'folder',1.35,1.9)+'</span><div class="li-main"><div class="li-t">'+esc(name)+'</div>'+(sub?'<div class="li-s">'+esc(sub)+'</div>':'')+'</div><span class="li-n num">'+count+'</span>'+chev()+'</div>';
+  return '<div class="li ic" data-act="open-folder" data-id="'+esc(id)+'"><span class="li-ic'+(icn?'':' folder')+'"'+(color?' style="color:'+color+'"':'')+'>'+ic(icn||'folder',1.35,1.9)+'</span><div class="li-main"><div class="li-t">'+esc(name)+'</div>'+(sub?'<div class="li-s">'+esc(sub)+'</div>':'')+'</div>'+cnt(count)+chev()+'</div>';
 }
 function subLabel(fid,fm){const k=kids(fid,fm).length;return k?k+(k===1?' subpasta':' subpastas'):'';}
 function curFolder(){
@@ -1673,7 +1677,7 @@ function subNode(f,fm,depth){
     +'<button class="arrbtn'+(open?' open':'')+'" data-act="nx-sub" data-id="'+esc(f.id)+'" aria-expanded="'+open+'" aria-label="'+(open?'Recolher ':'Abrir ')+esc(nm)+'">'+ic('right',1.05,2.6)+'</button>'
     +'<span class="li-ic folder">'+ic('folder',1.35,1.9)+'</span>'
     +'<div class="li-main" data-act="open-folder" data-id="'+esc(f.id)+'"><div class="li-t">'+esc(nm)+'</div>'+(sl?'<div class="li-s">'+esc(sl)+'</div>':'')+'</div>'
-    +'<span class="li-n num" aria-label="'+n+(n===1?' nota':' notas')+'">'+n+'</span></div>';
+    +cnt(n,0,n+(n===1?' nota':' notas'))+'</div>';
   if(open){
     const direct=S.notes.filter(x=>noteFolder(x,fm)===f.id).sort(noteSort);
     h+='<div class="sub-body">'
@@ -1688,7 +1692,7 @@ function notesBody(){
   const fm=fmap(),cf=curFolder(),q=S.nsOpen?norm(S.q||'').trim():'';
   if(q){
     const list=notesScope(cf,fm).filter(n=>norm((n.title||'')+' '+(n.body||'')+' '+(n.checklist||[]).map(c=>c.t).join(' ')+' '+(n.files||[]).map(f=>f.name).join(' ')).indexOf(q)>=0).sort(noteSort);
-    return secH('Resultados <span class="pill">'+list.length+'</span>',cf!==null?'<span class="hint">em '+esc(scopeName(cf,fm))+'</span>':'')+notesList(list,fm,true,emptyRow('Nada encontrado.','Tente outra palavra.'));
+    return secH('Resultados '+cnt(list.length,1),cf!==null?'<span class="hint">em '+esc(scopeName(cf,fm))+'</span>':'')+notesList(list,fm,true,emptyRow('Nada encontrado.','Tente outra palavra.'));
   }
   if(cf===null){
     const pinned=S.notes.filter(n=>n.pinned).length,scans=S.notes.filter(isScan).length,withF=S.notes.filter(n=>(n.files||[]).length).length;
@@ -1697,7 +1701,7 @@ function notesBody(){
     h+='<div class="group">'+folderRow('v:all','Todas as notas',S.notes.length,'','note')+folderRow('v:pin','Fixadas',pinned,'','pin')+folderRow('v:scan','Scans e documentos',scans,'','scan')+folderRow('v:draw','Desenhos',S.notes.filter(isDraw).length,'','edit')+folderRow('v:files','Com arquivos',withF,'','clip')+'</div>';
     const tags=allTags();
     h+=secH('Etiquetas','<span class="hint">escreva #palavra na nota</span>');
-    h+=tags.length?'<div class="tagchips">'+tags.map(t=>'<button class="chip" data-act="open-folder" data-id="t:'+esc(t[0])+'">#'+esc(t[0])+' <span style="color:var(--muted)">'+t[1]+'</span></button>').join('')+'</div>':'<div class="group">'+emptyRow('','Nenhuma etiqueta ainda. Ex.: #saúde, #casa.')+'</div>';
+    h+=tags.length?'<div class="tagchips">'+tags.map(t=>'<button class="chip" data-act="open-folder" data-id="t:'+esc(t[0])+'">#'+esc(t[0])+' '+cnt(t[1],1)+'</button>').join('')+'</div>':'<div class="group">'+emptyRow('','Nenhuma etiqueta ainda. Ex.: #saúde, #casa.')+'</div>';
     const nt=S.trash.filter(t=>t.c==='notes').length;
     h+='<div class="group" style="margin-top:1.2rem">'+folderRow('v:trash','Apagados recentemente',nt,'recupere em até 30 dias','trash','var(--muted)')+'</div>';
     return h;
@@ -1705,14 +1709,14 @@ function notesBody(){
   const real=!!cf&&cf.indexOf('v:')!==0&&cf.indexOf('t:')!==0;
   if(!real){
     const list=notesScope(cf,fm).sort(noteSort);
-    return secH('Notas <span class="pill">'+list.length+'</span>')+notesList(list,fm,cf!=='',emptyRow('Pasta vazia.','Crie uma nota ou escaneie um documento.'));
+    return secH('Notas '+cnt(list.length,1))+notesList(list,fm,cf!=='',emptyRow('Pasta vazia.','Crie uma nota ou escaneie um documento.'));
   }
   /* pasta de verdade: primeiro as notas dela (recolhíveis), depois as subpastas */
   const direct=S.notes.filter(n=>noteFolder(n,fm)===cf).sort(noteSort),ks=kids(cf,fm),open=!S.nn[cf];
-  let h='<div class="sec-h"><button class="sec-tog'+(open?' open':'')+'" data-act="nx-notes" data-id="'+esc(cf)+'" aria-expanded="'+open+'" aria-label="'+(open?'Recolher':'Mostrar')+' as notas desta pasta">'+ic('right',1.05,2.6)+'<h2>Notas <span class="pill">'+direct.length+'</span></h2></button></div>';
+  let h='<div class="sec-h"><button class="sec-tog'+(open?' open':'')+'" data-act="nx-notes" data-id="'+esc(cf)+'" aria-expanded="'+open+'" aria-label="'+(open?'Recolher':'Mostrar')+' as notas desta pasta">'+ic('right',1.05,2.6)+'<h2>Notas '+cnt(direct.length,1)+'</h2></button></div>';
   if(open)h+=direct.length?notesList(direct,fm,false,''):'<div class="group">'+(ks.length?emptyRow('Nenhuma nota nesta pasta.','Use os botões de cima para criar.'):emptyRow('Pasta vazia.','Crie uma nota ou escaneie um documento.'))+'</div>';
   if(ks.length){
-    h+=secH('Subpastas <span class="pill">'+ks.length+'</span>');
+    h+=secH('Subpastas '+cnt(ks.length,1));
     h+='<div class="group subtree">'+ks.map(k=>subNode(k,fm,1)).join('')+'</div>';
   }
   return h;
@@ -1729,7 +1733,7 @@ function viewNotas(){
   const fm=fmap(),cf=curFolder();
   if(cf==='v:trash')return trashView(['notes'],'Pastas','folder-back');
   let h='',ph='Buscar em todas as notas';
-  if(cf===null)h+=hdr('','Notas',notesTools('',{}));
+  if(cf===null)h+=hdr('','Notas','')+'<div class="notes-tools">'+notesTools('',{})+'</div>';
   else{
     const isTag=cf.indexOf('t:')===0,real=cf&&cf.indexOf('v:')!==0&&!isTag,f=real?fm[cf]:null,par=real?parentOf(f,fm):'';
     const backTo=par?(fm[par].name||'Sem nome'):'Pastas';
@@ -3011,7 +3015,7 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden){checkAlar
 window.__nucleo={Store:Store,Supa:Supa,S:S};
 if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost')){addEventListener('load',()=>{navigator.serviceWorker.register('sw.js').catch(()=>{});});}
 /* gancho só para os testes (no uso normal a marca não existe) */
-try{if(window.__NUCLEO_TEST__)window.__NUCLEO_TEST__={S,gsFind,gsBody,viewBusca,viewHoje,viewCaixa,viewNotas};}catch(e){}
+try{if(window.__NUCLEO_TEST__)window.__NUCLEO_TEST__={S,gsFind,gsBody,viewBusca,viewHoje,viewCaixa,viewNotas,planView,planBtn,smart};}catch(e){}
 buildTabs();render();Store.init();
 getAssets().then(a=>{S.assetsOk=!!a;});
 getDl().then(d=>{S.dlOk=!!d;});

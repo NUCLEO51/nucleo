@@ -172,7 +172,7 @@ ev(`__NUCLEO_TEST__.S.gq='';__NUCLEO_TEST__.S.tab='hoje';`);
     S.folders=[{id:'f1',name:'Documentos'}];S.notes=[];S.reminders=[];S.events=[];S.inbox=[];S.lists=[];`);
   const raiz = TT.viewNotas();
   const iS = raiz.indexOf('data-act="scan-new"'), iN = raiz.indexOf('data-act="new-note"'), iD = raiz.indexOf('data-act="draw-new"'), iA = raiz.indexOf('data-act="settings"');
-  t('notas: Escanear, Nova nota e Desenhar no topo, antes do Ajustes', iS > 0 && iS < iN && iN < iD && iD < iA, true);
+  t('notas: Escanear, Nova nota, Desenhar e Buscar numa fileira logo abaixo do título, antes da lista', iS > 0 && iS < iN && iN < iD && iD < raiz.indexOf('data-act="ns-toggle"') && raiz.indexOf('data-act="ns-toggle"') < raiz.indexOf('id="notesFolders"') && /class="notes-tools"/.test(raiz) && iA > 0 && iA < iS, true);
   t('notas: botões têm nome para leitura (aria-label)', /aria-label="Escanear"/.test(raiz) && /aria-label="Nova nota"/.test(raiz) && /aria-label="Desenhar"/.test(raiz), true);
   t('notas: a barra de baixo com os 3 botões saiu', !/class="actbar"/.test(raiz) && (raiz.match(/data-act="scan-new"/g) || []).length === 1 && (raiz.match(/data-act="new-note"/g) || []).length === 1, true);
   t('notas: Nova nota e Desenhar não repetem o mesmo ícone', /noteplus:/.test(html) && /brush:/.test(html), true);
@@ -317,6 +317,40 @@ ev(`__NUCLEO_TEST__.S.gq='';__NUCLEO_TEST__.S.tab='hoje';`);
   const raiz2 = TT.viewNotas();
   t('início de Notas: Buscar virou botão no topo e a barra fixa saiu', /data-act="ns-toggle"/.test(raiz2) && !/id="q"/.test(raiz2), true);
   ev(`__NUCLEO_TEST__.S.tab='hoje';__NUCLEO_TEST__.S.folder=null;__NUCLEO_TEST__.S.nsOpen=false;`);
+}
+
+
+// --- contagens em bolinha neon: Planner e Notas (v46); a tela Hoje não muda ---
+{
+  const TT = w.__NUCLEO_TEST__, today = ev(`isoDate(new Date())`);
+  ev(`const S=__NUCLEO_TEST__.S;S.ready=true;S.tab='notas';S.folder=null;S.q='';S.nsOpen=false;S.nx={};S.nn={};S.sheet=null;
+    S.folders=[{id:'f1',name:'Elisa'},{id:'f2',name:'Documentos',parent:'f1'},{id:'f3',name:'Fotos',parent:'f1'}];
+    S.notes=[{id:'n1',title:'A',body:'#saude',folder:'f1',checklist:[],files:[],images:[],createdAt:1},{id:'n2',title:'B',body:'',folder:'f2',checklist:[],files:[],images:[],createdAt:2}];
+    S.reminders=[{id:'r1',title:'Hoje coisa',notes:'',date:'${today}',time:'',done:false,list:'',subtasks:[],files:[]}];
+    S.events=[];S.inbox=[];S.lists=[];`);
+  t('neon: estilo da bolinha existe (cheia, pequena e só contorno para zero)', /\.cnt\{[^}]*#39FF14/.test(html) && /\.cnt\.sm\{/.test(html) && /\.cnt\.zero\{/.test(html), true);
+  // Planner
+  const pl = TT.planView();
+  t('planner: página abre sem erro', !/Não consegui montar o planner/.test(pl), true);
+  t('planner: números na frente dos dias estão em bolinha neon', (pl.match(/class="cnt/g) || []).length >= 5 && !/class="li-n num"/.test(pl), true);
+  t('planner: o dia de hoje mostra 1 em bolinha cheia e dia vazio mostra 0 só com contorno', /class="cnt num">1</.test(pl) && /class="cnt zero num">0</.test(pl), true);
+  const pb = TT.planBtn(TT.smart(), today);
+  t('planner: botão tem "Hoje N" em bolinha e os dias com itens em verde neon', /pb-hoje">Hoje <span class="cnt sm num">1</.test(pb) && /\.pb-d\.has b\{background:#39FF14/.test(html), true);
+  // Notas: início
+  ev(`__NUCLEO_TEST__.S.folder=null;`);
+  const raiz = TT.viewNotas();
+  t('notas início: contagens de pastas, tipos e apagados em bolinha neon', (raiz.match(/class="cnt/g) || []).length >= 8 && !/class="li-n num"/.test(raiz), true);
+  t('notas início: etiqueta com a contagem em bolinha pequena', /#saude <span class="cnt sm num">1</.test(raiz), true);
+  // Notas: dentro da pasta
+  ev(`__NUCLEO_TEST__.S.folder='f1';`);
+  const pasta = TT.viewNotas();
+  t('pasta: cabeçalhos Notas e Subpastas com a contagem em bolinha', /Notas <span class="cnt sm num">1</.test(pasta) && /Subpastas <span class="cnt sm num">2</.test(pasta), true);
+  t('pasta: cada subpasta com a contagem em bolinha (e 0 só com contorno)', /Documentos<\/div>[^]*?class="cnt num" aria-label="1 nota">1</.test(pasta) && /class="cnt zero num" aria-label="0 notas">0</.test(pasta), true);
+  t('pasta: sobrou nenhum número de contagem sem bolinha nas notas', !/class="li-n num"/.test(pasta) && !/class="pill"/.test(pasta), true);
+  // Hoje: sem mudança
+  ev(`__NUCLEO_TEST__.S.tab='hoje';__NUCLEO_TEST__.S.folder=null;`);
+  const hoje = TT.viewHoje();
+  t('hoje: continua igual (sem bolinhas neon, números dos botões como antes)', !/class="cnt/.test(hoje) && /class="tile-n num"/.test(hoje), true);
 }
 
 console.log(ok + ' ok, ' + bad + ' falhas');
