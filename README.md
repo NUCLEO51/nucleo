@@ -3,7 +3,8 @@
 Sistema pessoal de lembretes, notas e agenda (PWA). Este repositório é público e contém **somente código**.
 Nenhum dado pessoal, senha, chave secreta, backup ou foto deve entrar aqui.
 
-- `index.html` — protótipo atual do app.
+- `index.html` — o app (versão atual: v46).
+- `docs/GUIA-CHATGPT-NUCLEO.md` — **guia completo** do que existe, onde está e como mexer (para o ChatGPT e para quem continuar).
 - `supabase/001_schema.sql` — tabelas e regras de acesso (RLS) do banco.
 
 ## Regras
