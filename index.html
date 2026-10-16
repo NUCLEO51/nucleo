@@ -158,6 +158,15 @@ input,textarea,select{font:inherit;font-size:1rem;color:var(--fg)}
 .chip.on{background:var(--accent);color:var(--accent-fg)}
 .chip[disabled]{opacity:.45;cursor:default}
 .chips{display:flex;flex-wrap:wrap;gap:.5rem}
+.qcap{display:flex;gap:.5rem;margin:.8rem 0 .2rem}
+.qcap input{flex:1;min-width:0;min-height:3.2rem;border-radius:.9rem;border:1.5px solid var(--line);background:var(--surface);color:var(--fg);padding:0 .9rem;font-size:1.05rem}
+.qcap .btn{min-height:3.2rem;padding:0 1.1rem}
+.tab{position:relative}
+.tab-badge{position:absolute;top:.15rem;left:calc(50% + .45rem);min-width:1.35rem;height:1.35rem;padding:0 .35rem;border-radius:999px;background:#FF3B30;color:#fff;font-size:.78rem;font-weight:800;display:flex;align-items:center;justify-content:center;line-height:1}
+.tri-body{flex:1;overflow:auto;padding:1rem;display:flex;flex-direction:column;gap:1rem}
+.tri-card{background:var(--surface);border-radius:1.1rem;padding:1.3rem;font-size:1.45rem;font-weight:700;overflow-wrap:anywhere;line-height:1.3}
+.tri-btns{display:grid;grid-template-columns:1fr 1fr;gap:.8rem}
+.tri-btns .btn{min-height:4.2rem;font-size:1.15rem;white-space:normal}
 .li-pills{display:flex;flex-wrap:wrap;gap:.4rem;margin:.3rem 0 .1rem}
 .li-main{min-width:0;overflow-wrap:anywhere}
 .actbar{display:flex;flex-wrap:wrap;gap:.6rem;margin-top:1.2rem}
@@ -615,7 +624,7 @@ const S={tab:'hoje',raw:{},reminders:[],notes:[],events:[],inbox:[],folders:[],l
   folder:null,rview:null,q:'',rq:'',sheet:null,rings:[],assetsOk:false,dlOk:false,bw:true,weekend:false,fired:{},fs:20,theme:'auto',conf:'all',purged:false};
 const lsGet=k=>{try{return localStorage.getItem(k);}catch(e){return null;}};
 const lsSet=(k,v)=>{try{localStorage.setItem(k,v);}catch(e){}};
-const APP_V='v28';
+const APP_V='v29';
 const ERRLOG_KEY='nucleo-errlog';
 function logErr(where,e){try{const a=JSON.parse(localStorage.getItem(ERRLOG_KEY)||'[]');a.push({t:Date.now(),w:String(where).slice(0,40),m:String((e&&e.message)||e||'').slice(0,160)});while(a.length>30)a.shift();localStorage.setItem(ERRLOG_KEY,JSON.stringify(a));}catch(x){}}
 addEventListener('error',ev=>logErr('tela',ev.message||ev.error));
@@ -1293,19 +1302,49 @@ function navRow(prev,mid,next,label,pl,nl){return '<div class="navrow"><button c
 function tile(act,v,icn,cls,n,label){return '<button class="tile '+cls+'" data-act="'+act+'" data-v="'+v+'" data-to="'+v+'"><span class="tile-top"><span class="tile-ic">'+ic(icn,1.05,2.4)+'</span><span class="tile-n num">'+n+'</span></span><span class="tile-l">'+label+'</span></button>';}
 
 /* ---------- Hoje ---------- */
+function looseRems(){return S.reminders.filter(r=>!r.done&&!r.date&&!r.list&&!r.noInbox);}
+function inboxCount(){return S.inbox.length+looseRems().length;}
+function qcapSave(){
+  const el=$('qcapIn');if(!el)return;const text=el.value.trim();if(!text)return;
+  el.value='';
+  Store.put('inbox',{text,source:'digitado',createdAt:Date.now()}).then(()=>{render();}).catch(e=>logErr('anotar',e));
+}
+function triItems(){
+  return S.inbox.slice().sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)).map(i=>({k:'i',id:i.id,text:i.text,src:i.source?'via '+i.source:''}))
+    .concat(looseRems().map(r=>({k:'r',id:r.id,text:r.title,src:'lembrete sem data'})));
+}
+function triOpen(){S.triSkip=S.triSkip||{};triPaint();}
+function triClose(){const el=$('tri');if(el)el.remove();}
+function triPaint(mode){
+  let el=$('tri');if(!el){el=document.createElement('div');el.id='tri';el.className='fview';document.body.appendChild(el);}
+  const all=triItems(),left=all.filter(x=>!S.triSkip[x.k+x.id]),it=left[0];
+  let h='<div class="sheet-hd"><button class="txtbtn" data-act="tri-close">Fechar</button><h2>Organizar</h2><span style="width:3.5rem"></span></div><div class="tri-body">';
+  if(mode==='list'&&it){
+    h+='<div class="tri-card">'+esc(it.text)+'</div><div class="note-s">Em qual lista?</div><div class="tri-btns">'+(S.lists.length?S.lists.map(l=>'<button class="btn" data-act="tri-pick" data-lid="'+esc(l.id)+'">'+esc(l.name||'Lista')+'</button>').join(''):'<div class="note-s">Você ainda não tem listas.</div>')+'</div><button class="btn wide" data-act="tri-back">Voltar</button>';
+  }else if(!it){
+    h+='<div class="tri-card" style="text-align:center">'+(all.length?'Você pulou '+all.length+(all.length===1?' item.':' itens.'):'Tudo organizado ✓')+'</div>'+(all.length?'<button class="btn primary wide" data-act="tri-reset">Ver os pulados de novo</button>':'')+'<button class="btn wide" data-act="tri-close">Fechar</button>';
+  }else{
+    h+='<div class="note-s">Faltam '+left.length+(left.length===1?' item':' itens')+'</div><div class="tri-card">'+esc(it.text)+'</div>'+(it.src?'<div class="note-s">'+esc(it.src)+'</div>':'')+'<div class="tri-btns">';
+    if(it.k==='i')h+='<button class="btn primary" data-act="tri-rem">Lembrete</button><button class="btn primary" data-act="tri-note">Nota</button><button class="btn primary" data-act="tri-list">Lista</button><button class="btn danger" data-act="tri-del">Descartar</button>';
+    else{const r=S.reminders.find(x=>x.id===it.id)||{};const simples=!(r.subtasks||[]).length&&!(r.images||[]).length&&!(r.files||[]).length;h+='<button class="btn primary" data-act="tri-rem">Dar data</button>'+(simples?'<button class="btn primary" data-act="tri-note">Virar nota</button>':'')+'<button class="btn primary" data-act="tri-keep">Deixar assim</button>';}
+    h+='</div><button class="btn wide" data-act="tri-skip">Pular por agora</button>';
+  }
+  el.innerHTML=h+'</div>';
+}
+function triCur(){const left=triItems().filter(x=>!(S.triSkip||{})[x.k+x.id]);return left[0]||null;}
 function viewHoje(){
   const now=new Date(),today=isoDate(now),R=S.reminders;
   const overdue=R.filter(r=>!r.done&&r.date&&r.date<today).sort(byDT);
   const todayR=R.filter(r=>r.date===today).sort(byDT);
-  const nodate=R.filter(r=>!r.date&&!r.done).slice(0,8);
   const ag=agendaItems(today).filter(x=>x.kind==='ev');
   let h=hdr(DOWF[now.getDay()]+', '+now.getDate()+' de '+MESES[now.getMonth()],'Hoje',speakBtn('speak-day','Ouvir meu dia'));
   if(!S.ready)return h+'<div class="empty">Carregando…</div>';
+  h+='<div class="qcap"><input id="qcapIn" type="text" enterkeyhint="done" autocomplete="off" placeholder="Anotar algo rápido…" aria-label="Anotar algo rápido"><button class="btn primary" data-act="qcap-save">Anotar</button></div>';
   h+='<div class="tiles">'+
     tile('go-rem','s:hoje','today','t-blue',todayR.filter(r=>!r.done).length,'Lembretes hoje')+
     tile('go-agenda','hoje','cal','t-green',ag.length,'Agenda hoje')+
     tile('go-rem','s:prog','alert',overdue.length?'t-red t-late':'t-red',overdue.length,'Atrasados')+
-    tile('jump','sec-inbox','inbox','t-orange',S.inbox.length,'Caixa de entrada')+'</div>';
+    tile('jump','sec-inbox','inbox','t-orange',inboxCount(),'Caixa de entrada')+'</div>';
   h+='<div class="actbar"><button class="btn grow" data-act="rl-open">⏱ Cronômetro e temporizador</button></div>';
   h+='<div class="tiles">'+tile('fin-send','','inbox','t-green','+','Enviar ao FIN')+tile('fin-open','','calgrid','t-cyan','→','Abrir o FIN')+'</div>';
   h+=secH('Lembretes de hoje','<button class="txtbtn" data-act="new-rem" data-date="'+today+'">'+ic('plus',1,2.4)+'Novo</button>','sec-today');
@@ -1314,13 +1353,18 @@ function viewHoje(){
   h+='<div class="group">'+(ag.length?ag.map(x=>timeRow(x.time,x.title,'open-ev',x.id)).join(''):emptyRow('','Nenhum compromisso hoje.'))+'</div>';
   if(overdue.length){h+=secH('Atrasados <span class="pill danger">'+overdue.length+'</span>','<button class="txtbtn" data-act="late-today">Passar para hoje</button>','sec-late');h+='<div class="group">'+overdue.map(r=>remRow(r,true)).join('')+'</div>';}
   else h+='<div id="sec-late"></div>';
-  if(S.inbox.length){
-    h+=secH('Caixa de entrada','<span class="hint">falta organizar</span>','sec-inbox');
-    h+='<div class="group">'+S.inbox.slice().sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)).map(i=>
+  {
+    const nIn=inboxCount();
+    h+=secH('Caixa de entrada'+(nIn?' <span class="pill danger">'+nIn+'</span>':''),nIn?'<button class="txtbtn" data-act="tri-open">Organizar um por um</button>':'<span class="hint">tudo organizado</span>','sec-inbox');
+    if(!nIn)h+='<div class="group">'+emptyRow('Tudo organizado ✓','Nada solto para decidir. O que você anotar rápido cai aqui.')+'</div>';
+    else{
+      h+='<div class="group">'+S.inbox.slice().sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)).map(i=>
       '<div class="li static" style="flex-wrap:wrap"><div class="li-main" style="flex-basis:100%"><div class="li-t">'+esc(i.text)+'</div>'+(i.source?'<div class="li-s">via '+esc(i.source)+'</div>':'')+'</div>'+
       '<div class="chips" style="padding:.2rem 0 .2rem"><button class="chip" data-act="inbox-rem" data-id="'+esc(i.id)+'">Virar lembrete</button><button class="chip" data-act="inbox-note" data-id="'+esc(i.id)+'">Virar nota</button><button class="chip" data-act="inbox-del" data-id="'+esc(i.id)+'">Descartar</button></div></div>').join('')+'</div>';
-  }else h+='<div id="sec-inbox"></div>';
-  if(nodate.length){h+=secH('Sem data');h+='<div class="group">'+nodate.map(r=>remRow(r,false)).join('')+'</div>';}
+      const lr=looseRems();
+      if(lr.length)h+=secH('Lembretes sem data <span class="pill">'+lr.length+'</span>','<span class="hint">decida o destino</span>')+'<div class="group">'+lr.map(r=>{const simples=!(r.subtasks||[]).length&&!(r.images||[]).length&&!(r.files||[]).length;return '<div class="li static" style="flex-wrap:wrap"><div class="li-main" style="flex-basis:100%"><div class="li-t">'+esc(r.title)+'</div></div><div class="chips" style="padding:.2rem 0 .2rem"><button class="chip" data-act="open-rem" data-id="'+esc(r.id)+'">Dar data</button>'+(simples?'<button class="chip" data-act="loose-note" data-id="'+esc(r.id)+'">Virar nota</button>':'')+'<button class="chip" data-act="loose-keep" data-id="'+esc(r.id)+'">Deixar assim</button></div></div>';}).join('')+'</div>';
+    }
+  }
   return h;
 }
 
@@ -1501,13 +1545,15 @@ function notesBody(){
   const cf=curFolder();
   if(cf===null){
     const pinned=S.notes.filter(n=>n.pinned).length,scans=S.notes.filter(isScan).length,withF=S.notes.filter(n=>(n.files||[]).length).length;
-    let h='<div class="group" style="margin-top:1rem">'+folderRow('v:all','Todas as notas',S.notes.length,'','note')+folderRow('v:pin','Fixadas',pinned,'','pin')+folderRow('v:scan','Scans e documentos',scans,'','scan')+folderRow('v:draw','Desenhos',S.notes.filter(isDraw).length,'','edit')+folderRow('v:files','Com arquivos',withF,'','clip')+'</div>';
+    let h='';
     h+=secH('Pastas','<button class="txtbtn" data-act="new-folder" data-parent="">'+ic('folderPlus',1.1,2.2)+'Nova pasta</button>');
     h+='<div class="group">'+folderRow('','Geral',countIn('',fm),'notas sem pasta')+kids('',fm).map(f=>folderRow(f.id,f.name||'Sem nome',countIn(f.id,fm),subLabel(f.id,fm))).join('')+'</div>';
+    if(!S.folders.some(f=>norm(f.name||'')==='documentos'))h+='<div class="group" style="margin-top:1.2rem"><div class="li static" style="flex-wrap:wrap"><div class="li-main" style="flex-basis:100%"><div class="li-t">Pasta Documentos</div><div class="li-s">Cria a pasta com uma nota para cada pessoa (CPF, RG, CNH, SUS, endereço) e uma para o carro, tudo em branco para você preencher.</div></div><button class="btn primary wide" data-act="make-docs">Criar a pasta Documentos</button></div></div>';
+    h+=secH('Ver as notas por tipo');
+    h+='<div class="group">'+folderRow('v:all','Todas as notas',S.notes.length,'','note')+folderRow('v:pin','Fixadas',pinned,'','pin')+folderRow('v:scan','Scans e documentos',scans,'','scan')+folderRow('v:draw','Desenhos',S.notes.filter(isDraw).length,'','edit')+folderRow('v:files','Com arquivos',withF,'','clip')+'</div>';
     const tags=allTags();
     h+=secH('Etiquetas','<span class="hint">escreva #palavra na nota</span>');
     h+=tags.length?'<div class="tagchips">'+tags.map(t=>'<button class="chip" data-act="open-folder" data-id="t:'+esc(t[0])+'">#'+esc(t[0])+' <span style="color:var(--muted)">'+t[1]+'</span></button>').join('')+'</div>':'<div class="group">'+emptyRow('','Nenhuma etiqueta ainda. Ex.: #saúde, #casa.')+'</div>';
-    if(!S.folders.some(f=>norm(f.name||'')==='documentos'))h+='<div class="group" style="margin-top:1.2rem"><div class="li static" style="flex-wrap:wrap"><div class="li-main" style="flex-basis:100%"><div class="li-t">Pasta Documentos</div><div class="li-s">Cria a pasta com uma nota para cada pessoa (CPF, RG, CNH, SUS, endereço) e uma para o carro, tudo em branco para você preencher.</div></div><button class="btn primary wide" data-act="make-docs">Criar a pasta Documentos</button></div></div>';
     const nt=S.trash.filter(t=>t.c==='notes').length;
     h+='<div class="group" style="margin-top:1.2rem">'+folderRow('v:trash','Apagados recentemente',nt,'recupere em até 30 dias','trash','var(--muted)')+'</div>';
     return h;
@@ -1632,7 +1678,9 @@ function buildTabs(){
 function render(){
   ['hoje','lembretes','agenda','notas'].forEach(id=>{const b=$('tab-'+id);if(b)b.classList.toggle('on',S.tab===id);});
   renderRings();
+  try{const hb=$('tab-hoje');if(hb){let b=hb.querySelector('.tab-badge');const n=S.ready?inboxCount():0;if(n){if(!b){b=document.createElement('span');b.className='tab-badge';hb.appendChild(b);}b.textContent=n>99?'99+':String(n);}else if(b)b.remove();}}catch(e){}
   const active=document.activeElement;
+  if(S.tab==='hoje'&&active&&active.id==='qcapIn'&&$('qcapIn'))return;
   if(S.tab==='notas'&&active&&active.id==='q'&&$('notesBody')){$('notesBody').innerHTML=notesBody();return;}
   if(S.tab==='lembretes'&&active&&active.id==='rq'&&$('remBody')){renderRemBody();return;}
   const main=$('main'),st=main.scrollTop;
@@ -2580,6 +2628,26 @@ const A={
   'scan-new':d=>{if(!S.assetsOk){toast('Escanear precisa de permissão de edição neste navegador.');return;}S.pendingNew=true;S.pendingFolder=d.folder||'';pickFiles('cam');},
   'open-folder':d=>go(()=>{S.folder=d.id;S.q='';}),
   'folder-back':()=>go(()=>{const fm=fmap(),f=fm[S.folder];S.folder=f&&parentOf(f,fm)?parentOf(f,fm):null;}),
+  'qcap-save':()=>qcapSave(),
+  'tri-open':()=>triOpen(),
+  'tri-close':()=>{triClose();render();},
+  'tri-skip':()=>{const it=triCur();if(it){S.triSkip[it.k+it.id]=1;}triPaint();},
+  'tri-reset':()=>{S.triSkip={};triPaint();},
+  'tri-back':()=>triPaint(),
+  'tri-list':()=>triPaint('list'),
+  'tri-pick':async d=>{const it=triCur();if(!it||it.k!=='i')return;const l=S.lists.find(x=>x.id===d.lid);if(!l)return;
+    if(!(await ask({title:'Mandar para a lista “'+(l.name||'Lista')+'”?',msg:it.text,ok:'Mandar'})))return;
+    await Store.put('reminders',Object.assign(newRem('',l.id),{title:parseCapture(it.text).title||it.text}));await Store.del('inbox',it.id);triPaint();},
+  'tri-del':async()=>{const it=triCur();if(!it||it.k!=='i')return;if(!(await ask({title:'Descartar da caixa de entrada?',msg:it.text,ok:'Descartar',danger:true})))return;await Store.del('inbox',it.id);triPaint();},
+  'tri-rem':()=>{const it=triCur();if(!it)return;triClose();if(it.k==='i')A['inbox-rem']({id:it.id});else{const r=S.reminders.find(x=>x.id===it.id);if(r)openRem(r);}},
+  'tri-note':()=>{const it=triCur();if(!it)return;if(it.k==='i'){triClose();A['inbox-note']({id:it.id});}else A['loose-note']({id:it.id}).then(()=>triPaint());},
+  'tri-keep':()=>A['loose-keep']({id:(triCur()||{}).id}).then(()=>triPaint()),
+  'loose-keep':async d=>{const r=S.reminders.find(x=>x.id===d.id);if(!r)return;
+    if(!(await ask({title:'Deixar sem data?',msg:r.title+'\nEle sai da caixa de entrada e continua em Lembretes.',ok:'Deixar assim'})))return;
+    await Store.put('reminders',Object.assign({},r,{noInbox:true}));},
+  'loose-note':async d=>{const r=S.reminders.find(x=>x.id===d.id);if(!r)return;
+    if(!(await ask({title:'Virar nota?',msg:r.title+'\nVira uma nota em Geral. O lembrete vai para Apagados e pode ser recuperado em até 30 dias.',ok:'Virar nota'})))return;
+    await Store.put('notes',Object.assign(newNote(''),{title:(r.title||'').slice(0,60),body:r.notes||'',updatedAt:Date.now()}));await softDelete('reminders',r);},
   'new-folder':d=>openSheet('folder',{name:'',parent:d.parent||'',createdAt:Date.now()}),
   'make-docs':async()=>{
     if(S.folders.some(f=>norm(f.name||'')==='documentos'))return;
@@ -2678,6 +2746,7 @@ document.addEventListener('click',e=>{
   const el=e.target.closest('[data-act]');if(!el)return;
   const fn=A[el.dataset.act];if(fn){e.preventDefault();e.stopPropagation();fn(el.dataset);}
 });
+document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target&&e.target.id==='qcapIn'){e.preventDefault();qcapSave();}});
 document.addEventListener('input',e=>{
   const t=e.target;
   if(t.id==='q'){S.q=t.value;const b=$('notesBody');if(b)b.innerHTML=notesBody();return;}

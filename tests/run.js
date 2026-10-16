@@ -50,5 +50,9 @@ t('ícone novo no manifest e no app', /nucleo1/.test(html) && /nucleo1/.test(fs.
 
 t('pasta Documentos (modelo em branco)', /data-act="make-docs"/.test(html) && /'make-docs':async/.test(html), true);
 
+t('caixa de entrada: campo rápido, selo na aba, organizar um por um', /id="qcapIn"/.test(html) && /tab-badge/.test(html) && /data-act="tri-open"/.test(html) && /'tri-pick':async/.test(html), true);
+t('caixa de entrada sempre visível', /Tudo organizado ✓/.test(html), true);
+t('notas: pastas antes dos filtros', html.indexOf("secH('Pastas'") < html.indexOf("secH('Ver as notas por tipo')"), true);
+
 console.log(ok + ' ok, ' + bad + ' falhas');
 process.exit(bad ? 1 : 0);
