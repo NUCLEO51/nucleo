@@ -401,5 +401,73 @@ ev(`__NUCLEO_TEST__.S.gq='';__NUCLEO_TEST__.S.tab='hoje';`);
   ev(`__NUCLEO_TEST__.S.tab='hoje';__NUCLEO_TEST__.S.rview=null;__NUCLEO_TEST__.S.lc={};`);
 }
 
-console.log(ok + ' ok, ' + bad + ' falhas');
-process.exit(bad ? 1 : 0);
+
+// --- Mover lembrete de lista e nota de pasta; cores vivas das listas (v48) ---
+global.__pend = global.__pend || [];
+global.__pend.push((async () => {
+  const doc = w.document, clickAct = (el) => el.dispatchEvent(new w.MouseEvent('click', { bubbles: true, cancelable: true }));
+  const q = (sel) => doc.querySelector(sel), wait = (ms) => new Promise(r => setTimeout(r, ms));
+  const TT = w.__NUCLEO_TEST__, SS = 'JSON.stringify';
+  // cores vivas
+  ev(`const S=__NUCLEO_TEST__.S;S.ready=true;S.tab='hoje';S.sheet=null;S.rview=null;S.conf='del';
+    S.lists=[{id:'la',name:'Contas e dinheiro',color:'#B5584E',sections:[{id:'sa',t:'Atrasadas',done:false}]},{id:'lb',name:'Casa',color:'#5E8F6B',sections:[]},{id:'lc',name:'Amarela',color:'#C9961A',sections:[]},{id:'ld',name:'Azul',color:'#4F8DA3',sections:[]}];
+    S.reminders=[{id:'r1',title:'Trocar a lâmpada',notes:'',date:'',time:'',done:false,list:'lb',subtasks:[],files:[]}];
+    S.folders=[{id:'f1',name:'Elisa'},{id:'f2',name:'Documentos',parent:'f1'}];
+    S.notes=[{id:'n1',title:'CNH da Elisa',body:'',folder:'f1',checklist:[],files:[],images:[],createdAt:1}];
+    S.events=[];S.inbox=[];
+    S.raw={reminders:S.reminders.slice(),lists:S.lists.slice(),notes:S.notes.slice(),folders:S.folders.slice(),events:[],inbox:[]};`);
+  const home = TT.viewLembretes();
+  t('cores: as listas guardadas com cor apagada aparecem com a cor viva', /background:#FF3B30/.test(home) && /background:#1FC95B/.test(home) && /background:#FFB300/.test(home) && /background:#2F8CFF/.test(home) && !/background:#B5584E/.test(home) && !/background:#5E8F6B/.test(home), true);
+  t('cores: cor clara leva ícone escuro e cor escura leva ícone branco', /background:#FFB300;color:#111/.test(home) && /background:#2F8CFF;color:#fff/.test(home), true);
+  t('cores: paleta nova no código e antigas só como tradução', /const LCOL=\['#FFB300','#FF3B30','#FF7A00','#1FC95B','#A855F7','#2F8CFF','#98A2B3','#FF2D87'\]/.test(html) && /const MIDL=\['#C9961A'/.test(html), true);
+
+  // abrir o lembrete (tela de leitura) pela lista Casa
+  ev(`__NUCLEO_TEST__.S.tab='hoje';__NUCLEO_TEST__.S.rview='l:lb';`);
+  clickAct(q('#tab-lembretes'));
+  clickAct(q('#main [data-act="open-rem"][data-id="r1"]'));
+  t('mover lembrete: a tela de leitura tem o botão Mover para outra lista', !!q('#sheetRoot [data-act="move-open"]') && /Mover para outra lista/.test(q('#sheetRoot').innerHTML), true);
+  clickAct(q('#sheetRoot [data-act="move-open"]')); await wait(30);
+  const mv = q('#mvRoot');
+  t('mover lembrete: abre a escolha com listas, seção e a atual marcada', !!mv && mv.querySelectorAll('.mv-opt').length === 6 && /Contas e dinheiro/.test(mv.innerHTML) && /mv-opt sub/.test(mv.innerHTML) && /aria-current="true"[^>]*>(?:<span class="mv-dot"[^>]*><\/span>)?<span class="mv-t">Casa<\/span><span class="mv-now">agora<\/span>/.test(mv.innerHTML), true);
+  // cancelar não muda nada
+  clickAct(mv.querySelector('[data-mv="-1"]')); await wait(30);
+  t('mover lembrete: Cancelar fecha e não muda nada', !q('#mvRoot') && ev(`__NUCLEO_TEST__.S.reminders[0].list`) === 'lb', true);
+  // mover para a seção Atrasadas (sem confirmação: S.conf='del')
+  clickAct(q('#sheetRoot [data-act="move-open"]')); await wait(30);
+  const optSec = Array.from(q('#mvRoot').querySelectorAll('.mv-opt')).find(b => /Atrasadas/.test(b.textContent));
+  clickAct(optSec); await wait(80);
+  t('mover lembrete: foi para a lista e a seção escolhidas', ev(`__NUCLEO_TEST__.S.reminders[0].list`) === 'la' && ev(`__NUCLEO_TEST__.S.reminders[0].section`) === 'sa', true);
+  t('mover lembrete: a tela de leitura mostra a lista nova', /Contas e dinheiro › Atrasadas/.test(q('#sheetRoot').innerHTML), true);
+  // com confirmação ligada, pergunta antes
+  ev(`__NUCLEO_TEST__.S.conf='all';`);
+  clickAct(q('#sheetRoot [data-act="move-open"]')); await wait(30);
+  const optCasa = Array.from(q('#mvRoot').querySelectorAll('.mv-opt')).find(b => /Casa/.test(b.textContent));
+  clickAct(optCasa); await wait(60);
+  const ak = q('#askRoot');
+  t('mover lembrete: com confirmação ligada pergunta antes de mover', !!ak && /Mover para “Casa”\?/.test(ak.textContent) && ev(`__NUCLEO_TEST__.S.reminders[0].list`) === 'la', true);
+  await wait(600);
+  clickAct(q('#askRoot [data-ask="1"]')); await wait(80);
+  t('mover lembrete: depois de confirmar, foi mesmo para Casa e a seção zerou', ev(`__NUCLEO_TEST__.S.reminders[0].list`) === 'lb' && !ev(`__NUCLEO_TEST__.S.reminders[0].section`), true);
+  // escolher a lista em que já está não faz nada
+  clickAct(q('#sheetRoot [data-act="move-open"]')); await wait(30);
+  const optAgora = Array.from(q('#mvRoot').querySelectorAll('.mv-opt')).find(b => /agora/.test(b.textContent));
+  clickAct(optAgora); await wait(60);
+  t('mover lembrete: escolher onde já está não pergunta nem muda', !q('#askRoot') && ev(`__NUCLEO_TEST__.S.reminders[0].list`) === 'lb', true);
+
+  // nota: mover para outra pasta
+  ev(`const S=__NUCLEO_TEST__.S;S.conf='del';S.sheet=null;S.tab='lembretes';S.rview=null;S.folder='f1';`);
+  clickAct(q('#tab-notas'));
+  clickAct(q('#main [data-act="open-note"][data-id="n1"]'));
+  t('mover nota: a tela de leitura tem o botão Mover para outra pasta', !!q('#sheetRoot [data-act="move-open"]') && /Mover para outra pasta/.test(q('#sheetRoot').innerHTML), true);
+  clickAct(q('#sheetRoot [data-act="move-open"]')); await wait(30);
+  const mn = q('#mvRoot');
+  t('mover nota: escolha com Geral e as pastas em caminho, e a atual marcada', !!mn && /Geral \(sem pasta\)/.test(mn.innerHTML) && /Elisa › Documentos/.test(mn.innerHTML) && /<span class="mv-t">Elisa<\/span><span class="mv-now">agora<\/span>/.test(mn.innerHTML), true);
+  clickAct(Array.from(mn.querySelectorAll('.mv-opt')).find(b => /Elisa › Documentos/.test(b.textContent))); await wait(80);
+  t('mover nota: foi para a pasta escolhida e a leitura mostra o caminho novo', ev(`__NUCLEO_TEST__.S.notes[0].folder`) === 'f2' && /Elisa › Documentos/.test(q('#sheetRoot').innerHTML), true);
+  clickAct(q('#sheetRoot [data-act="move-open"]')); await wait(30);
+  clickAct(Array.from(q('#mvRoot').querySelectorAll('.mv-opt')).find(b => /Geral/.test(b.textContent))); await wait(80);
+  t('mover nota: também dá para tirar da pasta (Geral)', !ev(`__NUCLEO_TEST__.S.notes[0].folder`), true);
+  ev(`const S=__NUCLEO_TEST__.S;S.sheet=null;S.tab='hoje';S.folder=null;S.rview=null;S.conf='all';`);
+})());
+
+Promise.all(global.__pend || []).then(() => { console.log(ok + ' ok, ' + bad + ' falhas'); process.exit(bad ? 1 : 0); });
