@@ -48,5 +48,7 @@ t('registro de erros ligado', /addEventListener\('unhandledrejection'/.test(html
 t('limite de 50 por rodada nos alarmes atrasados', /nput>=50/.test(html), true);
 t('ícone novo no manifest e no app', /nucleo1/.test(html) && /nucleo1/.test(fs.readFileSync(path.join(__dirname, '..', 'manifest.webmanifest'), 'utf8')), true);
 
+t('pasta Documentos (modelo em branco)', /data-act="make-docs"/.test(html) && /'make-docs':async/.test(html), true);
+
 console.log(ok + ' ok, ' + bad + ' falhas');
 process.exit(bad ? 1 : 0);
