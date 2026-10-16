@@ -676,7 +676,7 @@ const S={tab:'hoje',raw:{},reminders:[],notes:[],events:[],inbox:[],folders:[],l
   folder:null,rview:null,q:'',rq:'',sheet:null,rings:[],assetsOk:false,dlOk:false,bw:true,weekend:false,fired:{},fs:20,theme:'auto',conf:'all',purged:false,gq:''};
 const lsGet=k=>{try{return localStorage.getItem(k);}catch(e){return null;}};
 const lsSet=(k,v)=>{try{localStorage.setItem(k,v);}catch(e){}};
-const APP_V='v42';
+const APP_V='v43';
 const ERRLOG_KEY='nucleo-errlog';
 function logErr(where,e){try{const a=JSON.parse(localStorage.getItem(ERRLOG_KEY)||'[]');a.push({t:Date.now(),w:String(where).slice(0,40),m:String((e&&e.message)||e||'').slice(0,160)});while(a.length>30)a.shift();localStorage.setItem(ERRLOG_KEY,JSON.stringify(a));}catch(x){}}
 addEventListener('error',ev=>logErr('tela',ev.message||ev.error));
@@ -1632,7 +1632,6 @@ function notesFolders(){
   const fm=fmap();let h='';
     h+=secH('Pastas','<button class="txtbtn" data-act="new-folder" data-parent="">'+ic('folderPlus',1.1,2.2)+'Nova pasta</button>');
     h+='<div class="group">'+folderRow('','Geral',countIn('',fm),'notas sem pasta')+kids('',fm).map(f=>folderRow(f.id,f.name||'Sem nome',countIn(f.id,fm),subLabel(f.id,fm))).join('')+'</div>';
-    if(!S.folders.some(f=>norm(f.name||'')==='documentos'))h+='<div class="group" style="margin-top:1.2rem"><div class="li static" style="flex-wrap:wrap"><div class="li-main" style="flex-basis:100%"><div class="li-t">Pasta Documentos</div><div class="li-s">Cria a pasta com uma nota para cada pessoa (CPF, RG, CNH, SUS, endereço) e uma para o carro, tudo em branco para você preencher.</div></div><button class="btn primary wide" data-act="make-docs">Criar a pasta Documentos</button></div></div>';
   return h;
 }
 function notesBody(){
@@ -2833,16 +2832,6 @@ const A={
     if(!(await ask({title:'Virar nota?',msg:r.title+'\nVira uma nota em Geral. O lembrete vai para Apagados e pode ser recuperado em até 30 dias.',ok:'Virar nota'})))return;
     await Store.put('notes',Object.assign(newNote(''),{title:(r.title||'').slice(0,60),body:r.notes||'',updatedAt:Date.now()}));await softDelete('reminders',r);},
   'new-folder':d=>openSheet('folder',{name:'',parent:d.parent||'',createdAt:Date.now()}),
-  'make-docs':async()=>{
-    if(S.folders.some(f=>norm(f.name||'')==='documentos'))return;
-    if(!(await ask({title:'Criar a pasta Documentos?',msg:'Cria a pasta e 5 notas em branco: Eu, Meu filho, Minha mãe, Minha mulher e Carro. Nada é preenchido por mim; você digita depois.',ok:'Criar'})))return;
-    const fid=await Store.put('folders',{name:'Documentos',parent:'',createdAt:Date.now()});
-    const pessoa=['Nome completo','CPF','RG','CNH (número)','Validade da CNH','Cartão do SUS','Título de eleitor','Endereço','Telefone'];
-    const carro=['Placa','Renavam','Chassi','Seguro (empresa e apólice)','Vencimento do licenciamento','Vencimento do IPVA'];
-    const mk=(t,f)=>({title:t,body:f.map(x=>x+': ').join('\n'),kind:'nota',pinned:false,folder:fid,checklist:[],images:[],createdAt:Date.now()});
-    for(const [t,f] of [['Eu',pessoa],['Meu filho',pessoa],['Minha mãe',pessoa],['Minha mulher',pessoa],['Carro',carro]])await Store.put('notes',mk(t,f));
-    render();
-  },
   'edit-folder':d=>{const f=S.folders.find(x=>x.id===d.id);if(f)openSheet('folder',clone(f));},
   'new-list':()=>openSheet('list',{name:'',color:LCOL[S.lists.length%LCOL.length],sections:[],createdAt:Date.now()}),
   'edit-list':d=>{const l=S.lists.find(x=>x.id===d.id);if(l)openSheet('list',Object.assign({color:LCOL[0],sections:[]},clone(l),{color:lcol(l.color)}));},

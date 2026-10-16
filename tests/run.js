@@ -48,7 +48,7 @@ t('registro de erros ligado', /addEventListener\('unhandledrejection'/.test(html
 t('limite de 50 por rodada nos alarmes atrasados', /nput>=50/.test(html), true);
 t('ícone novo no manifest e no app', /nucleo1/.test(html) && /nucleo1/.test(fs.readFileSync(path.join(__dirname, '..', 'manifest.webmanifest'), 'utf8')), true);
 
-t('pasta Documentos (modelo em branco)', /data-act="make-docs"/.test(html) && /'make-docs':async/.test(html), true);
+t('notas: botão Criar a pasta Documentos foi tirado', !/make-docs/.test(html) && !/Criar a pasta Documentos/.test(html), true);
 
 t('caixa de entrada: campo rápido, selo na aba, caixa única com cartões', !/id="qcapIn"/.test(html) && /f\.focus\(\{preventScroll/.test(html) && /tab-badge/.test(html) && /inb-card/.test(html) && /'loose-del'/.test(html) && !/Organizar um por um<\/button>/.test(html), true);
 t('caixa de entrada sempre visível', /Tudo organizado ✓/.test(html), true);
@@ -239,5 +239,12 @@ ev(`__NUCLEO_TEST__.S.gq='';__NUCLEO_TEST__.S.tab='hoje';`);
   ev(`__NUCLEO_TEST__.S.tab='hoje';__NUCLEO_TEST__.S.folder=null;__NUCLEO_TEST__.S.rview=null;`);
 }
 
+{
+  const TT = w.__NUCLEO_TEST__;
+  ev(`const S=__NUCLEO_TEST__.S;S.ready=true;S.tab='notas';S.folder=null;S.q='';S.folders=[];S.notes=[];S.reminders=[];S.events=[];S.inbox=[];S.lists=[];`);
+  const v = TT.viewNotas();
+  t('notas: sem pasta Documentos, a tela inicial não oferece criar', !/Pasta Documentos/.test(v) && !/Criar a pasta/.test(v) && /Nova pasta/.test(v), true);
+  ev(`__NUCLEO_TEST__.S.tab='hoje';`);
+}
 console.log(ok + ' ok, ' + bad + ' falhas');
 process.exit(bad ? 1 : 0);
