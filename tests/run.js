@@ -5,7 +5,7 @@ const vc = new VirtualConsole();
 vc.on('jsdomError', e => console.log('erro no app:', String(e.message).slice(0, 200), (e.detail && e.detail.stack || '').split('\n').slice(0,3).join(' | ')));
 const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
 const dom = new JSDOM(html, { runScripts: 'dangerously', url: 'https://nucleo51.github.io/nucleo/', pretendToBeVisual: true, virtualConsole: vc,
-  beforeParse(w) { w.matchMedia = w.matchMedia || (() => ({ matches: false, addListener() {}, addEventListener() {} })); w.scrollTo = () => {}; } });
+  beforeParse(w) { w.__NUCLEO_TEST__ = true; w.matchMedia = w.matchMedia || (() => ({ matches: false, addListener() {}, addEventListener() {} })); w.scrollTo = () => {}; } });
 const w = dom.window;
 const ev = s => w.eval(s);
 let ok = 0, bad = 0;
@@ -57,6 +57,64 @@ t('notas: pastas antes dos filtros', html.indexOf('id="notesFolders"') < html.in
 t('arquivos: não apagar anexo usado por outro item', /usado\.has\(id\)/.test(html) && /Este arquivo não está mais guardado/.test(html), true);
 
 t('planner: botão, página, atrasados e fim de semana só se houver itens', /function planBtn\(/.test(html) && /function planView\(/.test(html) && /function planDayRow\(/.test(html) && !/plan-late-today/.test(html) && /if\(i>=5&&!dayCount\(iso\)\)continue/.test(html) && !/Mostrar sábado e domingo/.test(html.slice(html.indexOf('function remHomeBody'),html.indexOf('function listRow'))), true);
+
+
+// --- busca geral (v39) ---
+const T = () => w.__NUCLEO_TEST__;
+ev(`const S=window.__NUCLEO_TEST__.S;S.ready=true;S.tab='hoje';
+S.folders=[{id:'f1',name:'Documentos'},{id:'f2',name:'Carro',parent:'f1'}];
+S.lists=[{id:'l1',name:'Mercado'}];
+S.reminders=[
+ {id:'r1',title:'Consulta médica',notes:'levar pedido do cardiologista',date:'2026-10-20',time:'09:00',done:false,list:'',subtasks:[],files:[]},
+ {id:'r2',title:'Comprar pão',notes:'',date:'2026-10-16',time:'',done:false,list:'l1',subtasks:[{t:'Manteiga',done:false}],files:[]},
+ {id:'r3',title:'Renovar documento',notes:'',date:'',time:'',done:true,list:'',subtasks:[],files:[{name:'CNH ELISA 2.pdf'}]}];
+S.events=[{id:'e1',title:'Reunião escola',notes:'sala 3',date:'2026-10-22',time:'14:00'}];
+S.notes=[{id:'n1',title:'Seguro do carro',body:'Apólice vence em março. Corretor: João',folder:'f2',checklist:[],files:[],createdAt:1}];
+S.inbox=[{id:'i1',text:'ligar para a seguradora',source:'siri',createdAt:1}];`);
+const gs = q => ev('(function(){const r=__NUCLEO_TEST__.gsFind(' + JSON.stringify(q) + ');return {rem:r.rem.map(x=>x.id),ev:r.ev.map(x=>x.id),note:r.note.map(x=>x.id),inbox:r.inbox.map(x=>x.id),folder:r.folder.map(x=>x.id),list:r.list.map(x=>x.id),total:r.total};})()');
+t('busca acha lembrete pelo título, sem acento', gs('medica').rem, ['r1']);
+t('busca acha texto dentro das observações', gs('cardiologista').rem, ['r1']);
+t('busca acha subtarefa', gs('manteiga').rem, ['r2']);
+t('busca acha nome de anexo', gs('cnh').rem, ['r3']);
+t('busca acha compromisso', gs('escola').ev, ['e1']);
+t('busca acha dentro do texto da nota', gs('apolice').note, ['n1']);
+t('busca acha nota pelo nome da pasta', gs('carro').note, ['n1']);
+t('busca acha pasta', gs('docum').folder, ['f1']);
+t('busca acha lista', gs('mercado').list, ['l1']);
+t('busca acha na caixa de entrada', gs('seguradora').inbox, ['i1']);
+t('busca com duas palavras exige as duas', gs('seguro carro').note, ['n1']);
+t('busca com duas palavras sem a segunda não acha', gs('seguro avião').total, 0);
+t('busca ignora maiúsculas', gs('REUNIÃO').ev, ['e1']);
+t('busca vazia: pede 2 letras', /pelo menos 2 letras/.test((ev('__NUCLEO_TEST__.S.gq="a"'), ev('__NUCLEO_TEST__.gsBody()'))), true);
+t('busca sem resultado avisa', /Nada encontrado/.test((ev('__NUCLEO_TEST__.S.gq="zzzzqq"'), ev('__NUCLEO_TEST__.gsBody()'))), true);
+t('busca mostra contagem e seções', /resultado/.test((ev('__NUCLEO_TEST__.S.gq="carro"'), ev('__NUCLEO_TEST__.gsBody()'))) && /Notas/.test((ev('__NUCLEO_TEST__.S.gq="carro"'), ev('__NUCLEO_TEST__.gsBody()'))), true);
+t('lembrete feito aparece marcado como feito', /feito/.test((ev('__NUCLEO_TEST__.S.gq="cnh"'), ev('__NUCLEO_TEST__.gsBody()'))), true);
+t('botão de busca na tela Hoje, ao lado de Ouvir e Ajustes', (() => { const h = ev('__NUCLEO_TEST__.viewHoje()'); const i = h.indexOf('data-act="gs-open"'), j = h.indexOf('data-act="speak-day"'), k = h.indexOf('data-act="settings"'); return i > 0 && i < j && j < k; })(), true);
+t('tela de busca tem campo, voltar e área de resultados', (() => { const h = ev('__NUCLEO_TEST__.viewBusca()'); return /id="gq"/.test(h) && /data-act="gs-back"/.test(h) && /id="gsBody"/.test(h); })(), true);
+t('busca: tela entra no render e mantém teclado', /busca:viewBusca/.test(html) && /active\.id==='gq'/.test(html), true);
+ev(`__NUCLEO_TEST__.S.gq='';__NUCLEO_TEST__.S.tab='hoje';`);
+
+
+// --- busca geral: fluxo de toque (abrir, digitar, resultado, voltar) ---
+{
+  const doc = w.document, clickAct = (el) => el.dispatchEvent(new w.MouseEvent('click', { bubbles: true, cancelable: true }));
+  const q = (sel) => doc.querySelector(sel);
+  ev(`__NUCLEO_TEST__.S.tab='lembretes'`);
+  clickAct(q('#tab-hoje'));                                   // vai para Hoje (re-desenha com os dados de teste)
+  t('fluxo: tela Hoje mostra o botão de busca', !!q('#main [data-act="gs-open"]'), true);
+  clickAct(q('#main [data-act="gs-open"]'));                  // toca na lupa
+  t('fluxo: abriu a tela de busca com o campo', !!q('#gq') && ev('__NUCLEO_TEST__.S.tab') === 'busca', true);
+  const inp = q('#gq'); inp.value = 'seguro';
+  inp.dispatchEvent(new w.Event('input', { bubbles: true }));
+  const body = q('#gsBody');
+  t('fluxo: digitou e apareceram resultados (nota)', /Seguro do carro/.test(body.innerHTML) && !!body.querySelector('[data-act="open-note"]'), true);
+  t('fluxo: campo continua o mesmo (teclado não fecha)', q('#gq') === inp, true);
+  clickAct(body.querySelector('[data-act="open-note"]'));      // toca no resultado
+  t('fluxo: tocar no resultado abre a nota', ev('__NUCLEO_TEST__.S.sheet&&__NUCLEO_TEST__.S.sheet.type') === 'notev', true);
+  ev('__NUCLEO_TEST__.S.sheet=null');
+  clickAct(q('#main [data-act="gs-back"]'));                  // Voltar
+  t('fluxo: Voltar leva para Hoje e limpa a busca', ev('__NUCLEO_TEST__.S.tab') === 'hoje' && ev('__NUCLEO_TEST__.S.gq') === '', true);
+}
 
 console.log(ok + ' ok, ' + bad + ' falhas');
 process.exit(bad ? 1 : 0);

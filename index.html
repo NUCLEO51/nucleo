@@ -249,6 +249,8 @@ input,textarea,select{font:inherit;font-size:1rem;color:var(--fg)}
 /* notas */
 .search{display:flex;align-items:center;gap:.5rem;background:var(--surface-2);border-radius:.8rem;padding:0 .8rem;min-height:2.7rem;margin-top:.8rem;color:var(--muted)}
 .search input{flex:1;min-width:0;border:0;outline:0;background:transparent;min-height:2.6rem}
+.search.big{min-height:3.3rem;margin-bottom:.4rem}
+.search.big input{font-size:1.15rem;min-height:3.1rem;color:var(--fg)}
 .thumb{width:2.4rem;height:2.9rem;border-radius:.4rem;background:var(--surface-2);color:var(--muted);display:flex;align-items:center;justify-content:center;overflow:hidden;flex:none}
 .thumb img{width:100%;height:100%;object-fit:cover;display:block}
 .li.note{--inset:4.15rem}
@@ -657,10 +659,10 @@ const LS='meu-sistema-v1';
 const DAY=864e5;
 const S={tab:'hoje',raw:{},reminders:[],notes:[],events:[],inbox:[],folders:[],lists:[],trash:[],loaded:{},ready:false,sync:'boot',pending:0,
   weekStart:mondayOf(new Date()),month:{y:new Date().getFullYear(),m:new Date().getMonth()},selDay:isoDate(new Date()),
-  folder:null,rview:null,q:'',rq:'',sheet:null,rings:[],assetsOk:false,dlOk:false,bw:true,weekend:false,fired:{},fs:20,theme:'auto',conf:'all',purged:false};
+  folder:null,rview:null,q:'',rq:'',sheet:null,rings:[],assetsOk:false,dlOk:false,bw:true,weekend:false,fired:{},fs:20,theme:'auto',conf:'all',purged:false,gq:''};
 const lsGet=k=>{try{return localStorage.getItem(k);}catch(e){return null;}};
 const lsSet=(k,v)=>{try{localStorage.setItem(k,v);}catch(e){}};
-const APP_V='v38';
+const APP_V='v39';
 const ERRLOG_KEY='nucleo-errlog';
 function logErr(where,e){try{const a=JSON.parse(localStorage.getItem(ERRLOG_KEY)||'[]');a.push({t:Date.now(),w:String(where).slice(0,40),m:String((e&&e.message)||e||'').slice(0,160)});while(a.length>30)a.shift();localStorage.setItem(ERRLOG_KEY,JSON.stringify(a));}catch(x){}}
 addEventListener('error',ev=>logErr('tela',ev.message||ev.error));
@@ -1377,7 +1379,7 @@ function viewHoje(){
   const overdue=R.filter(r=>!r.done&&r.date&&r.date<today).sort(byDT);
   const todayR=R.filter(r=>r.date===today).sort(byDT);
   const ag=agendaItems(today).filter(x=>x.kind==='ev');
-  let h=hdr(DOWF[now.getDay()]+', '+now.getDate()+' de '+MESES[now.getMonth()],'Hoje',speakBtn('speak-day','Ouvir meu dia'));
+  let h=hdr(DOWF[now.getDay()]+', '+now.getDate()+' de '+MESES[now.getMonth()],'Hoje',searchBtn()+speakBtn('speak-day','Ouvir meu dia'));
   if(!S.ready)return h+'<div class="empty">Carregando…</div>';
   h+='<div class="tiles">'+
     tile('go-rem','s:hoje','today','t-blue',todayR.filter(r=>!r.done).length,'Lembretes hoje')+
@@ -1717,6 +1719,76 @@ function rlRing_(sw,ms){
   const p=fmtParts(ms,sw),frac=rlFrac(sw,ms);
   return '<div class="rl-ring"><svg viewBox="0 0 200 200" aria-hidden="true"><circle class="rl-bg" cx="100" cy="100" r="90"/><circle id="rlArc" class="rl-arc"'+(!sw&&RL.tm.done?' style="stroke:var(--danger)"':'')+' cx="100" cy="100" r="90" stroke-dasharray="'+RL_C.toFixed(2)+'" stroke-dashoffset="'+(RL_C*(1-frac)).toFixed(2)+'" transform="rotate(-90 100 100)"/></svg><div class="rl-digits"><div class="rl-main num'+(p.long?' long':'')+'" id="rlMain">'+p.main+'</div><div class="rl-frac num" id="rlFrac">'+p.frac+'</div></div></div>';
 }
+/* ---------- busca geral (botão da tela Hoje) ---------- */
+function searchBtn(){return '<button class="iconbtn" data-act="gs-open" aria-label="Buscar em tudo">'+ic('search',1.2,2.2)+'</button>';}
+function gsWords(q){return norm(q||'').split(/\s+/).filter(Boolean);}
+function gsHit(text,ws){const t=norm(String(text||''));return ws.every(w=>t.indexOf(w)>=0);}
+function gsSnip(text,ws){
+  const raw=String(text||'').replace(/\s+/g,' ').trim();if(!raw)return '';
+  const n=norm(raw);let at=-1;
+  for(const w of ws){const i=n.indexOf(w);if(i>=0&&(at<0||i<at))at=i;}
+  if(at<0)return '';
+  const a=Math.max(0,at-25),b=Math.min(raw.length,at+80);
+  return (a>0?'…':'')+raw.slice(a,b)+(b<raw.length?'…':'');
+}
+function gsWhy(fields,ws){
+  for(const f of fields){
+    if(!f[1])continue;
+    const t=norm(String(f[1]));
+    if(ws.some(w=>t.indexOf(w)>=0))return f[0]+': '+gsSnip(f[1],ws);
+  }
+  return '';
+}
+function gsRow(icn,title,sub,why,attrs,done){
+  return '<div class="li ic'+(done?' done':'')+'" '+attrs+'><span class="li-ic">'+ic(icn,1.2,2)+'</span><div class="li-main"><div class="li-t">'+esc(title||'Sem título')+'</div>'+(sub?'<div class="li-s">'+esc(sub)+'</div>':'')+(why?'<div class="li-note">'+esc(why)+'</div>':'')+'</div>'+chev()+'</div>';
+}
+function gsFind(q){
+  const ws=gsWords(q),fm=fmap(),lm=lmap(),today=isoDate(new Date()),out={};
+  out.rem=S.reminders.filter(r=>gsHit([r.title,r.notes,(r.subtasks||[]).map(x=>x.t).join(' '),(r.files||[]).map(f=>f.name).join(' '),(lm[r.list]&&lm[r.list].name)||''].join(' '),ws))
+    .sort((a,b)=>(a.done?1:0)-(b.done?1:0)||byDT(a,b));
+  out.ev=S.events.filter(e=>gsHit([e.title,e.notes].join(' '),ws)).sort((a,b)=>String(a.date||'').localeCompare(String(b.date||''))||String(a.time||'').localeCompare(String(b.time||'')));
+  out.note=S.notes.filter(n=>{const fid=noteFolder(n,fm);return gsHit([n.title,n.body,(n.checklist||[]).map(c=>c.t).join(' '),(n.files||[]).map(f=>f.name).join(' '),fid?pathOf(fid,fm).join(' '):''].join(' '),ws);}).sort(noteSort);
+  out.inbox=S.inbox.filter(i=>gsHit(i.text,ws));
+  out.folder=S.folders.filter(f=>gsHit(f.name,ws));
+  out.list=S.lists.filter(l=>gsHit(l.name,ws));
+  out.total=out.rem.length+out.ev.length+out.note.length+out.inbox.length+out.folder.length+out.list.length;
+  out.ws=ws;
+  return out;
+}
+function gsBody(){
+  if(!S.ready)return '<div class="empty">Carregando…</div>';
+  const q=S.gq||'',ws=gsWords(q);
+  if(norm(q).replace(/\s/g,'').length<2)return '<div class="group">'+emptyRow('Digite pelo menos 2 letras.','Procuro em lembretes, compromissos, notas, anexos, pastas e listas.')+'</div>';
+  const r=gsFind(q),fm=fmap(),lm=lmap(),CAP=40,today=isoDate(new Date());
+  if(!r.total)return '<div class="group">'+emptyRow('Nada encontrado.','Tente outra palavra ou menos letras.')+'</div>';
+  let h='<div class="note-s" style="margin:.2rem .2rem .6rem"><b>'+r.total+'</b> '+(r.total===1?'resultado':'resultados')+' · toque para abrir</div>';
+  const sec=(title,arr,fn)=>{if(!arr.length)return;h+=secH(title+' <span class="pill">'+arr.length+'</span>')+'<div class="group">'+arr.slice(0,CAP).map(fn).join('')+(arr.length>CAP?emptyRow('','Mostrando os '+CAP+' primeiros. Digite mais letras para afinar.'):'')+'</div>';};
+  sec('Lembretes',r.rem,x=>{
+    const bits=[];if(x.done)bits.push('feito');if(x.date)bits.push(relDay(x.date,today));if(x.time)bits.push(x.time);if(lm[x.list]&&lm[x.list].name)bits.push(lm[x.list].name);
+    const why=gsWhy([['Observações',x.notes],['Subtarefa',(x.subtasks||[]).map(s=>s.t).filter(Boolean).join('; ')],['Anexo',(x.files||[]).map(f=>f.name).join('; ')]],ws);
+    return gsRow(x.done?'check':'bell',x.title,bits.join(' · '),why,'data-act="open-rem" data-id="'+esc(x.id)+'"',x.done);
+  });
+  sec('Compromissos',r.ev,x=>{
+    const bits=[];if(x.date)bits.push(relDay(x.date,today));if(x.time)bits.push(x.time);
+    return gsRow('cal',x.title,bits.join(' · '),gsWhy([['Observações',x.notes]],ws),'data-act="open-ev" data-id="'+esc(x.id)+'"');
+  });
+  sec('Notas',r.note,x=>{
+    const fid=noteFolder(x,fm),bits=[fid?pathOf(fid,fm).join(' › '):'Geral'];
+    const ts=x.updatedAt||x.createdAt;if(ts)bits.push(relDay(isoDate(new Date(ts)),today));
+    const why=gsWhy([['Texto',x.body],['Item',(x.checklist||[]).map(c=>c.t).filter(Boolean).join('; ')],['Arquivo',(x.files||[]).map(f=>f.name).join('; ')]],ws);
+    return gsRow(x.kind==='scan'?'scan':((x.checklist||[]).length?'list':'note'),x.title,bits.join(' · '),why,'data-act="open-note" data-id="'+esc(x.id)+'"');
+  });
+  sec('Caixa de entrada',r.inbox,x=>gsRow('inbox',x.text,x.source?'via '+x.source:'solto','', 'data-act="gs-inbox"'));
+  sec('Pastas',r.folder,x=>gsRow('folder',x.name,pathOf(x.id,fm).join(' › ')+' · '+countIn(x.id,fm)+' notas','','data-act="gs-folder" data-id="'+esc(x.id)+'"'));
+  sec('Listas',r.list,x=>gsRow('list',x.name,S.reminders.filter(y=>y.list===x.id&&!y.done).length+' lembretes abertos','','data-act="go-rem" data-v="l:'+esc(x.id)+'"'));
+  return h;
+}
+function viewBusca(){
+  let h=subHdr('Hoje','gs-back','Lembretes, compromissos, notas, anexos…','Buscar em tudo');
+  h+='<div class="search big">'+ic('search',1.15,2.2)+'<label for="gq" class="sr">Buscar em tudo</label><input id="gq" type="search" placeholder="Digite uma palavra" value="'+esc(S.gq)+'" autocomplete="off" autocapitalize="off" enterkeyhint="search"></div>';
+  h+='<div id="gsBody">'+gsBody()+'</div>';
+  return h;
+}
 function viewRelogio(){
   const sw=RL.sw,tm=RL.tm,rb=(act,cls,label)=>'<button class="rl-btn '+cls+'" data-act="'+act+'">'+label+'</button>';
   let h=subHdr('Hoje','rl-back','Cronômetro e temporizador','Relógio');
@@ -1756,8 +1828,9 @@ function render(){
   if(S.tab==='hoje'&&active&&active.id==='qcapIn'&&$('qcapIn'))return;
   if(S.tab==='notas'&&active&&active.id==='q'&&$('notesBody')){$('notesBody').innerHTML=notesBody();const nf=$('notesFolders');if(nf)nf.style.display=S.q?'none':'';return;}
   if(S.tab==='lembretes'&&active&&active.id==='rq'&&$('remBody')){renderRemBody();return;}
+  if(S.tab==='busca'&&active&&active.id==='gq'&&$('gsBody')){$('gsBody').innerHTML=gsBody();return;}
   const main=$('main'),st=main.scrollTop;
-  main.innerHTML=({hoje:viewHoje,lembretes:viewLembretes,agenda:viewAgenda,notas:viewNotas,relogio:viewRelogio})[S.tab]();
+  main.innerHTML=({hoje:viewHoje,lembretes:viewLembretes,agenda:viewAgenda,notas:viewNotas,relogio:viewRelogio,busca:viewBusca})[S.tab]();
   main.scrollTop=st;
 }
 function renderRemBody(){const b=$('remBody');if(!b)return;const ws=S.weekStart;b.innerHTML=remHomeBody(smart(),lmap(),isoDate(new Date()),ws,isoDate(ws)===isoDate(mondayOf(new Date())));}
@@ -2789,6 +2862,10 @@ const A={
   'cap-mode':d=>{S.sheet.draft.mode=d.m;renderSheet();},
   'rl-open':()=>go(()=>{S.tab='relogio';}),
   'rl-back':()=>go(()=>{S.tab='hoje';}),
+  'gs-open':()=>{go(()=>{S.tab='busca';S.gq='';});const i=$('gq');if(i)try{i.focus();}catch(e){}},
+  'gs-back':()=>go(()=>{S.tab='hoje';S.gq='';}),
+  'gs-folder':d=>go(()=>{S.tab='notas';S.folder=d.id;S.q='';}),
+  'gs-inbox':()=>{go(()=>{S.tab='hoje';});setTimeout(()=>{const el=$('sec-inbox');if(el&&el.offsetHeight)el.scrollIntoView({block:'start'});},60);},
   'rl-mode':d=>{RL.mode=d.v==='tm'?'tm':'sw';rlSave();render();},
   'rl-sw-start':()=>{const sw=RL.sw;if(sw.run){sw.acc=swMs();sw.run=false;}else{sw.t0=Date.now();sw.run=true;rlWake();}rlSave();render();},
   'rl-sw-lap':()=>{if(!RL.sw.run)return;RL.sw.laps.unshift({t:swMs()});rlSave();render();},
@@ -2827,6 +2904,7 @@ document.addEventListener('input',e=>{
   const t=e.target;
   if(t.id==='q'){S.q=t.value;const b=$('notesBody');if(b)b.innerHTML=notesBody();const nf=$('notesFolders');if(nf)nf.style.display=S.q?'none':'';return;}
   if(t.id==='rq'){S.rq=t.value;renderRemBody();return;}
+  if(t.id==='gq'){S.gq=t.value;const b=$('gsBody');if(b)b.innerHTML=gsBody();return;}
   if(!S.sheet)return;
   if(t.dataset.bind!==undefined){
     setSheetField(t.dataset.bind,t.type==='checkbox'?t.checked:t.value);
@@ -2834,6 +2912,7 @@ document.addEventListener('input',e=>{
   }else if(t.dataset.subText!==undefined){S.sheet.draft[t.dataset.subK][+t.dataset.subText].t=t.value;}
   else if(t.dataset.alMsg!==undefined){const a=S.sheet.draft.alarms.find(x=>x.id===t.dataset.alMsg);if(a)a.msg=t.value;}
 });
+document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target&&e.target.id==='gq')e.target.blur();});
 document.addEventListener('change',e=>{
   const t=e.target;
   if(t.id==='fileCam'||t.id==='fileLib'){onFiles(t);return;}
@@ -2858,6 +2937,8 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden){checkAlar
 
 window.__nucleo={Store:Store,Supa:Supa,S:S};
 if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost')){addEventListener('load',()=>{navigator.serviceWorker.register('sw.js').catch(()=>{});});}
+/* gancho só para os testes (no uso normal a marca não existe) */
+try{if(window.__NUCLEO_TEST__)window.__NUCLEO_TEST__={S,gsFind,gsBody,viewBusca,viewHoje};}catch(e){}
 buildTabs();render();Store.init();
 getAssets().then(a=>{S.assetsOk=!!a;});
 getDl().then(d=>{S.dlOk=!!d;});
