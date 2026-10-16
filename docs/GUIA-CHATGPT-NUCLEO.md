@@ -83,7 +83,7 @@ App pessoal do Marcelo, instalado no iPhone como **PWA** (página que vira app).
 - `docs/` — este guia. `README.md` aponta para ele.
 
 ### 2.3 Como o `index.html` é montado (importante para mexer no código)
-- **Três scripts.** (1) `<script id="lib">`: funções puras que os testes enxergam direto (`parseCapture` — entende frases de data/hora; `repNext` — próxima repetição etc.). (2) O **script principal**, dentro de uma função isolada com `'use strict'`: estado, banco, telas, ações. (3) Um pequeno script do botão flutuante «← Voltar».
+- **Três scripts.** (1) o script com `id="lib"`: funções puras que os testes enxergam direto (`parseCapture` — entende frases de data/hora; `repNext` — próxima repetição etc.). (2) O **script principal**, dentro de uma função isolada com `'use strict'`: estado, banco, telas, ações. (3) Um pequeno script do botão flutuante «← Voltar».
 - **Estado global `S`:** aba atual (`S.tab`), página aberta em Lembretes (`S.rview`), pasta aberta em Notas (`S.folder`), busca (`S.q`, `S.nsOpen`), setinhas abertas (`S.nx`, `S.nn`, `S.lc`), ajustes (`S.fs` tamanho, `S.conf` confirmação, `S.theme`), folha aberta (`S.sheet`), etc. Os itens ficam em `S.reminders`, `S.notes`, `S.events`, `S.inbox`, `S.folders`, `S.lists` (versões filtradas de `S.raw`, que guarda tudo; `partition()` recalcula uma a partir da outra).
 - **`render()`** redesenha a aba atual e **preserva a rolagem**. **`go(fn)`** executa `fn`, redesenha e **volta ao topo**. Para abrir/recolher sem pular a tela, use `render()` direto.
 - **Ações por toque:** todo botão tem `data-act="nome"` e um objeto de ações (`A`) trata o clique por delegação (um único ouvinte no documento). Para criar um botão novo: `data-act` + uma entrada em `A`.
