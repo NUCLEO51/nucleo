@@ -629,7 +629,7 @@ const S={tab:'hoje',raw:{},reminders:[],notes:[],events:[],inbox:[],folders:[],l
   folder:null,rview:null,q:'',rq:'',sheet:null,rings:[],assetsOk:false,dlOk:false,bw:true,weekend:false,fired:{},fs:20,theme:'auto',conf:'all',purged:false};
 const lsGet=k=>{try{return localStorage.getItem(k);}catch(e){return null;}};
 const lsSet=(k,v)=>{try{localStorage.setItem(k,v);}catch(e){}};
-const APP_V='v34';
+const APP_V='v35';
 const ERRLOG_KEY='nucleo-errlog';
 function logErr(where,e){try{const a=JSON.parse(localStorage.getItem(ERRLOG_KEY)||'[]');a.push({t:Date.now(),w:String(where).slice(0,40),m:String((e&&e.message)||e||'').slice(0,160)});while(a.length>30)a.shift();localStorage.setItem(ERRLOG_KEY,JSON.stringify(a));}catch(x){}}
 addEventListener('error',ev=>logErr('tela',ev.message||ev.error));
@@ -1344,7 +1344,6 @@ function viewHoje(){
   const ag=agendaItems(today).filter(x=>x.kind==='ev');
   let h=hdr(DOWF[now.getDay()]+', '+now.getDate()+' de '+MESES[now.getMonth()],'Hoje',speakBtn('speak-day','Ouvir meu dia'));
   if(!S.ready)return h+'<div class="empty">Carregando…</div>';
-  h+='<div class="qcap"><input id="qcapIn" type="text" enterkeyhint="done" autocomplete="off" placeholder="Anotar algo rápido…" aria-label="Anotar algo rápido"><button class="btn primary" data-act="qcap-save">Anotar</button></div>';
   h+='<div class="tiles">'+
     tile('go-rem','s:hoje','today','t-blue',todayR.filter(r=>!r.done).length,'Lembretes hoje')+
     tile('go-agenda','hoje','cal','t-green',ag.length,'Agenda hoje')+
@@ -1845,7 +1844,7 @@ function renderSheet(focus){
   const old=$('sheetBody'),st=old?old.scrollTop:0;
   $('sheetRoot').innerHTML=({remv:sheetRemV,notev:sheetNoteV,rem:sheetRem,ev:sheetEv,note:sheetNote,cap:sheetCap,set:sheetSet,folder:sheetFolder,list:sheetList})[sh.type]();
   const b=$('sheetBody');if(b&&!focus)b.scrollTop=st;
-  if(focus&&sh.isNew){const f=$('f-title')||$('cap-text');if(f)setTimeout(()=>f.focus(),60);}
+  if(focus&&sh.isNew){const f=$('f-title')||$('cap-text');if(f){try{f.focus({preventScroll:true});}catch(e){f.focus();}setTimeout(()=>{if(document.activeElement!==f)f.focus();},80);}}
 }
 function head(title,saveLabel){
   return '<div class="sheet-hd"><button class="txtbtn" data-act="close-sheet">'+(saveLabel?'Cancelar':'Fechar')+'</button><h2>'+esc(title)+'</h2>'+(saveLabel?'<button class="txtbtn" data-act="save-sheet">'+saveLabel+'</button>':'<span style="width:3.5rem"></span>')+'</div>';
