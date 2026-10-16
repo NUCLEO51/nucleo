@@ -155,6 +155,14 @@ input,textarea,select{font:inherit;font-size:1rem;color:var(--fg)}
 .btn.sm{min-height:2.6rem;padding:0 .9rem;font-size:.9rem}
 .txtbtn{min-height:2.4rem;padding:0 .3rem;border:0;background:none;font-weight:700;color:var(--link);font-size:.95rem;display:inline-flex;align-items:center;gap:.3rem}
 .chip{min-height:2.4rem;padding:0 .85rem;border-radius:999px;border:0;background:var(--surface-2);font-weight:700;font-size:.85rem;display:inline-flex;align-items:center;gap:.35rem}
+.inb-list{display:flex;flex-direction:column;gap:.9rem}
+.inb-card{background:var(--surface);border-radius:1.1rem;padding:1rem 1.1rem 1.1rem;border-left:7px solid var(--accent)}
+.inb-card.l{border-left-color:#3B9CFF}
+.inb-tag{display:inline-block;font-size:.8rem;font-weight:800;letter-spacing:.03em;padding:.2rem .7rem;border-radius:999px;margin-bottom:.5rem}
+.inb-tag.a{background:var(--accent-soft);color:var(--link)}
+.inb-tag.l{background:rgba(59,156,255,.18);color:#3B9CFF}
+.inb-card .li-t{font-size:1.1rem;font-weight:600}
+.inb-card .chip{min-height:2.8rem;font-size:.95rem}
 .chip.danger{background:#FF3B30;color:#fff}
 .chip.on{background:var(--accent);color:var(--accent-fg)}
 .chip[disabled]{opacity:.45;cursor:default}
@@ -625,7 +633,7 @@ const S={tab:'hoje',raw:{},reminders:[],notes:[],events:[],inbox:[],folders:[],l
   folder:null,rview:null,q:'',rq:'',sheet:null,rings:[],assetsOk:false,dlOk:false,bw:true,weekend:false,fired:{},fs:20,theme:'auto',conf:'all',purged:false};
 const lsGet=k=>{try{return localStorage.getItem(k);}catch(e){return null;}};
 const lsSet=(k,v)=>{try{localStorage.setItem(k,v);}catch(e){}};
-const APP_V='v31';
+const APP_V='v32';
 const ERRLOG_KEY='nucleo-errlog';
 function logErr(where,e){try{const a=JSON.parse(localStorage.getItem(ERRLOG_KEY)||'[]');a.push({t:Date.now(),w:String(where).slice(0,40),m:String((e&&e.message)||e||'').slice(0,160)});while(a.length>30)a.shift();localStorage.setItem(ERRLOG_KEY,JSON.stringify(a));}catch(x){}}
 addEventListener('error',ev=>logErr('tela',ev.message||ev.error));
@@ -1356,14 +1364,15 @@ function viewHoje(){
   else h+='<div id="sec-late"></div>';
   {
     const nIn=inboxCount();
-    h+=secH('Caixa de entrada'+(nIn?' <span class="pill danger">'+nIn+'</span>':''),nIn?'<button class="txtbtn" data-act="tri-open">Organizar um por um</button>':'<span class="hint">tudo organizado</span>','sec-inbox');
+    h+=secH('Caixa de entrada'+(nIn?' <span class="pill danger">'+nIn+'</span>':''),'<span class="hint">'+(nIn?'decida o destino':'tudo organizado')+'</span>','sec-inbox');
     if(!nIn)h+='<div class="group">'+emptyRow('Tudo organizado ✓','Nada solto para decidir. O que você anotar rápido cai aqui.')+'</div>';
     else{
-      h+='<div class="group">'+S.inbox.slice().sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)).map(i=>
-      '<div class="li static" style="flex-wrap:wrap"><div class="li-main" style="flex-basis:100%"><div class="li-t">'+esc(i.text)+'</div>'+(i.source?'<div class="li-s">via '+esc(i.source)+'</div>':'')+'</div>'+
-      '<div class="chips" style="padding:.2rem 0 .2rem"><button class="chip" data-act="inbox-rem" data-id="'+esc(i.id)+'">Virar lembrete</button><button class="chip" data-act="inbox-note" data-id="'+esc(i.id)+'">Virar nota</button><button class="chip danger" data-act="inbox-del" data-id="'+esc(i.id)+'">Excluir</button></div></div>').join('')+'</div>';
-      const lr=looseRems();
-      if(lr.length)h+=secH('Lembretes sem data <span class="pill">'+lr.length+'</span>','<span class="hint">decida o destino</span>')+'<div class="group">'+lr.map(r=>{const simples=!(r.subtasks||[]).length&&!(r.images||[]).length&&!(r.files||[]).length;return '<div class="li static" style="flex-wrap:wrap"><div class="li-main" style="flex-basis:100%"><div class="li-t">'+esc(r.title)+'</div></div><div class="chips" style="padding:.2rem 0 .2rem"><button class="chip" data-act="open-rem" data-id="'+esc(r.id)+'">Dar data</button>'+(simples?'<button class="chip" data-act="loose-note" data-id="'+esc(r.id)+'">Virar nota</button>':'')+'<button class="chip" data-act="loose-keep" data-id="'+esc(r.id)+'">Deixar assim</button><button class="chip danger" data-act="loose-del" data-id="'+esc(r.id)+'">Excluir</button></div></div>';}).join('')+'</div>';
+      const card=(cls,tag,title,sub,btns)=>'<div class="inb-card '+cls+'"><span class="inb-tag '+cls+'">'+tag+'</span><div class="li-t">'+esc(title)+'</div>'+(sub?'<div class="li-s">'+esc(sub)+'</div>':'')+'<div class="chips" style="padding-top:.75rem">'+btns+'</div></div>';
+      const bt=(act,id,txt,cls)=>'<button class="chip'+(cls?' '+cls:'')+'" data-act="'+act+'" data-id="'+esc(id)+'">'+txt+'</button>';
+      h+='<div class="inb-list">'+S.inbox.slice().sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)).map(i=>
+        card('a','Anotação rápida',i.text,i.source?'via '+i.source:'',bt('inbox-rem',i.id,'Virar lembrete')+bt('inbox-note',i.id,'Virar nota')+bt('inbox-del',i.id,'Excluir','danger'))).join('')
+      +looseRems().map(r=>{const simples=!(r.subtasks||[]).length&&!(r.images||[]).length&&!(r.files||[]).length;
+        return card('l','Lembrete sem data',r.title,'',bt('open-rem',r.id,'Dar data')+(simples?bt('loose-note',r.id,'Virar nota'):'')+bt('loose-keep',r.id,'Deixar assim')+bt('loose-del',r.id,'Excluir','danger'));}).join('')+'</div>';
     }
   }
   return h;
