@@ -388,6 +388,15 @@ input[type=date].inp,input[type=time].inp{display:block;width:100%;max-width:100
 .vv{text-align:right;font-weight:700;min-width:0;overflow-wrap:anywhere}
 .vtext{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.5}
 .vtext.big{font-size:1.1rem;background:var(--surface);border-radius:1rem;padding:1rem}
+.vtext.fmt{white-space:normal}
+.vtext .fh{font-weight:800;color:var(--accent);margin:1rem 0 .3rem;padding-bottom:.25rem;border-bottom:1px solid var(--line)}
+.vtext .fh:first-child{margin-top:0}
+.vtext .fb{display:flex;gap:.6rem;margin:.45rem 0}
+.vtext .fd{flex:none;color:var(--accent);font-weight:800;min-width:1.1rem}
+.vtext .ft{min-width:0}
+.vtext .fp{margin:.4rem 0}
+.vtext .fs{height:.55rem}
+.vtext b.fl{color:var(--muted);font-weight:700}
 .valarm{padding:.55rem 0;border-bottom:1px solid var(--line)}
 .valarm:last-child{border-bottom:0}
 .vchecks{display:flex;flex-direction:column}
@@ -821,7 +830,7 @@ const S={tab:'hoje',raw:{},reminders:[],notes:[],events:[],inbox:[],folders:[],l
   folder:null,rview:null,q:'',rq:'',sheet:null,rings:[],assetsOk:false,dlOk:false,bw:true,weekend:false,fired:{},fs:20,theme:'auto',conf:'all',purged:false,gq:'',nsOpen:false,nx:{},nn:{},lc:{}};
 const lsGet=k=>{try{return localStorage.getItem(k);}catch(e){return null;}};
 const lsSet=(k,v)=>{try{localStorage.setItem(k,v);}catch(e){}};
-const APP_V='v54';
+const APP_V='v55';
 const ERRLOG_KEY='nucleo-errlog';
 function logErr(where,e){try{const a=JSON.parse(localStorage.getItem(ERRLOG_KEY)||'[]');a.push({t:Date.now(),w:String(where).slice(0,40),m:String((e&&e.message)||e||'').slice(0,160)});while(a.length>30)a.shift();localStorage.setItem(ERRLOG_KEY,JSON.stringify(a));}catch(x){}}
 addEventListener('error',ev=>logErr('tela',ev.message||ev.error));
@@ -2643,6 +2652,22 @@ async function editDrawing(imgId,target){
 
 /* ---------- páginas de visualização (abrir para ver, lápis para editar) ---------- */
 const PRIO=['Nenhuma','Baixa !','Média !!','Alta !!!'];
+/* mostra o texto de nota/observação com títulos (#), marcadores (- * •), números e rótulos (Placa: …). O texto salvo NÃO muda. */
+function fmtText(raw){
+  const inl=t=>esc(t).replace(/\*\*(.+?)\*\*/g,'<b>$1</b>');
+  const kv=t=>{const m=/^([A-Za-zÀ-ÿ][^:*]{0,34}):\s+(.+)$/.exec(t);return m?'<b class="fl">'+inl(m[1])+':</b> '+inl(m[2]):inl(t);};
+  let h='';
+  String(raw==null?'':raw).replace(/\r/g,'').split('\n').forEach(line=>{
+    const l=line.replace(/\s+$/,'');
+    if(!l.trim()){h+='<div class="fs"></div>';return;}
+    let m;
+    if((m=/^\s*(#+)\s+(.+)$/.exec(l))){h+='<div class="fh">'+inl(m[2])+'</div>';return;}
+    if((m=/^\s*[-*•]\s+(.+)$/.exec(l))){h+='<div class="fb"><span class="fd">•</span><span class="ft">'+kv(m[1])+'</span></div>';return;}
+    if((m=/^\s*(\d{1,2}[.)])\s+(.+)$/.exec(l))){h+='<div class="fb"><span class="fd">'+esc(m[1])+'</span><span class="ft">'+kv(m[2])+'</span></div>';return;}
+    h+='<div class="fp">'+kv(l.trim())+'</div>';
+  });
+  return h;
+}
 function vRow(label,val){return '<div class="vrow"><span class="vl">'+esc(label)+'</span><span class="vv">'+val+'</span></div>';}
 function viewHead(title){return '<div class="sheet-hd"><button class="txtbtn" data-act="close-sheet">Fechar</button><h2>'+esc(title)+'</h2><button class="txtbtn" data-act="view-edit" aria-label="Editar">'+ic('edit',1,2.2)+'Editar</button></div>';}
 function viewImgs(imgs){return imgs&&imgs.length?'<div class="grid-img">'+imgs.map((id,i)=>'<button class="gi" data-act="view-img" data-id="'+esc(id)+'" aria-label="Abrir imagem '+(i+1)+'"><img src="'+imgSrc(id)+'" data-img="'+esc(id)+'" alt="Imagem '+(i+1)+'"></button>').join('')+'</div>':'';}
@@ -2667,7 +2692,7 @@ function sheetRemV(){
   const al=r.alarms||[];
   h+='<div class="block"><span class="block-t">'+ic('bell',.9,2.2)+' Alarmes</span>'+(al.length&&r.date&&r.time?al.map((a,ix)=>{const f=alarmFireDate(r,a);return '<div class="valarm"><b>'+esc(minLabel(a.min))+'</b>'+(f?' · '+esc(relDay(isoDate(f),today))+' às '+pad(f.getHours())+':'+pad(f.getMinutes()):'')+(a.msg?'<div>'+esc(a.msg)+'</div>':'')+clockBtn(r,ix)+'</div>';}).join(''):'<div class="note-s">'+(al.length?'Escolha data e horário para os alarmes valerem.':'Nenhum alarme.')+'</div>')+'</div>';
   if((r.subtasks||[]).length)h+='<div class="block"><span class="block-t">Subtarefas</span>'+viewChecks(r.subtasks,'view-sub')+'</div>';
-  if((r.notes||'').trim())h+='<div class="block"><span class="block-t">Observações</span><div class="vtext">'+esc(r.notes)+'</div></div>';
+  if((r.notes||'').trim())h+='<div class="block"><span class="block-t">Observações</span><div class="vtext fmt">'+fmtText(r.notes)+'</div></div>';
   if((r.images||[]).length)h+='<div class="block"><span class="block-t">Fotos</span>'+viewImgs(r.images)+'</div>';
   if((r.files||[]).length)h+='<div class="block"><span class="block-t">Arquivos</span><div class="flist">'+fileRows(r.files,false)+'</div></div>';
   h+='</div><div class="sheet-ft"><button class="btn" data-act="speak-sheet">'+ic('speaker',.9,2.2)+'Ouvir</button><button class="btn" data-act="view-done">'+(r.done?'Reabrir':'Concluir')+'</button><button class="btn primary grow" data-act="view-edit">'+ic('edit',1,2.2)+'Editar</button></div></div></div>';
@@ -2707,7 +2732,7 @@ function sheetNoteV(){
   if((n.images||[]).length)h+=n.kind==='desenho'?n.images.map((id,i)=>'<button class="vbig" data-act="view-img" data-id="'+esc(id)+'" aria-label="Ampliar desenho '+(i+1)+'"><img src="'+imgSrc(id)+'" data-img="'+esc(id)+'" alt="Desenho '+(i+1)+'"></button>').join(''):viewImgs(n.images);
   const eds=(n.images||[]).filter(id=>(n.drawSrc||{})[id]);
   if(eds.length)h+='<div class="chips">'+eds.map((id,i)=>'<button class="chip" data-act="edit-draw" data-id="'+esc(id)+'">'+ic('edit',.85,2.2)+'Editar desenho'+(eds.length>1?' '+(i+1):'')+'</button>').join('')+'</div>';
-  if((n.body||'').trim())h+='<div class="vtext big">'+esc(n.body)+'</div>';
+  if((n.body||'').trim())h+='<div class="vtext big fmt">'+fmtText(n.body)+'</div>';
   if((n.checklist||[]).length)h+='<div class="block"><span class="block-t">Lista de verificação</span>'+viewChecks(n.checklist,'view-chk')+'</div>';
   if((n.files||[]).length)h+='<div class="block"><span class="block-t">Arquivos</span><div class="flist">'+fileRows(n.files,false)+'</div></div>';
   if(!(n.body||'').trim()&&!(n.checklist||[]).length&&!(n.images||[]).length&&!(n.files||[]).length)h+='<div class="note-s">Nota vazia. Toque em Editar para escrever.</div>';
@@ -3437,7 +3462,7 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden){checkAlar
 window.__nucleo={Store:Store,Supa:Supa,S:S};
 if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost')){addEventListener('load',()=>{navigator.serviceWorker.register('sw.js').catch(()=>{});});}
 /* gancho só para os testes (no uso normal a marca não existe) */
-try{if(window.__NUCLEO_TEST__)window.__NUCLEO_TEST__={openScanner,handleScanFiles,Store,S,gsFind,gsBody,viewBusca,viewHoje,viewCaixa,viewNotas,planView,planBtn,smart,viewLembretes,Supa,SupaAssets,finSend,finCounts,dayCount};}catch(e){}
+try{if(window.__NUCLEO_TEST__)window.__NUCLEO_TEST__={fmtText,openScanner,handleScanFiles,Store,S,gsFind,gsBody,viewBusca,viewHoje,viewCaixa,viewNotas,planView,planBtn,smart,viewLembretes,Supa,SupaAssets,finSend,finCounts,dayCount};}catch(e){}
 buildTabs();render();Store.init();
 getAssets().then(a=>{S.assetsOk=!!a;});
 getDl().then(d=>{S.dlOk=!!d;});

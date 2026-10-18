@@ -679,4 +679,38 @@ global.__pend.push((async () => {
   t('PDF (do scanner ou do app Arquivos): vira nota de scan com o arquivo anexado, sem converter em imagem', !!nt && nt.kind === 'scan' && /^Documento de \d\d\/\d\d \d\d:\d\d$/.test(nt.title) && nt.files.length === 1 && nt.files[0].name === 'Digitalização 18-10.pdf' && nt.files[0].type === 'application/pdf' && nt.files[0].id === 'uid/doc1.pdf' && (nt.images || []).length === 0 && ups.length === 1 && ups[0].type === 'application/pdf' && ups[0].ext === 'pdf', true);
   ev(`const S=__NUCLEO_TEST__.S;S.sheet=null;S.tab='hoje';S.pendingNew=false;S.notes=[];S.raw={reminders:[],lists:[],notes:[],folders:[],events:[],inbox:[]};S.conf='all';`);
 })());
+
+// --- Leitura mais legível: títulos, marcadores e rótulos (v55) ---
+const __prevP5 = Promise.all((global.__pend || []).slice());
+global.__pend.push((async () => {
+  await __prevP5;
+  const doc = w.document, q = s => doc.querySelector(s), TT = w.__NUCLEO_TEST__;
+  const f = (s) => ev(`__NUCLEO_TEST__.fmtText(${JSON.stringify(s)})`);
+  const a = f('# Dados do carro\n- Placa: FCZ 5C76\n- RENAVAM: 01067391999\n\nTexto simples\nHora 10:30 ok');
+  t('leitura: "# título" vira título em destaque', /<div class="fh">Dados do carro<\/div>/.test(a), true);
+  t('leitura: "- item" vira linha com marcador • e o rótulo (antes dos dois pontos) em destaque', /<div class="fb"><span class="fd">•<\/span><span class="ft"><b class="fl">Placa:<\/b> FCZ 5C76<\/span><\/div>/.test(a), true);
+  t('leitura: linha em branco vira espaço entre blocos e texto comum vira parágrafo', /<div class="fs"><\/div>/.test(a) && /<div class="fp">Texto simples<\/div>/.test(a), true);
+  t('leitura: horário como 10:30 não vira rótulo', /<div class="fp">Hora 10:30 ok<\/div>/.test(a), true);
+  t('leitura: "* item" e "• item" também viram marcador; lista numerada mantém o número', /<span class="fd">•<\/span><span class="ft">um<\/span>/.test(f('* um')) && /<span class="fd">•<\/span><span class="ft">dois<\/span>/.test(f('• dois')) && /<span class="fd">1\.<\/span><span class="ft">primeiro<\/span>/.test(f('1. primeiro')), true);
+  t('leitura: **negrito** funciona e HTML digitado é escapado (sem risco)', /<b>forte<\/b>/.test(f('isto é **forte**')) && !/<script>/.test(f('<script>alert(1)</script>')) && /&lt;script&gt;/.test(f('<script>alert(1)</script>')), true);
+  t('leitura: texto vazio não dá erro', f('').length < 40, true);
+  // as duas telas de leitura usam o formato
+  ev(`const S=__NUCLEO_TEST__.S;S.ready=true;S.tab='hoje';S.sheet=null;S.conf='del';S.rview=null;S.folder=null;
+    S.lists=[];S.folders=[{id:'f1',name:'Consulta rápida'}];S.events=[];S.inbox=[];
+    S.notes=[{id:'n1',title:'Audi',body:'# Dados do carro\\n- Placa: FCZ 5C76\\n- Município: Monte Alegre do Sul',folder:'f1',kind:'nota',checklist:[],files:[],images:[],createdAt:1}];
+    S.reminders=[{id:'r1',title:'Pagar',notes:'# Como pagar\\n- Onde: Mercado Pago da Elisa\\n- Quando: dia 16',date:'2030-01-16',time:'09:00',done:false,list:'',alarms:[],subtasks:[],images:[],files:[]}];
+    S.raw={reminders:S.reminders.slice(),lists:[],notes:S.notes.slice(),folders:S.folders.slice(),events:[],inbox:[]};S.tab='lembretes';S.folder='f1';`);
+  q('#tab-notas').click();
+  q('#main [data-act="open-note"][data-id="n1"]').click();
+  const nv = q('#sheetRoot .vtext.big.fmt');
+  t('leitura da nota: o texto aparece formatado (título, marcadores e rótulos) e o texto salvo não mudou', !!nv && /<div class="fh">Dados do carro<\/div>/.test(nv.innerHTML) && nv.querySelectorAll('.fb').length === 2 && /<b class="fl">Placa:<\/b>/.test(nv.innerHTML) && ev('__NUCLEO_TEST__.S.notes[0].body') === '# Dados do carro\n- Placa: FCZ 5C76\n- Município: Monte Alegre do Sul', true);
+  ev(`__NUCLEO_TEST__.S.sheet=null;`);
+  ev(`__NUCLEO_TEST__.S.tab='hoje';__NUCLEO_TEST__.S.rview='s:todos';`); q('#tab-lembretes').click();
+  const rr = q('#main [data-act="open-rem"][data-id="r1"]');
+  if (rr) rr.click();
+  const rv = q('#sheetRoot .vtext.fmt');
+  t('leitura do lembrete: as observações também aparecem formatadas', !!rv && /<div class="fh">Como pagar<\/div>/.test(rv.innerHTML) && rv.querySelectorAll('.fb').length === 2 && /<b class="fl">Onde:<\/b>/.test(rv.innerHTML), true);
+  t('estilo: o corpo formatado quebra linhas sozinho (sem pre-wrap) e o título usa a cor de destaque', /\.vtext\.fmt\{white-space:normal\}/.test(html) && /\.vtext \.fh\{font-weight:800;color:var\(--accent\)/.test(html), true);
+  ev(`const S=__NUCLEO_TEST__.S;S.sheet=null;S.tab='hoje';S.rview=null;S.notes=[];S.reminders=[];S.raw={reminders:[],lists:[],notes:[],folders:[],events:[],inbox:[]};S.conf='all';`);
+})());
 Promise.all(global.__pend || []).then(() => { console.log(ok + ' ok, ' + bad + ' falhas'); process.exit(bad ? 1 : 0); });
