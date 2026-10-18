@@ -535,4 +535,63 @@ global.__pend.push((async () => {
   t('repetir 2 vezes: ao concluir a 2ª (última), o lembrete termina sozinho', ev(`__NUCLEO_TEST__.S.reminders[0].done`) === true, true);
   ev(`__NUCLEO_TEST__.S.tab='hoje';__NUCLEO_TEST__.S.rview=null;__NUCLEO_TEST__.S.conf='all';`);
 })());
+
+// --- Área "Lembretes do FIN": separada dos outros, com alarme (v52) ---
+const __prevP3 = Promise.all((global.__pend || []).slice());
+global.__pend.push((async () => {
+  await __prevP3;
+  const doc = w.document, q = s => doc.querySelector(s), wait = ms => new Promise(r => setTimeout(r, ms)), TT = w.__NUCLEO_TEST__;
+  const hoje = ev('isoDate(new Date())');
+  const mk = (id, title, date, time, list, extra) => Object.assign({ id, title, notes: '', date, time, repeat: 'none', repN: 1, done: false, list, alarms: [], subtasks: [], images: [], files: [], priority: 0 }, extra || {});
+  const seed = (lists, rems) => ev(`const S=__NUCLEO_TEST__.S;S.ready=true;S.tab='hoje';S.sheet=null;S.conf='del';S.rview=null;S.rq='';S.rfromHoje=0;S.rfromPlan=0;S.lc={};
+    S.lists=${JSON.stringify(lists)};S.reminders=${JSON.stringify(rems)};S.folders=[];S.notes=[];S.events=[];S.inbox=[];
+    S.raw={reminders:S.reminders.slice(),lists:S.lists.slice(),notes:[],folders:[],events:[],inbox:[]};`);
+  const L = [{ id: 'lf', name: 'FIN — vencimentos', color: '#1FC95B', sections: [], fin: true }, { id: 'lc', name: 'Casa', color: '#5E8F6B', sections: [] }];
+  const R = [
+    mk('f1', 'Parcela atrasada da Elisa', '2020-01-15', '09:00', 'lf', { alarms: [{ id: 'a1', min: 0 }] }),
+    mk('f2', 'Conta do FIN hoje à noite', hoje, '23:59', 'lf', { alarms: [{ id: 'a2', min: 0 }] }),
+    mk('f3', 'Parcela distante', '2099-01-15', '09:00', 'lf', { alarms: [{ id: 'a3', min: 0 }] }),
+    mk('c1', 'Consertar a torneira', '2020-01-10', '10:00', 'lc'),
+    mk('c2', 'Comprar pilhas', '2099-02-01', '', '')];
+  seed(L, R);
+  const sm = TT.smart();
+  t('separação: os atalhos gerais não contam os lembretes do FIN (Todos, Hoje, Atrasados, Programados)', sm.todos.length === 2 && sm.late.length === 1 && sm.late[0].id === 'c1' && sm.prog.length === 2 && !sm.hoje.some(r => r.list === 'lf'), true);
+  t('separação: o Planner e a contagem do dia não contam os do FIN', ev(`__NUCLEO_TEST__.dayCount('${hoje}')`) === 0 && !/class="cnt num">1</.test(TT.planView()), true);
+  t('FIN: contagem própria (atrasado, hoje e total)', JSON.stringify(TT.finCounts()) === JSON.stringify({ has: true, late: 1, hoje: 1, total: 3 }), true);
+  const home = TT.viewLembretes();
+  t('Lembretes: banner "Lembretes do FIN" com atrasados e hoje, e a lista do FIN some de "Minhas listas"', /class="finban" data-act="rview" data-v="fin"/.test(home) && home.indexOf('finban') < home.indexOf('Planner') && /1 atrasado · 1 hoje · 3 no total/.test(home) && !/FIN — vencimentos<\/div>/.test(home) && /Casa<\/div>/.test(home), true);
+  const hv = TT.viewHoje();
+  t('Hoje: atalho "Lembretes do FIN" (vermelho quando há atrasado) abre a área', /data-act="go-rem" data-v="fin"/.test(hv) && /Lembretes do FIN/.test(hv) && /t-red t-late/.test(hv.slice(hv.indexOf('data-v="fin"') - 80, hv.indexOf('data-v="fin"') + 160)), true);
+  ev(`__NUCLEO_TEST__.S.rview='fin';`);
+  const pg = TT.viewLembretes();
+  t('área do FIN: só os lembretes do FIN, separados em Atrasados, Hoje e Mais adiante', /Parcela atrasada da Elisa/.test(pg) && /Conta do FIN hoje à noite/.test(pg) && /Parcela distante/.test(pg) && !/Consertar a torneira/.test(pg) && !/Comprar pilhas/.test(pg) && pg.indexOf('Atrasados') < pg.indexOf('Hoje <') && pg.indexOf('Hoje <') < pg.indexOf('Mais adiante'), true);
+  t('área do FIN: botão + (novo lembrete do FIN), lápis da lista e aviso do alarme com a regra de 1 dia antes', /data-act="fin-new"/.test(pg) && /data-act="edit-list" data-id="lf"/.test(pg) && /mesmo com o app fechado/.test(pg) && /1 dia antes do vencimento, às 09:00/.test(pg), true);
+  // fluxo: Hoje → tile → área → Voltar para Hoje
+  seed(L, R);
+  q('#tab-hoje').click(); await wait(10);
+  q('#main [data-act="go-rem"][data-v="fin"]').click(); await wait(20);
+  t('fluxo: tocar no atalho do Hoje abre a área do FIN, com Voltar para Hoje', ev('__NUCLEO_TEST__.S.tab') === 'lembretes' && ev('__NUCLEO_TEST__.S.rview') === 'fin' && !!q('#main [data-act="hj-back"]') && /Lembretes do FIN/.test(q('#main').textContent), true);
+  q('#main [data-act="fin-new"]').click(); await wait(20);
+  t('novo lembrete do FIN: abre já na lista do FIN, às 09:00, prioridade média e com alarme na hora', ev(`(function(){const d=__NUCLEO_TEST__.S.sheet&&__NUCLEO_TEST__.S.sheet.draft;return !!d&&d.list==='lf'&&d.time==='09:00'&&d.priority===2&&d.alarms.length===1&&d.alarms[0].min===0;})()`), true);
+  ev(`__NUCLEO_TEST__.S.sheet=null;`);
+  q('#main [data-act="hj-back"]').click(); await wait(10);
+  t('fluxo: Voltar leva para Hoje', ev('__NUCLEO_TEST__.S.tab') === 'hoje' && ev('__NUCLEO_TEST__.S.rview') === null, true);
+  // formulário da lista: caixa "Lista do FIN"
+  seed(L, R);
+  ev(`__NUCLEO_TEST__.S.tab='hoje';`); q('#tab-lembretes').click(); await wait(10);
+  ev(`__NUCLEO_TEST__.S.rview='fin';`); q('#tab-hoje').click(); q('#tab-lembretes').click(); await wait(10);
+  ev(`__NUCLEO_TEST__.S.rview='fin';`);
+  q('#tab-hoje').click(); ev(`__NUCLEO_TEST__.S.rview='fin';`); q('#tab-lembretes').click(); await wait(10);
+  q('#main [data-act="edit-list"][data-id="lf"]').click(); await wait(20);
+  t('formulário da lista: caixa "Lista do FIN" marcada para a lista do FIN', !!q('#sheetRoot #f-fin') && q('#sheetRoot #f-fin').checked === true && /Lista do FIN: fica separada/.test(q('#sheetRoot').textContent), true);
+  ev(`__NUCLEO_TEST__.S.sheet=null;`);
+  // sem a área: banner para criar
+  seed([{ id: 'lc', name: 'Casa', color: '#5E8F6B', sections: [] }], [mk('c2', 'Comprar pilhas', '2099-02-01', '', '')]);
+  const sem = TT.viewLembretes();
+  t('sem a área do FIN: o banner convida a criar', /data-act="fin-area-create"/.test(sem) && /Toque para criar/.test(sem), true);
+  ev(`__NUCLEO_TEST__.S.tab='hoje';`); q('#tab-lembretes').click(); await wait(10);
+  q('#main [data-act="fin-area-create"]').click(); await wait(80);
+  t('criar a área: nasce a lista "FIN — vencimentos" marcada como do FIN e abre a área', ev(`__NUCLEO_TEST__.S.lists.some(l=>l.fin&&/FIN/.test(l.name))`) === true && ev('__NUCLEO_TEST__.S.rview') === 'fin', true);
+  ev(`const S=__NUCLEO_TEST__.S;S.tab='hoje';S.rview=null;S.lists=[];S.reminders=[];S.raw={reminders:[],lists:[],notes:[],folders:[],events:[],inbox:[]};S.conf='all';`);
+})());
 Promise.all(global.__pend || []).then(() => { console.log(ok + ' ok, ' + bad + ' falhas'); process.exit(bad ? 1 : 0); });

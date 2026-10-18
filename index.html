@@ -275,6 +275,11 @@ input,textarea,select{font:inherit;font-size:1rem;color:var(--fg)}
 .sub-body{margin:.1rem .5rem .8rem .9rem;padding-left:.5rem;border-left:3px solid var(--line)}
 .sub-body .notes-cards .li.note{background:var(--surface-2)}
 .sub-body .group{background:var(--surface-2)}
+.finban{display:flex;gap:.8rem;align-items:center;width:100%;text-align:left;margin:.8rem 0 .2rem;padding:.9rem 1rem;border:2px solid #1FC95B;border-radius:1.1rem;background:var(--surface);color:var(--fg);font:inherit;cursor:pointer}
+.finban .fb-i{font-size:2rem}
+.finban .fb-t{flex:1;min-width:0}
+.finban b{font-size:1.15rem;display:block}
+.finban i{font-style:normal;font-size:.95rem;color:var(--muted)}
 .sub-empty{color:var(--muted);font-size:.9rem;padding:.4rem .2rem}
 .notes-cards{display:flex;flex-direction:column;gap:.75rem}
 .notes-cards .li.note{background:var(--surface);border-radius:1.1rem;border-left:7px solid var(--accent);padding:.9rem 1rem .9rem .9rem;min-height:4.6rem;box-shadow:0 0 0 1px var(--line)}
@@ -699,7 +704,7 @@ const S={tab:'hoje',raw:{},reminders:[],notes:[],events:[],inbox:[],folders:[],l
   folder:null,rview:null,q:'',rq:'',sheet:null,rings:[],assetsOk:false,dlOk:false,bw:true,weekend:false,fired:{},fs:20,theme:'auto',conf:'all',purged:false,gq:'',nsOpen:false,nx:{},nn:{},lc:{}};
 const lsGet=k=>{try{return localStorage.getItem(k);}catch(e){return null;}};
 const lsSet=(k,v)=>{try{localStorage.setItem(k,v);}catch(e){}};
-const APP_V='v51';
+const APP_V='v52';
 const ERRLOG_KEY='nucleo-errlog';
 function logErr(where,e){try{const a=JSON.parse(localStorage.getItem(ERRLOG_KEY)||'[]');a.push({t:Date.now(),w:String(where).slice(0,40),m:String((e&&e.message)||e||'').slice(0,160)});while(a.length>30)a.shift();localStorage.setItem(ERRLOG_KEY,JSON.stringify(a));}catch(x){}}
 addEventListener('error',ev=>logErr('tela',ev.message||ev.error));
@@ -1307,7 +1312,8 @@ const byDT=(a,b)=>(a.done?1:0)-(b.done?1:0)||(b.pinned?1:0)-(a.pinned?1:0)||(a.d
 function agendaItems(iso){
   const out=[];
   S.events.forEach(e=>{if(occursOn(e,iso))out.push({kind:'ev',id:e.id,title:e.title,time:e.time||'',rep:repSpec(e)?repLabel(e):''});});
-  S.reminders.forEach(r=>{if(r.agenda&&r.date===iso)out.push({kind:'rem',id:r.id,title:r.title,time:r.time||'',done:r.done});});
+  const ids=finIds();
+  S.reminders.forEach(r=>{if(r.agenda&&r.date===iso&&!isFinR(r,ids))out.push({kind:'rem',id:r.id,title:r.title,time:r.time||'',done:r.done});});
   return out.sort((a,b)=>(a.time||'').localeCompare(b.time||''));
 }
 function conflictsFor(date,time,ignoreId){
@@ -1316,8 +1322,9 @@ function conflictsFor(date,time,ignoreId){
   return agendaItems(date).filter(x=>x.id!==ignoreId&&x.time&&Math.abs(toMin(x.time)-t)<60).map(x=>x.title+' às '+x.time);
 }
 function dayItems(iso){
-  const out=[];
+  const out=[],ids=finIds();
   S.reminders.forEach(r=>{
+    if(isFinR(r,ids))return;
     if(r.date===iso)out.push({t:r.time||'',kind:'rem',r});
     if(!r.done&&r.date&&r.time&&r.date!==iso)(r.alarms||[]).forEach(a=>{
       const f=alarmFireDate(r,a);
@@ -1327,14 +1334,23 @@ function dayItems(iso){
   S.events.forEach(e=>{if(occursOn(e,iso))out.push({t:e.time||'',kind:'ev',e});});
   return out.sort((a,b)=>a.t.localeCompare(b.t));
 }
-const dayCount=iso=>S.reminders.filter(r=>r.date===iso&&!r.done).length+S.events.filter(e=>occursOn(e,iso)).length;
+const dayCount=iso=>{const ids=finIds();return S.reminders.filter(r=>r.date===iso&&!r.done&&!isFinR(r,ids)).length+S.events.filter(e=>occursOn(e,iso)).length;};
 function lmap(){const m={};S.lists.forEach(l=>{m[l.id]=l;});return m;}
 const remList=(r,lm)=>r.list&&lm[r.list]?r.list:'';
+/* listas marcadas como "do FIN": os lembretes delas ficam numa área própria e NÃO entram nas listas gerais, no Planner nem nas contagens */
+const finIds=()=>new Set(S.lists.filter(l=>l.fin).map(l=>l.id));
+const isFinR=(r,ids)=>!!(r.list&&(ids||finIds()).has(r.list));
+const overdueR=(r,now)=>!!(r.date&&(r.time?dtOf(r.date,r.time)<now:r.date<isoDate(now)));
+function finCounts(){
+  const ids=finIds(),now=new Date(),today=isoDate(now),open=S.reminders.filter(r=>!r.done&&isFinR(r,ids));
+  const late=open.filter(r=>overdueR(r,now)).length,hoje=open.filter(r=>r.date===today&&!overdueR(r,now)).length;
+  return {has:ids.size>0,late,hoje,total:open.length};
+}
 /* concluídos dentro de cada lista: ligar/desligar (guardado neste aparelho, uma escolha por lista) */
 const HD_KEY='nucleo-hidedone';
 function hiddenDone(){try{return JSON.parse(lsGet(HD_KEY)||'{}')||{};}catch(e){return {};}}
 function smart(){
-  const today=isoDate(new Date()),R=S.reminders,open=R.filter(r=>!r.done);
+  const today=isoDate(new Date()),ids=finIds(),R=S.reminders.filter(r=>!isFinR(r,ids)),open=R.filter(r=>!r.done);
   return {
     todos:open,
     hoje:open.filter(r=>r.date&&r.date<=today),
@@ -1489,7 +1505,8 @@ function viewHoje(){
     tile('go-agenda','hoje','cal','t-green',ag.length,'Agenda hoje')+
     tile('go-rem','s:late','alert',nLate?'t-red t-late':'t-red',nLate,'Atrasados')+
     tile('go-caixa','','inbox','t-orange',inboxCount(),'Caixa de entrada')+'</div>';
-  h+='<div class="tiles">'+tile('fin-send','','inbox','t-green','+','Enviar ao FIN')+tile('fin-open','','calgrid','t-cyan','→','Abrir o FIN')+'</div>';
+  const fc=finCounts();
+  h+='<div class="tiles">'+tile('go-rem','fin','bell',fc.late?'t-red t-late':'t-green',fc.late+fc.hoje,'Lembretes do FIN')+tile('fin-send','','inbox','t-green','+','Enviar ao FIN')+tile('fin-open','','calgrid','t-cyan','→','Abrir o FIN')+'</div>';
   h+='<div class="actbar"><button class="btn grow" data-act="rl-open">⏱ Cronômetro e temporizador</button></div>';
   return h;
 }
@@ -1569,7 +1586,7 @@ function remHomeBody(sm,lm,today,ws,cur){
     const list=S.reminders.filter(r=>norm((r.title||'')+' '+(r.notes||'')).indexOf(q)>=0).sort(byDT);
     return secH('Resultados <span class="pill">'+list.length+'</span>')+'<div class="group">'+(list.length?list.map(r=>remRow(r,true)).join(''):emptyRow('Nada encontrado.','Tente outra palavra.'))+'</div>';
   }
-  let h=planBtn(sm,today)+'<div class="tiles six">'+
+  let h=finBanner()+planBtn(sm,today)+'<div class="tiles six">'+
     tile('rview','s:todos','inbox','t-cyan',sm.todos.length,'Todos')+
     tile('rview','s:hoje','cal','t-blue',sm.hoje.length,'Hoje')+
     tile('rview','s:prog','calgrid','t-red',sm.prog.length,'Programados')+
@@ -1579,9 +1596,33 @@ function remHomeBody(sm,lm,today,ws,cur){
     tile('rview','s:done','check','t-purple',sm.done.length,'Concluídos')+'</div>';
   h+=secH('Minhas listas','<button class="txtbtn" data-act="new-list">'+ic('plus',1,2.4)+'Nova lista</button>');
   const cnt=id=>S.reminders.filter(r=>!r.done&&remList(r,lm)===id).length;
-  h+='<div class="group" style="margin-top:.8rem">'+listRow('','Lembretes',LCOL[0],cnt(''))+S.lists.slice().sort(byName).map(l=>listRow(l.id,l.name||'Sem nome',lcol(l.color),cnt(l.id))).join('')+'</div>';
+  h+='<div class="group" style="margin-top:.8rem">'+listRow('','Lembretes',LCOL[0],cnt(''))+S.lists.filter(l=>!l.fin).sort(byName).map(l=>listRow(l.id,l.name||'Sem nome',lcol(l.color),cnt(l.id))).join('')+'</div>';
   const nt=S.trash.filter(t=>t.c!=='notes').length;
   h+='<div class="group" style="margin-top:.8rem"><div class="li ic" data-act="rview" data-v="trash"><span class="li-ic" style="color:var(--muted)">'+ic('trash',1.25,2)+'</span><div class="li-main"><div class="li-t">Apagados recentemente</div><div class="li-s">recupere em até 30 dias</div></div><span class="li-n num">'+nt+'</span>'+chev()+'</div></div>';
+  return h;
+}
+function finBanner(){
+  const c=finCounts();
+  if(!c.has)return '<button class="finban" data-act="fin-area-create"><span class="fb-i">💰</span><span class="fb-t"><b>Lembretes do FIN</b><i>Área separada para vencimentos de dívidas, contas e cartões, com alarme. Toque para criar.</i></span></button>';
+  return '<button class="finban" data-act="rview" data-v="fin"><span class="fb-i">💰</span><span class="fb-t"><b>Lembretes do FIN</b><i>'+(c.late?c.late+(c.late===1?' atrasado · ':' atrasados · '):'')+c.hoje+' hoje · '+c.total+' no total</i></span>'+cnt(c.late+c.hoje)+'</button>';
+}
+/* a área própria dos lembretes do FIN, separada por prazo */
+function finRemView(){
+  const ids=finIds(),today=isoDate(new Date()),now=new Date(),fl=S.lists.find(l=>l.fin);
+  let h=S.rfromHoje?subHdr('Hoje','hj-back','Vencimentos do FIN','Lembretes do FIN','',fl?lcol(fl.color):''):subHdr('Lembretes','rview-back','Vencimentos do FIN','Lembretes do FIN','',fl?lcol(fl.color):'');
+  if(!fl)return h+'<div class="card" style="margin-top:1rem">Ainda não existe a área do FIN. Ela guarda só os lembretes de vencimento (parcelas, contas, faturas), separados dos outros, com alarme.</div><button class="btn" data-act="fin-area-create">Criar a área do FIN</button>';
+  h+='<div class="notes-tools"><button class="iconbtn" data-act="fin-new" aria-label="Novo lembrete do FIN">'+ic('plus',1.2,2.4)+'</button><button class="iconbtn" data-act="edit-list" data-id="'+esc(fl.id)+'" aria-label="Editar a lista do FIN">'+ic('edit',1.1,2.2)+'</button></div>';
+  h+='<div class="hint" style="margin:.2rem .3rem .6rem">🔔 O aviso toca na hora marcada, mesmo com o app fechado. Regra: lembrar 1 dia antes do vencimento, às 09:00.</div>';
+  const all=S.reminders.filter(r=>isFinR(r,ids)).sort(byDT),open=all.filter(r=>!r.done),done=all.filter(r=>r.done);
+  const lim=isoDate(addDays(new Date(),7));
+  const late=open.filter(r=>overdueR(r,now)),hoje=open.filter(r=>r.date===today&&!overdueR(r,now)),prox=open.filter(r=>r.date>today&&r.date<=lim),depois=open.filter(r=>r.date>lim),sem=open.filter(r=>!r.date);
+  const groups=[['late','Atrasados',late],['hoje','Hoje',hoje],['prox','Próximos 7 dias',prox],['depois','Mais adiante',depois],['sem','Sem data',sem],['done','Concluídos',done]].filter(g=>g[2].length);
+  if(!groups.length)return h+'<div class="group">'+emptyRow('Nenhum lembrete do FIN.','Toque no + lá em cima para criar um vencimento.')+'</div>';
+  groups.forEach(g=>{
+    const key='fin:'+g[0],o=!S.lc[key];
+    h+='<div class="sec-h"><button class="sec-tog'+(o?' open':'')+'" data-act="lc-toggle" data-id="'+key+'" aria-expanded="'+o+'" aria-label="'+(o?'Recolher ':'Abrir ')+g[1]+'">'+ic('right',1.05,2.6)+'<h2>'+g[1]+' '+cnt(g[2].length,1)+'</h2></button></div>';
+    if(o)h+='<div class="group">'+g[2].map(r=>remRow(r,true)).join('')+'</div>';
+  });
   return h;
 }
 function listRow(id,name,color,n){
@@ -1592,6 +1633,7 @@ function remSub(){
   const v=S.rview,today=isoDate(new Date()),lm=lmap();
   if(v==='trash')return trashView(['reminders','events'],'Lembretes','rview-back');
   if(v==='plan')return planView();
+  if(v==='fin')return finRemView();
   if(v.indexOf('d:')===0){
     const iso=v.slice(2),d=parseISO(iso),items=dayItems(iso);
     let h=subHdr(S.rfromPlan?'Planner':'Lembretes','rview-back',d.getDate()+' de '+MESES[d.getMonth()]+(iso===today?' · hoje':''),cap1(DOWF[d.getDay()]),speakBtn('speak-day','Ouvir este dia'));
@@ -2572,6 +2614,7 @@ function sheetList(){
   let h='<div class="sheet"><div class="sheet-in">'+head(sh.isNew?'Nova lista':'Lista','Salvar')+'<div class="sheet-body" id="sheetBody">';
   h+='<div><label class="lbl" for="f-title">Nome da lista</label><input class="inp" id="f-title" data-bind="name" value="'+esc(d.name)+'" placeholder="Ex.: Tarefas" autocomplete="off"></div>';
   h+='<div><span class="lbl">Cor</span><div class="swatches">'+LCOL.map(c=>'<button class="sw'+(d.color===c?' on':'')+'" style="background:'+c+'" data-act="set-color" data-v="'+c+'" aria-label="Cor" aria-pressed="'+(d.color===c)+'">'+(d.color===c?ic('check',1,3):'')+'</button>').join('')+'</div></div>';
+  h+='<label class="check"><input type="checkbox" id="f-fin" data-bind="fin" '+(d.fin?'checked':'')+'>Lista do FIN: fica separada dos outros lembretes, na área “Lembretes do FIN”</label>';
   h+='<div class="block"><span class="block-t">Seções (opcional)</span><div class="note-s">Dividem a lista em partes, como “Novo” e “Outros”.</div>'+(d.sections||[]).map((x,i)=>'<div class="sub"><input class="inp" data-sub-k="sections" data-sub-text="'+i+'" value="'+esc(x.t)+'" aria-label="Nome da seção"><button class="iconbtn" style="background:transparent;color:var(--muted)" data-act="rm-sub" data-k="sections" data-i="'+i+'" aria-label="Remover seção">'+ic('close',.9)+'</button></div>').join('')+'<div style="display:flex;gap:.4rem"><input class="inp" id="newSub" data-k="sections" placeholder="Ex.: Novo" autocomplete="off"><button class="btn sm" data-act="add-sub" data-k="sections">Adicionar</button></div></div>';
   if(!sh.isNew)h+='<div class="note-s">Se apagar a lista, os lembretes dela vão para “Lembretes”. Nenhum lembrete é apagado.</div>';
   h+='</div>'+footer(sh,'Apagar lista')+'</div></div>';
@@ -2995,6 +3038,15 @@ const A={
     await Store.put('notes',Object.assign(newNote(''),{title:(r.title||'').slice(0,60),body:r.notes||'',updatedAt:Date.now()}));await softDelete('reminders',r);},
   'new-folder':d=>openSheet('folder',{name:'',parent:d.parent||'',createdAt:Date.now()}),
   'edit-folder':d=>{const f=S.folders.find(x=>x.id===d.id);if(f)openSheet('folder',clone(f));},
+  'fin-area-create':async()=>{
+    await Store.put('lists',{name:'FIN — vencimentos',color:LCOL[3],sections:[],fin:true,createdAt:Date.now()});
+    toast('Área do FIN criada.');go(()=>{S.tab='lembretes';S.rview='fin';S.rq='';});
+  },
+  'fin-new':()=>{
+    const l=S.lists.find(x=>x.fin);if(!l){toast('Crie a área do FIN primeiro.');return;}
+    const r=newRem('',l.id);r.time='09:00';r.priority=2;r.alarms=[{id:uid(),min:0}];
+    openSheet('rem',r);
+  },
   'new-list':()=>openSheet('list',{name:'',color:LCOL[S.lists.length%LCOL.length],sections:[],createdAt:Date.now()}),
   'edit-list':d=>{const l=S.lists.find(x=>x.id===d.id);if(l)openSheet('list',Object.assign({color:LCOL[0],sections:[]},clone(l),{color:lcol(l.color)}));},
   'set-color':d=>{setSheetField('color',d.v);renderSheet();},
@@ -3124,7 +3176,7 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden){checkAlar
 window.__nucleo={Store:Store,Supa:Supa,S:S};
 if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost')){addEventListener('load',()=>{navigator.serviceWorker.register('sw.js').catch(()=>{});});}
 /* gancho só para os testes (no uso normal a marca não existe) */
-try{if(window.__NUCLEO_TEST__)window.__NUCLEO_TEST__={S,gsFind,gsBody,viewBusca,viewHoje,viewCaixa,viewNotas,planView,planBtn,smart,viewLembretes,Supa,SupaAssets,finSend};}catch(e){}
+try{if(window.__NUCLEO_TEST__)window.__NUCLEO_TEST__={S,gsFind,gsBody,viewBusca,viewHoje,viewCaixa,viewNotas,planView,planBtn,smart,viewLembretes,Supa,SupaAssets,finSend,finCounts,dayCount};}catch(e){}
 buildTabs();render();Store.init();
 getAssets().then(a=>{S.assetsOk=!!a;});
 getDl().then(d=>{S.dlOk=!!d;});
