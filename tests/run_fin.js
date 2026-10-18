@@ -45,16 +45,16 @@ const count = (h, s) => h.split(s).length - 1;
   t('mês: ordenado por data (luz dia 10 antes do IPVA dia 16)', mes.indexOf('Conta de luz') < mes.indexOf('IPVA 2026'), true);
   t('mês: cada linha mostra dia e dia da semana', /<span class="d"><b>16<\/b><i>(dom|seg|ter|qua|qui|sex|sáb)<\/i>/.test(mes), true);
   t('mês: IPVA aparece como Paga e a luz sem valor como Em atraso ou Sem valor', /IPVA 2026[^]*?>Paga</.test(mes) && /Conta de luz[^]*?(Em atraso|Sem valor)/.test(mes), true);
-  t('mês: resumo do mês (total, já pago, falta pagar) numa linha só, uma vez, antes da tabela', count(mes, 'Total do mês') === 1 && count(mes, 'Já pago') === 1 && count(mes, '<div class="mut">Falta pagar</div>') === 1 && mes.indexOf('sum3') < mes.indexOf('class="tbl"'), true);
+  t('mês: resumo do mês (total, já pago, falta pagar) numa linha só, uma vez, antes da tabela', count(mes, '<div class="mut">Já pago</div>') === 1 && count(mes, '<div class="mut">Falta pagar</div>') === 1 && count(mes, '<div class="mut">A pagar</div>') === 1 && mes.indexOf('sum3') < mes.indexOf('class="tbl"'), true);
   t('mês: a tabela vem antes do botão Nova conta', mes.indexOf('class="tbl"') < mes.indexOf('data-act="bill-new"'), true);
-  t('mês: filtros Tudo, Falta pagar e Pagas com a contagem', /Tudo \(5\)/.test(mes) && /Falta pagar \(4\)/.test(mes) && /Pagas \(1\)/.test(mes), true);
+  t('mês: filtros Tudo, Falta pagar e Pagas com a contagem', /Tudo<small>5<\/small>/.test(mes) && /A pagar<small>4<\/small>/.test(mes) && /Feitas<small>1<\/small>/.test(mes) && !/A receber<small>/.test(mes), true);
   t('mês: conta que não vence neste mês só aparece em "Outras contas cadastradas"', mes.indexOf('Conta antiga') > mes.indexOf('Outras contas cadastradas') && count(mes, 'Conta antiga') === 1, true);
   t('mês: botão Nova conta e a aba chama Mês (a aba Contas saiu)', /data-act="bill-new"/.test(mes) && /'bills','📅','Mês'/.test(html) && !/'bills','🧾','Contas'/.test(html), true);
 
-  ev(`S.mf='open'`); const aberto = ev('vMonth()');
-  t('filtro Falta pagar: some a conta paga e ficam as outras', !/IPVA 2026/.test(aberto) && /Aluguel/.test(aberto), true);
-  ev(`S.mf='paid'`); const pagas = ev('vMonth()');
-  t('filtro Pagas: só a conta paga', /IPVA 2026/.test(pagas) && !/Aluguel/.test(pagas), true);
+  ev(`S.mf='pay'`); const aberto = ev('vMonth()');
+  t('filtro A pagar: some a conta paga e ficam as outras', !/IPVA 2026/.test(aberto) && /Aluguel/.test(aberto), true);
+  ev(`S.mf='done'`); const pagas = ev('vMonth()');
+  t('filtro Feitas: só a conta paga', /IPVA 2026/.test(pagas) && !/Aluguel/.test(pagas), true);
   ev(`S.mf='all'; S.mm=addMonths('${ym}',1)`); const prox = ev('vMonth()');
   t('mês que vem: contas fixas como Previsto, luz sem valor e a 1ª parcela da dívida do Mercado Pago', /Aluguel[^]*?>Previsto</.test(prox) && /Conta de luz[^]*?>Sem valor</.test(prox) && /Mercado Pago da Elisa/.test(prox) && prox.indexOf('IPVA 2026') > prox.indexOf('Outras contas cadastradas'), true);
   ev(`S.mm=null`);
@@ -87,19 +87,47 @@ const count = (h, s) => h.split(s).length - 1;
   t('seta ‹: volta um mês e o botão do meio volta para este mês', ev('S.mm') === ev(`addMonths('${ym}',-1)`), true);
   click(doc.querySelector('#app [data-act="m-today"]'));
   t('botão do mês: volta para este mês', ev('S.mm') === null, true);
-  click(doc.querySelector('#app [data-act="m-filter"][data-v="paid"]'));
-  t('filtro: tocar em Pagas mostra só as pagas', ev('S.mf') === 'paid' && !/Aluguel/.test(doc.querySelector('#app').innerHTML), true);
+  click(doc.querySelector('#app [data-act="m-filter"][data-v="done"]'));
+  t('filtro: tocar em Feitas mostra só as feitas', ev('S.mf') === 'done' && !/Aluguel/.test(doc.querySelector('#app').innerHTML), true);
   ev(`S.mf='all'`);
 
   // ---- Dívidas, Cartões e Início (sem repetir)
   const debts = ev('vDebts()');
-  t('dívidas: blocos Em aberto e Pagas com resumo; situação em letras normais', /Em aberto \(2\)/.test(debts) && /Pagas \(1\)/.test(debts) && /Soma das parcelas por mês/.test(debts) && />Ativa</.test(debts) && !/>ATIVA</.test(debts), true);
+  t('dívidas: blocos Em aberto e Pagas com resumo; situação em letras normais', /A pagar \(2\)/.test(debts) && /Pagas e recebidas \(1\)/.test(debts) && /Parcelas por mês \(a pagar\)/.test(debts) && />Ativa</.test(debts) && !/>ATIVA</.test(debts), true);
   t('dívidas: mostra a próxima parcela', /próxima parcela em/.test(debts), true);
   const home = ev('vHome()');
   t('início: cartões só resumidos (total e toque para a aba Cartões)', /data-act="tab" data-v="cards"/.test(home) && !/Pode usar/.test(home) && !/Fatura atual/.test(home), true);
   t('início: botão "Carregar exemplos" some quando já há dados', !/demo-on/.test(home), true);
   const cards = ev('vCards()');
   t('aba Cartões: usado, pode usar, fatura atual e vence', ['Usado', 'Pode usar', 'Fatura atual', 'Vence'].every(k => cards.indexOf(k) > 0), true);
+
+  // ---- parcelas A RECEBER
+  ev(`S.recs.push({id:'d9',kind:'debt',version:1,data:{creditor:'Fulano devolve',balanceC:300000,installC:100000,rateBp:null,dueDay:20,status:'ATIVA',kindD:'Outro',holder:'MARCELO',payer:'',account:'',note:'',dir:'RECEBER'}})`);
+  ev(`S.mf='all';S.mm=null`);
+  const mr = ev('vMonth()');
+  t('a receber: aparece na planilha com + e a situação "A receber" (ou Confirmar se a data já passou)', /Fulano devolve/.test(mr) && /\+ R\$/.test(mr) && /Fulano devolve[^]*?(>A receber<|>Confirmar<)/.test(mr), true);
+  t('a receber: resumo próprio (A receber, Já recebido, Falta receber) e a diferença', /<div class="mut">A receber<\/div>/.test(mr) && /Já recebido/.test(mr) && /Falta receber/.test(mr) && /você recebe/.test(mr), true);
+  t('a receber: o filtro A receber aparece e mostra só ele', /A receber<small>1<\/small>/.test(mr) && (ev(`S.mf='rec'`), /Fulano devolve/.test(ev('vMonth()')) && !/Conta de luz/.test(ev('vMonth()'))), true);
+  ev(`S.mf='pay'`);
+  t('a receber: o filtro A pagar não mostra o que é a receber', !/Fulano devolve/.test(ev('vMonth()')), true);
+  ev(`S.mf='all'`);
+  const dv = ev('vDebts()');
+  t('dívidas: seção própria "A receber" com saldo a receber, em verde', /A receber \(1\)/.test(dv) && /Saldo a receber \(1\)/.test(dv) && /class="rc"/.test(dv) && /Falta receber/.test(dv), true);
+  t('dívidas: a seção A pagar não inclui o que é a receber', dv.indexOf('Fulano devolve') > dv.indexOf('A receber (1)'), true);
+  t('início: mostra saldo a pagar e saldo a receber separados', /Saldo a pagar/.test(ev('vHome()')) && /Saldo a receber \(1\)/.test(ev('vHome()')), true);
+  t('quitar: o plano só considera o que EU devo (o a receber fica de fora)', !/Fulano devolve/.test(ev('vPlan()')), true);
+  t('por pessoa: o a receber não soma como dívida', ev(`byKind('debt').filter(d=>d.data.dir!=='RECEBER').length`) === 3, true);
+  ev(`debtPay(S.recs.find(r=>r.id==='d9'),'${ym}')`);
+  t('janela da parcela a receber: "Marcar como recebida" e "Falta receber"', /Marcar como recebida/.test(doc.querySelector('.modal').textContent) && /Falta receber/.test(doc.querySelector('.modal').textContent), true);
+  click(doc.querySelector('.modal .mback'));
+  t('marcar recebida: o saldo a receber diminui da parcela', JSON.stringify(ev(`(function(){const n=debtPayData({balanceC:300000,installC:100000,status:'ATIVA',dir:'RECEBER',paidYm:[]},'${ym}',false);return [n.balanceC,n.paidYm,n.dir];})()`)), JSON.stringify([200000, [ym], 'RECEBER']));
+  ev(`debtForm(null,{dir:'RECEBER'})`);
+  t('formulário: campo "Esta parcela é…" com A pagar e A receber, e vem com a opção escolhida', !!doc.querySelector('.modal #f-dir') && /A receber \(me devem\)/.test(doc.querySelector('.modal #f-dir').textContent) && doc.querySelector('.modal #f-dir').value === 'RECEBER', true);
+  click(doc.querySelector('.modal .mback'));
+  t('texto "Fulano me deve 500 dia 10" vira sugestão de parcela a receber', ev(`(function(){const r=parseText('Fulano me deve 500 dia 10');return [r.type,r.recv,r.dueDay];})()`).join() === 'debt,true,10', true);
+  t('texto comum não vira "a receber"', ev(`parseText('Conta de luz vence dia 10').recv`), false);
+  ev(`S.recs=S.recs.filter(r=>r.id!=='d9')`);
+  t('contrato e chat: dir, paidYm e firstDue documentados', /dir \(`PAGAR`/.test(fs.readFileSync(path.join(__dirname, '..', 'fin', 'API.md'), 'utf8')) || /\*\*dir\*\*/.test(fs.readFileSync(path.join(__dirname, '..', 'fin', 'API.md'), 'utf8')), true);
 
   // ---- Voltar no topo de TODA janela
   const pc = ev('confirmBox("Titulo",["linha"],"Sim")');
@@ -152,7 +180,7 @@ const count = (h, s) => h.split(s).length - 1;
   ev(`viewFile({id:'x',name:'sumiu.pdf',type:'application/pdf'})`); await wait(30);
   t('arquivo que sumiu: mostra a mensagem em vez de travar', /Não consegui abrir o arquivo \(404\)/.test(doc.querySelector('.modal').textContent), true);
   click(doc.querySelector('.modal .mback'));
-  t('FIN: versão do cache subiu para v4', /fin-app-v4/.test(fs.readFileSync(path.join(__dirname, '..', 'fin', 'sw.js'), 'utf8')), true);
+  t('FIN: versão do cache subiu para v5', /fin-app-v5/.test(fs.readFileSync(path.join(__dirname, '..', 'fin', 'sw.js'), 'utf8')), true);
 
   console.log(ok + ' ok, ' + bad + ' falhas (FIN)');
   process.exit(bad ? 1 : 0);

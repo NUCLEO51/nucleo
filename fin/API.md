@@ -8,7 +8,7 @@ O FIN nunca paga nem move dinheiro. Apagar = lixeira (reversível).
 - `charge`: compra no cartão (cardId, valor em centavos, parcelas, data, descrição)
 - `invpay`: pagamento de fatura registrado
 - `bill` / `billmonth`: conta recorrente e o valor/estado de cada mês
-- `debt`: creditor, balanceC, installC, rateBp (juros ao mês em centésimos de %), status, holder (devedor no contrato), payer (quem paga hoje), dueDay, account
+- `debt`: creditor, balanceC, installC, rateBp (juros ao mês em centésimos de %), status, holder (devedor no contrato), payer (quem paga hoje), dueDay, account, **dir** (`PAGAR` padrão = eu devo; `RECEBER` = me devem), **firstDue** (data da 1ª parcela), **paidYm** (lista de meses AAAA-MM já pagos ou recebidos; ao marcar, o saldo diminui da parcela)
 - `proposal`: pendências vindas do Núcleo (text, status) e `cfg:'capacity'` com `capacityC` (quanto dá por mês para dívidas)
 - `holder`/`payer`: `MARCELO` ou `MARLENE`
 

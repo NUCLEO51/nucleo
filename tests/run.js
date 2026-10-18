@@ -513,4 +513,26 @@ global.__pend.push((async () => {
   q('#finTop').click();
   t('Voltar do topo fecha a tela', !q('#finSend'), true);
 })());
+
+// --- A cada 30 dias e repetir no máximo N vezes (v51) ---
+t('repetição: opção direta "A cada 30 dias" na lista e no motor', ev(`JSON.stringify(repSpec({repeat:'days30'}))`) === JSON.stringify({ n: 30, u: 'day', days: [] }) && /\['days30','A cada 30 dias'\]/.test(html), true);
+t('repetição: a cada 30 dias soma 30 dias (16/jan → 15/fev), não "mesmo dia do mês"', ev(`repNext({date:'2030-01-16',time:'09:00',repeat:'days30'},new Date('2030-01-16T10:00:00')).date`), '2030-02-15');
+t('repetição: o rótulo mostra "3ª de 12" quando há limite de vezes', ev(`repLabel({repeat:'monthly',repTimes:12,repDone:2})`) === 'Todo mês · 3ª de 12' && ev(`repLabel({repeat:'days30',repTimes:'12'})`) === 'A cada 30 dias · 1ª de 12', true);
+t('repetição: sem limite o rótulo continua igual', ev(`repLabel({repeat:'monthly'})`), 'Todo mês');
+t('formulário do lembrete: campo "Repetir no máximo (vezes)", só para lembrete (compromisso não)', /id="f-times"/.test(html) && /if\(!isEv\)h\+='<div><label class="lbl" for="f-times"/.test(html), true);
+const __prevP2 = Promise.all((global.__pend || []).slice());
+global.__pend.push((async () => {
+  await __prevP2;
+  const doc = w.document, q = s => doc.querySelector(s), wait = ms => new Promise(r => setTimeout(r, ms)), TT = w.__NUCLEO_TEST__;
+  ev(`const S=__NUCLEO_TEST__.S;S.ready=true;S.tab='hoje';S.sheet=null;S.conf='del';S.rview='s:todos';S.rq='';S.rfromHoje=0;
+    S.lists=[];S.folders=[];S.notes=[];S.events=[];S.inbox=[];
+    S.reminders=[{id:'r9',title:'Parcela do empréstimo',notes:'',date:'2030-01-16',time:'09:00',repeat:'monthly',repN:1,repTimes:2,repDone:0,done:false,list:'',alarms:[],subtasks:[],images:[],files:[]}];
+    S.raw={reminders:S.reminders.slice(),lists:[],notes:[],folders:[],events:[],inbox:[]};`);
+  q('#tab-lembretes').click(); await wait(20);
+  q('#main [data-act="toggle-done"][data-id="r9"]').click(); await wait(80);
+  t('repetir 2 vezes: ao concluir a 1ª, o lembrete anda para o mês seguinte e conta 1', ev(`__NUCLEO_TEST__.S.reminders[0].date`) === '2030-02-16' && ev(`__NUCLEO_TEST__.S.reminders[0].repDone`) === 1 && ev(`__NUCLEO_TEST__.S.reminders[0].done`) === false, true);
+  q('#main [data-act="toggle-done"][data-id="r9"]').click(); await wait(80);
+  t('repetir 2 vezes: ao concluir a 2ª (última), o lembrete termina sozinho', ev(`__NUCLEO_TEST__.S.reminders[0].done`) === true, true);
+  ev(`__NUCLEO_TEST__.S.tab='hoje';__NUCLEO_TEST__.S.rview=null;__NUCLEO_TEST__.S.conf='all';`);
+})());
 Promise.all(global.__pend || []).then(() => { console.log(ok + ' ok, ' + bad + ' falhas'); process.exit(bad ? 1 : 0); });

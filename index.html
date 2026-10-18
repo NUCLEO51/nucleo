@@ -480,16 +480,18 @@ function repSpec(o){
   if(k==='weekly')return {n:1,u:'week',days:[]};
   if(k==='biweekly')return {n:2,u:'week',days:[]};
   if(k==='monthly')return {n:1,u:'month',days:[]};
+  if(k==='days30')return {n:30,u:'day',days:[]};
   if(k==='yearly')return {n:1,u:'year',days:[]};
   if(k==='custom'){const n=Math.max(1,Math.min(999,parseInt(o.repN,10)||1));const u=UNITS_PL[o.repU]?o.repU:'day';return {n,u,days:(o.repDays||[]).map(Number).filter(x=>x>=0&&x<=6)};}
   return null;
 }
 function repLabel(o){
   const sp=repSpec(o);if(!sp)return 'Não repete';
-  const fixed={daily:'Todo dia',weekdays:'Dias úteis (seg a sex)',weekly:'Toda semana',biweekly:'A cada 2 semanas',monthly:'Todo mês',yearly:'Todo ano'};
+  const fixed={daily:'Todo dia',weekdays:'Dias úteis (seg a sex)',weekly:'Toda semana',biweekly:'A cada 2 semanas',monthly:'Todo mês',days30:'A cada 30 dias',yearly:'Todo ano'};
   let t=fixed[o.repeat]||(sp.n===1?UNITS_ONE[sp.u]:'A cada '+sp.n+' '+UNITS_PL[sp.u]);
   if(o.repeat==='custom'&&sp.u==='week'&&sp.days.length)t+=' ('+sp.days.slice().sort().map(d=>DOW3[d]).join(', ')+')';
   if(o.repUntil){const p=o.repUntil.split('-');t+=' até '+p[2]+'/'+p[1];}
+  const tm=parseInt(o.repTimes,10)||0;if(tm>0)t+=' · '+((parseInt(o.repDone,10)||0)+1)+'ª de '+tm;
   return t;
 }
 function repStep(cur,sp,baseISO){
@@ -697,7 +699,7 @@ const S={tab:'hoje',raw:{},reminders:[],notes:[],events:[],inbox:[],folders:[],l
   folder:null,rview:null,q:'',rq:'',sheet:null,rings:[],assetsOk:false,dlOk:false,bw:true,weekend:false,fired:{},fs:20,theme:'auto',conf:'all',purged:false,gq:'',nsOpen:false,nx:{},nn:{},lc:{}};
 const lsGet=k=>{try{return localStorage.getItem(k);}catch(e){return null;}};
 const lsSet=(k,v)=>{try{localStorage.setItem(k,v);}catch(e){}};
-const APP_V='v50';
+const APP_V='v51';
 const ERRLOG_KEY='nucleo-errlog';
 function logErr(where,e){try{const a=JSON.parse(localStorage.getItem(ERRLOG_KEY)||'[]');a.push({t:Date.now(),w:String(where).slice(0,40),m:String((e&&e.message)||e||'').slice(0,160)});while(a.length>30)a.shift();localStorage.setItem(ERRLOG_KEY,JSON.stringify(a));}catch(x){}}
 addEventListener('error',ev=>logErr('tela',ev.message||ev.error));
@@ -2165,7 +2167,7 @@ function checkBlock(d,key,title,ph){
     '<div style="display:flex;gap:.4rem"><input class="inp" id="newSub" data-k="'+key+'" placeholder="'+esc(ph)+'" autocomplete="off"><button class="btn sm" data-act="add-sub" data-k="'+key+'">Adicionar</button></div></div>';
 }
 function repeatInputs(d,isEv){
-  const opts=[['none','Não repete'],['daily','Todo dia'],['weekdays','Dias úteis (seg a sex)'],['weekly','Toda semana'],['biweekly','A cada 2 semanas'],['monthly','Todo mês'],['yearly','Todo ano'],['custom','Personalizado…']];
+  const opts=[['none','Não repete'],['daily','Todo dia'],['weekdays','Dias úteis (seg a sex)'],['weekly','Toda semana'],['biweekly','A cada 2 semanas'],['monthly','Todo mês'],['days30','A cada 30 dias'],['yearly','Todo ano'],['custom','Personalizado…']];
   let h='<div><label class="lbl" for="f-rep">Repetir</label><select class="inp" id="f-rep" data-bind="repeat" data-rerender>'+opts.map(o=>'<option value="'+o[0]+'"'+((d.repeat||'none')===o[0]?' selected':'')+'>'+o[1]+'</option>').join('')+'</select></div>';
   if(d.repeat==='custom'){
     const units=[['hour','hora(s)'],['day','dia(s)'],['week','semana(s)'],['month','mês(es)'],['year','ano(s)']].filter(u=>!(isEv&&u[0]==='hour'));
@@ -2179,6 +2181,7 @@ function repeatInputs(d,isEv){
   }
   if(repSpec(d)){
     h+='<div><label class="lbl" for="f-until">Parar de repetir em (opcional)</label><input class="inp" type="date" id="f-until" data-bind="repUntil" value="'+esc(d.repUntil||'')+'"></div>';
+    if(!isEv)h+='<div><label class="lbl" for="f-times">Repetir no máximo (vezes, opcional)</label><input class="inp" type="number" inputmode="numeric" min="1" max="999" id="f-times" data-bind="repTimes" value="'+esc(d.repTimes||'')+'" placeholder="Ex.: 12 para 12 parcelas"><div class="hint">Conta a primeira. Ao concluir a última vez, o lembrete termina sozinho.</div></div>';
     h+='<div class="prev"><b>'+esc(repLabel(d))+'</b>'+(d.date?'<small>'+esc((function(){const n=repNext(Object.assign({},d,{repN:d.repN,repU:d.repU}),new Date(dtOf(d.date,d.time||'00:00').getTime()));return n?'Depois desta, repete em '+relDay(n.date,isoDate(new Date()))+(n.time?' às '+n.time:''):'Sem próximas repetições.';})())+'</small>':'')+'</div>';
   }
   return h;
@@ -2727,9 +2730,10 @@ async function toggleDone(id){
   const r=S.reminders.find(x=>x.id===id);if(!r)return;
   if(confirmAll()&&!(await ask(r.done?{title:'Reabrir este lembrete?',msg:r.title,ok:'Reabrir'}:{title:'Marcar como feito?',msg:r.title,ok:'Feito'})))return;
   const today=isoDate(new Date());
-  const nx=(!r.done&&repSpec(r)&&r.date)?repNext(r,new Date()):null;
+  const used=(parseInt(r.repDone,10)||0)+1,maxT=parseInt(r.repTimes,10)||0;
+  const nx=(!r.done&&repSpec(r)&&r.date&&(!maxT||used<maxT))?repNext(r,new Date()):null;
   if(nx){
-    await Store.put('reminders',Object.assign({},r,{repAnchor:(r.repAnchor&&r.repAnchorFor===r.date)?r.repAnchor:r.date,repAnchorFor:nx.date,date:nx.date,time:nx.time,subtasks:(r.subtasks||[]).map(s=>Object.assign({},s,{done:false}))}));
+    await Store.put('reminders',Object.assign({},r,{repDone:used,repAnchor:(r.repAnchor&&r.repAnchorFor===r.date)?r.repAnchor:r.date,repAnchorFor:nx.date,date:nx.date,time:nx.time,subtasks:(r.subtasks||[]).map(s=>Object.assign({},s,{done:false}))}));
     okToast('Feito. Próxima vez: '+relDay(nx.date,today)+(nx.time?' às '+nx.time:''),'Desfazer',()=>Store.put('reminders',r));
   }else{
     await Store.put('reminders',Object.assign({},r,{done:!r.done,doneAt:r.done?0:Date.now()}));

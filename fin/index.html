@@ -51,9 +51,11 @@ h2{font-size:1.25rem;margin:1.2rem 1rem .4rem}
 .mnav .mid{flex:1;font-size:1.1rem}
 .sum3{display:grid;grid-template-columns:repeat(3,1fr);gap:.4rem;text-align:center;padding:.7rem .5rem}
 .sum3 .mut{font-size:.8rem}
+.rc{color:#34c27a}
 .sum3 b{font-size:.9rem;white-space:nowrap}
 .chips2{display:flex;gap:.4rem;margin:.3rem 0 .6rem}
-.chips2 button{flex:1;font:inherit;font-size:.95rem;font-weight:700;min-height:2.9rem;border-radius:.8rem;border:2px solid transparent;background:var(--surface-2);color:var(--fg);cursor:pointer}
+.chips2 button small{display:block;font-size:1.05rem;font-weight:800}
+.chips2 button{flex:1;min-width:0;font:inherit;font-size:.9rem;font-weight:700;min-height:3.4rem;line-height:1.2;padding:.2rem;border-radius:.8rem;border:2px solid transparent;background:var(--surface-2);color:var(--fg);cursor:pointer}
 .chips2 button.on{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
 .tbl{border:1px solid var(--line);border-radius:1rem;overflow:hidden;background:var(--surface);margin:.4rem 0}
 .tbl .tr{display:grid;grid-template-columns:3rem 1fr auto;gap:.5rem;align-items:center;width:100%;text-align:left;padding:.65rem .7rem;border:0;border-bottom:1px solid var(--line);background:transparent;color:var(--fg);font:inherit;min-height:3.6rem;cursor:pointer}
@@ -68,6 +70,7 @@ h2{font-size:1.25rem;margin:1.2rem 1rem .4rem}
 .tbl .w i{font-style:normal;font-size:.85rem;color:var(--muted);overflow-wrap:anywhere}
 .tbl .v{display:flex;flex-direction:column;align-items:flex-end;gap:.25rem}
 .tbl .v b{font-size:1.05rem;white-space:nowrap}
+.tbl .v b.rc{color:#34c27a}
 .tbl .tr.pg .w b,.tbl .tr.pg .v b{opacity:.65}
 
 .big{font-size:1.5rem;font-weight:800}
@@ -361,7 +364,7 @@ function simulate(debts,capC,order){
 const cfgRec=()=>byKind('proposal').find(r=>r.data&&r.data.cfg==='capacity');
 const monthsTxt=n=>{const a=Math.floor(n/12),m=n%12;return (a?a+(a>1?' anos':' ano'):'')+(a&&m?' e ':'')+(m?m+(m>1?' meses':' mês'):(a?'':'0 mês'));};
 function vPlan(){
-  const ds=byKind('debt').filter(d=>d.data.status!=='PAGA'&&mine(d.data));
+  const ds=byKind('debt').filter(d=>d.data.status!=='PAGA'&&d.data.dir!=='RECEBER'&&mine(d.data));
   const ok=ds.filter(d=>d.data.balanceC!=null&&d.data.balanceC>0),semSaldo=ds.filter(d=>d.data.balanceC==null);
   const cfg=cfgRec(),cap=cfg?cfg.data.capacityC:null;
   let h=header('Plano de quitação')+'<p class="sub">Simulação. Não é promessa e não negocia nada.</p>'+whoBar()+'<div class="wrap">';
@@ -404,6 +407,7 @@ function parseText(t){
   let amountC=null;if(mm){const v=parseMoney(mm[1]);if(!Number.isNaN(v))amountC=v;}
   let type='';
   if(/divida|devo\b|emprestimo|consignad/.test(norm))type='debt';
+  const recv=/me devem?\b|a receber|vou receber|receber\b/.test(norm);if(recv)type='debt';
   else if(/cartao|\bx\b|\d\s*x\b|parcel|fatura/.test(norm))type='charge';
   else if(/conta|vence|boleto|\bluz\b|agua|\bgas\b|internet|aluguel|telefone/.test(norm))type='bill';
   const nz=x=>String(x).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
@@ -420,7 +424,7 @@ function parseText(t){
   let desc=t.replace(/\b\d{1,2}\s*x\b/gi,' ').replace(/(?:R\$\s*)?(\d{1,3}(?:\.\d{3})+(?:,\d{2})?|\d+(?:,\d{2})?)/g,' ').replace(/\b\d{1,2}\s*x\b/gi,' ').replace(/\b(no|na|do|da|de|cart[aã]o|cartao|parcelado|parcelas?|vence|dia|ontem|hoje)\b/gi,' ').replace(/\s+/g,' ').trim();
   matched.forEach(w=>{desc=desc.split(/\s+/).filter(x=>nz(x).replace(/[^a-z0-9]/g,'')!==w).join(' ');});
   desc=desc.replace(/\b(d[ií]vida|conta|devo)\b/gi,' ').replace(/[^\p{L}\p{N}\s()+-]/gu,' ').replace(/\s+/g,' ').trim()||t.slice(0,40);
-  return {type,amountC,n:nm?+nm[1]:1,dueDay:dm?+dm[1]:null,card,date,desc};
+  return {type,amountC,n:nm?+nm[1]:1,dueDay:dm?+dm[1]:null,card,date,desc,recv};
 }
 async function markProp(rec,status){try{await Api.update(rec,Object.assign({},rec.data,{status}));}catch(e){S.msg=e.message;}render();}
 const sizeTxt=n=>!n?'':n<1024?n+' B':n<1048576?Math.round(n/1024)+' KB':(n/1048576).toFixed(1).replace('.',',')+' MB';
@@ -459,14 +463,14 @@ async function reviewProp(rec){
     const out=await chargeForm(card,null,{date:pr.date,desc:pr.desc,totalC:pr.amountC,n:pr.n});
     if(out)markProp(rec,'feito');};
   m.querySelector('#p-bi').onclick=async()=>{m.remove();const out=await billForm(null,{name:pr.desc,dueDay:pr.dueDay,amountC:pr.amountC,variable:pr.amountC==null,recurring:true});if(out)markProp(rec,'feito');};
-  m.querySelector('#p-de').onclick=async()=>{m.remove();const out=await debtForm(null,{creditor:pr.desc,balanceC:pr.amountC,status:'ATIVA',dueDay:pr.dueDay});if(out)markProp(rec,'feito');};
+  m.querySelector('#p-de').onclick=async()=>{m.remove();const out=await debtForm(null,{creditor:pr.desc,balanceC:pr.amountC,status:'ATIVA',dueDay:pr.dueDay,dir:pr.recv?'RECEBER':'PAGAR'});if(out)markProp(rec,'feito');};
 }
 
 function upcoming(){
   const td=todayIso(),lim=isoDate(new Date(Date.now()+30*864e5)),out=[];
   monthRows(ymOf(td)).filter(x=>!x.r.data.paidAt&&mine(x.bill.data)).forEach(x=>{const dt=billDue(x);if(dt<=lim)out.push({dt,kind:'Conta',name:x.bill.data.name,c:x.r.data.amountC,late:dt<td});});
   byKind('card').filter(c=>mine(c.data)).forEach(cr=>{const k=cardCalc(cr);Object.values(k.inv).filter(v=>!v.paid&&v.ym<=k.openYm&&v.totalC>0).forEach(v=>{const dt=dueDateFor(cr.data,v.ym);if(dt<=lim)out.push({dt,kind:'Fatura',name:cr.data.name+' · '+ymShort(v.ym),c:v.totalC,late:dt<td});});});
-  byKind('debt').filter(d=>d.data.dueDay&&mine(d.data)).forEach(d=>{const dt=debtNext(d.data,true);if(dt&&dt<=lim)out.push({dt,kind:'Dívida',name:d.data.creditor,c:d.data.installC,late:dt<td||d.data.status==='ATRASADA'});});
+  byKind('debt').filter(d=>d.data.dueDay&&mine(d.data)).forEach(d=>{const dt=debtNext(d.data,true),rv=d.data.dir==='RECEBER';if(dt&&dt<=lim)out.push({dt,kind:rv?'A receber':'Dívida',recv:rv,name:d.data.creditor,c:d.data.installC,late:dt<td||d.data.status==='ATRASADA'});});
   return out.sort((a,b)=>a.dt<b.dt?-1:1);
 }
 const hasDemo=()=>S.recs.some(r=>r.data&&r.data.demo);
@@ -523,7 +527,7 @@ function vHome(){
   if(S.who==='ALL'){
     const keys=PEOPLE.map(x=>x[0]).concat(['']);
     const info=keys.map(k=>{
-      const dd=byKind('debt').filter(d=>(d.data.holder||'')===k&&d.data.status!=='PAGA');
+      const dd=byKind('debt').filter(d=>(d.data.holder||'')===k&&d.data.status!=='PAGA'&&d.data.dir!=='RECEBER');
       const cc=byKind('card').filter(c=>(c.data.holder||'')===k);
       const bb=monthRows(ym).filter(x=>(x.bill.data.holder||'')===k&&!x.r.data.paidAt);
       return {k,debt:dd.reduce((a,d)=>a+(d.data.balanceC||0),0),used:cc.reduce((a,c)=>a+cardCalc(c).used,0),open:bb.reduce((a,x)=>a+(x.r.data.amountC||0),0),n:dd.length+cc.length+bb.length};
@@ -539,17 +543,20 @@ function vHome(){
   const up=upcoming();
   if(up.length){
     h+='<h2>Próximos vencimentos (30 dias)</h2>';
-    up.forEach(u=>{h+='<div class="card"><div class="row"><span class="t" style="font-weight:800">'+esc(u.name)+'</span><b>'+money(u.c)+'</b></div><div class="row"><span class="mut">'+u.kind+' · '+brDate(u.dt)+'</span>'+(u.late?'<span class="tag bad">Em atraso</span>':'')+'</div></div>';});
+    up.forEach(u=>{h+='<div class="card"><div class="row"><span class="t" style="font-weight:800">'+esc(u.name)+'</span><b'+(u.recv?' class="rc"':'')+'>'+(u.recv?'+ ':'')+money(u.c)+'</b></div><div class="row"><span class="mut">'+u.kind+' · '+brDate(u.dt)+'</span>'+(u.late?'<span class="tag bad">Em atraso</span>':'')+'</div></div>';});
   }
   const cardsH=byKind('card').filter(c=>mine(c.data));
   if(cardsH.length){
     let totH=0;cardsH.forEach(cr=>{totH+=cardCalc(cr).used;});
     h+='<h2>Cartões</h2><button class="item" data-act="tab" data-v="cards"><div class="row"><span class="mut">Total usado ('+cardsH.length+(cardsH.length===1?' cartão':' cartões')+')</span><b>'+money(totH)+'</b></div><div class="mut">Toque para ver cada cartão, a fatura e o limite.</div></button>';
   }
-  const debts=byKind('debt').filter(d=>d.data.status!=='PAGA'&&mine(d.data));
-  if(debts.length){
-    const sum=debts.reduce((a,d)=>a+(d.data.balanceC||0),0),miss=debts.some(d=>d.data.balanceC==null);
-    h+='<h2>Dívidas</h2><div class="card"><div class="row"><span class="mut">Saldo conhecido ('+debts.length+')</span><b>'+money(sum)+'</b></div>'+(miss?'<div class="mut">Algum saldo está “Não informado”.</div>':'')+'</div>';
+  const debtsAll=byKind('debt').filter(d=>d.data.status!=='PAGA'&&mine(d.data));
+  const debts=debtsAll.filter(d=>d.data.dir!=='RECEBER'),recvs=debtsAll.filter(d=>d.data.dir==='RECEBER');
+  if(debts.length||recvs.length){
+    let inner='';
+    if(debts.length){const sum=debts.reduce((a,d)=>a+(d.data.balanceC||0),0),miss=debts.some(d=>d.data.balanceC==null);inner+='<div class="row"><span class="mut">Saldo a pagar ('+debts.length+')</span><b>'+money(sum)+'</b></div>'+(miss?'<div class="mut">Algum saldo está “Não informado”.</div>':'');}
+    if(recvs.length){const sr=recvs.reduce((a,d)=>a+(d.data.balanceC||0),0);inner+='<div class="row"><span class="mut">Saldo a receber ('+recvs.length+')</span><b class="rc">'+money(sr)+'</b></div>';}
+    h+='<h2>Dívidas e parcelas</h2><div class="card">'+inner+'</div>';
   }
   h+='<div class="note">Projeção parcial não é dinheiro disponível. O FIN só organiza e lembra: quem paga é você.</div>';
   h+=hasDemo()?'<button class="btn sec" data-act="demo-off">Apagar os exemplos de teste</button>':(S.recs.length?'':'<button class="btn sec" data-act="demo-on">Carregar exemplos de teste</button>');
@@ -599,17 +606,17 @@ function debtPayData(x,ym,undo){
   return n;
 }
 async function debtPay(rec,ym){
-  const x=rec.data,paid=(x.paidYm||[]).indexOf(ym)>=0,date=dateOf(ym,x.dueDay);
-  const m=modal('<h3>'+esc(x.creditor)+'</h3><div class="card sum">'+esc('Parcela de '+ymShort(ym)+'\nValor: '+money(x.installC)+'\nVence '+brDate(date)+'\nSaldo da dívida: '+money(x.balanceC)+'\nSituação: '+(paid?'Paga':'A pagar'))+'</div>'
-    +'<button class="btn" id="d-pay">'+(paid?'Desfazer “paga”':'Marcar como paga')+'</button><button class="btn sec" id="d-edit">Editar a dívida</button><button class="btn sec" id="d-no">Voltar</button>');
+  const x=rec.data,rv=x.dir==='RECEBER',paid=(x.paidYm||[]).indexOf(ym)>=0,date=dateOf(ym,x.dueDay);
+  const m=modal('<h3>'+esc(x.creditor)+'</h3><div class="card sum">'+esc('Parcela de '+ymShort(ym)+'\nValor: '+money(x.installC)+'\nVence '+brDate(date)+'\n'+(rv?'Falta receber: ':'Saldo da dívida: ')+money(x.balanceC)+'\nSituação: '+(paid?(rv?'Recebida':'Paga'):(rv?'A receber':'A pagar')))+'</div>'
+    +'<button class="btn" id="d-pay">'+(paid?(rv?'Desfazer “recebida”':'Desfazer “paga”'):(rv?'Marcar como recebida':'Marcar como paga'))+'</button><button class="btn sec" id="d-edit">Editar a dívida</button><button class="btn sec" id="d-no">Voltar</button>');
   m.querySelector('#d-no').onclick=()=>m.remove();
   m.querySelector('#d-edit').onclick=()=>{m.remove();debtForm(rec);};
   m.querySelector('#d-pay').onclick=async()=>{
     const nx=debtPayData(x,ym,paid),lines=['Parcela de '+ymShort(ym)+' · '+money(x.installC)];
-    if(x.balanceC!=null&&x.installC)lines.push('Saldo da dívida: '+money(x.balanceC)+' → '+money(nx.balanceC));
-    if(nx.status!==x.status)lines.push('Situação: '+(DST[x.status]||x.status)+' → '+(DST[nx.status]||nx.status));
-    lines.push(paid?'Volta para “a pagar”.':'O FIN não paga nada. Só registra que você pagou.');
-    if(await confirmBox(paid?'Desfazer “paga”?':'Marcar como paga?',lines,'Sim')){
+    if(x.balanceC!=null&&x.installC)lines.push((rv?'Falta receber: ':'Saldo da dívida: ')+money(x.balanceC)+' → '+money(nx.balanceC));
+    if(nx.status!==x.status)lines.push('Situação: '+dstTxt(x)+' → '+dstTxt(nx));
+    lines.push(paid?(rv?'Volta para “a receber”.':'Volta para “a pagar”.'):(rv?'O FIN não recebe nada. Só registra que você recebeu.':'O FIN não paga nada. Só registra que você pagou.'));
+    if(await confirmBox(paid?(rv?'Desfazer “recebida”?':'Desfazer “paga”?'):(rv?'Marcar como recebida?':'Marcar como paga?'),lines,'Sim')){
       m.remove();try{await Api.update(rec,nx);S.msg='';}catch(e){S.msg=e.message;}render();
     }
   };
@@ -638,34 +645,38 @@ function monthItems(ym){
     });
   });
   byKind('debt').filter(d=>mine(d.data)).forEach(d=>{
-    const x=d.data;if(!x.dueDay)return;
+    const x=d.data,rv=x.dir==='RECEBER';if(!x.dueDay)return;
     const paid=(x.paidYm||[]).indexOf(ym)>=0;
     if(!paid&&!debtOwes(x,ym))return;
     const date=dateOf(ym,x.dueDay);let state,cls='';
-    if(paid){state='Paga';cls='ok';}
+    if(paid){state=rv?'Recebida':'Paga';cls='ok';}
     else if(x.installC==null){state='Sem valor';cls='warn';}
     else if(date<td){if(x.status==='ATRASADA'){state='Em atraso';cls='bad';}else{state='Confirmar';cls='warn';}}
-    else state='A pagar';
-    out.push({k:'debt',id:d.id,ym,date,name:x.creditor,tipo:'Dívida'+(x.kindD?' · '+x.kindD:''),who:x.holder,amountC:x.installC,state,cls});
+    else state=rv?'A receber':'A pagar';
+    out.push({k:'debt',id:d.id,ym,date,name:x.creditor,tipo:(rv?'A receber':'Dívida')+(x.kindD?' · '+x.kindD:''),who:x.holder,amountC:x.installC,state,cls,dir:rv?'RECEBER':'PAGAR'});
   });
   return out.sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:(a.name<b.name?-1:1));
 }
 function mRow(it){
   const sub=[it.tipo].concat(it.who?[pname(it.who)]:[]).join(' · ');
-  return '<button class="tr'+(it.state==='Paga'?' pg':'')+'" data-act="m-open" data-k="'+it.k+'" data-id="'+esc(it.id)+'" data-ym="'+esc(it.ym||'')+'">'
+  return '<button class="tr'+((it.state==='Paga'||it.state==='Recebida')?' pg':'')+'" data-act="m-open" data-k="'+it.k+'" data-id="'+esc(it.id)+'" data-ym="'+esc(it.ym||'')+'">'
     +'<span class="d"><b>'+it.date.slice(8,10)+'</b><i>'+dowOf(it.date)+'</i></span>'
     +'<span class="w"><b>'+esc(it.name)+'</b><i>'+esc(sub)+'</i></span>'
-    +'<span class="v"><b>'+(it.amountC==null?'—':money(it.amountC))+'</b><em class="tag '+it.cls+'">'+esc(it.state)+'</em></span></button>';
+    +'<span class="v"><b'+(it.dir==='RECEBER'?' class="rc"':'')+'>'+(it.amountC==null?'—':(it.dir==='RECEBER'?'+ ':'')+money(it.amountC))+'</b><em class="tag '+it.cls+'">'+esc(it.state)+'</em></span></button>';
 }
 function vMonth(){
   const cur=ymOf(todayIso()),ym=S.mm||cur,all=monthItems(ym);
-  const pagas=all.filter(i=>i.state==='Paga'),abertas=all.filter(i=>i.state!=='Paga');
-  const shown=S.mf==='paid'?pagas:(S.mf==='open'?abertas:all);
-  const sum=l=>l.reduce((a,i)=>a+(i.amountC||0),0),total=sum(all),pg=sum(pagas),semV=abertas.filter(i=>i.amountC==null).length;
+  const feita=i=>i.state==='Paga'||i.state==='Recebida',rcv=i=>i.dir==='RECEBER';
+  const pagar=all.filter(i=>!rcv(i)),receber=all.filter(rcv),fazer=all.filter(i=>!feita(i));
+  const sum=l=>l.reduce((a,i)=>a+(i.amountC||0),0);
+  const tP=sum(pagar),pP=sum(pagar.filter(feita)),tR=sum(receber),pR=sum(receber.filter(feita)),semV=fazer.filter(i=>i.amountC==null).length;
+  const shown=S.mf==='pay'?pagar.filter(i=>!feita(i)):(S.mf==='rec'?receber.filter(i=>!feita(i)):(S.mf==='done'?all.filter(feita):all));
   let h=header('Mês','')+whoBar()+'<div class="wrap">';
   h+='<div class="mnav"><button class="arr" data-act="m-prev" aria-label="Mês anterior">‹</button><button class="mid" data-act="m-today">'+esc(ymLabel(ym))+(ym===cur?' · este mês':'')+'</button><button class="arr" data-act="m-next" aria-label="Próximo mês">›</button></div>';
-  h+='<div class="card sum3"><div><div class="mut">Total do mês</div><b>'+money(total)+'</b></div><div><div class="mut">Já pago</div><b>'+money(pg)+'</b></div><div><div class="mut">Falta pagar</div><b>'+money(total-pg)+'</b></div></div>'+(semV?'<div class="hint" style="margin:-.2rem .3rem .4rem">'+semV+' sem valor não entra na soma.</div>':'');
-  h+='<div class="chips2">'+[['all','Tudo ('+all.length+')'],['open','Falta pagar ('+abertas.length+')'],['paid','Pagas ('+pagas.length+')']].map(f=>'<button data-act="m-filter" data-v="'+f[0]+'" class="'+(S.mf===f[0]?'on':'')+'">'+f[1]+'</button>').join('')+'</div>';
+  h+='<div class="card sum3"><div><div class="mut">A pagar</div><b>'+money(tP)+'</b></div><div><div class="mut">Já pago</div><b>'+money(pP)+'</b></div><div><div class="mut">Falta pagar</div><b>'+money(tP-pP)+'</b></div></div>';
+  if(receber.length)h+='<div class="card sum3"><div><div class="mut">A receber</div><b class="rc">'+money(tR)+'</b></div><div><div class="mut">Já recebido</div><b class="rc">'+money(pR)+'</b></div><div><div class="mut">Falta receber</div><b class="rc">'+money(tR-pR)+'</b></div></div><div class="hint" style="margin:-.2rem .3rem .4rem">O que falta: você recebe '+money(tR-pR)+' e paga '+money(tP-pP)+' (diferença '+money((tR-pR)-(tP-pP))+').</div>';
+  if(semV)h+='<div class="hint" style="margin:-.2rem .3rem .4rem">'+semV+' sem valor não entra na soma.</div>';
+  h+='<div class="chips2">'+[['all','Tudo',all.length],['pay','A pagar',pagar.filter(i=>!feita(i)).length]].concat(receber.length?[['rec','A receber',receber.filter(i=>!feita(i)).length]]:[]).concat([['done','Feitas',all.filter(feita).length]]).map(f=>'<button data-act="m-filter" data-v="'+f[0]+'" class="'+(S.mf===f[0]?'on':'')+'">'+f[1]+'<small>'+f[2]+'</small></button>').join('')+'</div>';
   if(!all.length)h+='<div class="card mut">Nada vence neste mês. Contas, faturas de cartão e parcelas de dívidas aparecem aqui sozinhas.</div>';
   else if(!shown.length)h+='<div class="card mut">Nada nesta lista.</div>';
   else h+='<div class="tbl" role="table"><div class="tr th" role="row"><span>Dia</span><span>O que</span><span>Valor</span></div>'+shown.map(mRow).join('')+'</div>';
@@ -735,21 +746,28 @@ function vCard(){
   return h+'</div>';
 }
 const DST={ATIVA:'Ativa',ATRASADA:'Atrasada',PAGA:'Paga',DESCONHECIDA:'Não sei'};
+const DSTR={ATIVA:'A receber',ATRASADA:'Atrasada',PAGA:'Recebida',DESCONHECIDA:'Não sei'};
+const dstTxt=x=>(x.dir==='RECEBER'?DSTR:DST)[x.status]||x.status;
 function debtRow(d){
-  const x=d.data;
-  return '<button class="item" data-act="debt-edit" data-id="'+d.id+'"><div class="row"><span class="t">'+esc(x.creditor)+'</span><span class="tag '+(x.status==='PAGA'?'ok':(x.status==='ATRASADA'?'bad':''))+'">'+esc(DST[x.status]||x.status)+'</span></div><div class="row"><span class="mut">Saldo</span><b>'+money(x.balanceC)+'</b></div><div class="row"><span class="mut">Parcela</span><b>'+money(x.installC)+'</b></div><div class="mut">Devedor no contrato: '+esc(pname(x.holder))+(x.payer?' · paga hoje: '+esc(pname(x.payer)):'')+(x.kindD?' · '+esc(x.kindD):'')+(x.rateBp!=null?' · juros '+(x.rateBp/100).toFixed(2).replace('.',',')+'% ao mês':'')+(x.account?' · conta '+esc(x.account):'')+'</div>'+(x.dueDay?'<div class="mut">Vence dia '+x.dueDay+(debtNext(x,true)?' · próxima parcela em '+brDate(debtNext(x,true)):'')+'</div>':'')+(x.note?'<div class="mut">'+esc(x.note)+'</div>':'')+'</button>';
+  const x=d.data,rv=x.dir==='RECEBER';
+  return '<button class="item" data-act="debt-edit" data-id="'+d.id+'"><div class="row"><span class="t">'+esc(x.creditor)+'</span><span class="tag '+(x.status==='PAGA'?'ok':(x.status==='ATRASADA'?'bad':''))+'">'+esc(dstTxt(x))+'</span></div><div class="row"><span class="mut">'+(rv?'Falta receber':'Saldo')+'</span><b'+(rv?' class="rc"':'')+'>'+money(x.balanceC)+'</b></div><div class="row"><span class="mut">Parcela</span><b'+(rv?' class="rc"':'')+'>'+money(x.installC)+'</b></div><div class="mut">'+(rv?'A receber · quem recebe: '+esc(pname(x.holder)):'Devedor no contrato: '+esc(pname(x.holder))+(x.payer?' · paga hoje: '+esc(pname(x.payer)):''))+(x.kindD?' · '+esc(x.kindD):'')+(x.rateBp!=null?' · juros '+(x.rateBp/100).toFixed(2).replace('.',',')+'% ao mês':'')+(x.account?' · conta '+esc(x.account):'')+'</div>'+(x.dueDay?'<div class="mut">Vence dia '+x.dueDay+(debtNext(x,true)?' · próxima parcela em '+brDate(debtNext(x,true)):'')+'</div>':'')+(x.note?'<div class="mut">'+esc(x.note)+'</div>':'')+'</button>';
 }
 function vDebts(){
   const ds=byKind('debt').filter(d=>mine(d.data));
-  const open=ds.filter(d=>d.data.status!=='PAGA'),paid=ds.filter(d=>d.data.status==='PAGA');
-  let h=header('Dívidas')+whoBar()+'<div class="wrap"><button class="btn" data-act="debt-new">+ Nova dívida</button>';
-  if(!ds.length)h+='<div class="card mut">Nenhuma dívida cadastrada.</div>';
-  if(open.length){
-    const sum=open.reduce((a,d)=>a+(d.data.balanceC||0),0),inst=open.reduce((a,d)=>a+(d.data.installC||0),0),miss=open.some(d=>d.data.balanceC==null);
-    h+='<div class="card"><div class="row"><span class="mut">Saldo conhecido ('+open.length+' em aberto)</span><b>'+money(sum)+'</b></div><div class="row"><span class="mut">Soma das parcelas por mês</span><b>'+money(inst)+'</b></div>'+(miss?'<div class="mut">Algum saldo está “Não informado”.</div>':'')+'</div>';
-    h+='<h2>Em aberto ('+open.length+')</h2>'+open.map(debtRow).join('');
+  const abertas=ds.filter(d=>d.data.status!=='PAGA'),pagar=abertas.filter(d=>d.data.dir!=='RECEBER'),receber=abertas.filter(d=>d.data.dir==='RECEBER'),feitas=ds.filter(d=>d.data.status==='PAGA');
+  let h=header('Dívidas')+whoBar()+'<div class="wrap"><button class="btn" data-act="debt-new">+ Nova dívida ou parcela</button>';
+  if(!ds.length)h+='<div class="card mut">Nada cadastrado. Use “Nova dívida ou parcela” para o que você deve e também para o que te devem.</div>';
+  if(pagar.length){
+    const sum=pagar.reduce((a,d)=>a+(d.data.balanceC||0),0),inst=pagar.reduce((a,d)=>a+(d.data.installC||0),0),miss=pagar.some(d=>d.data.balanceC==null);
+    h+='<div class="card"><div class="row"><span class="mut">Saldo a pagar ('+pagar.length+' em aberto)</span><b>'+money(sum)+'</b></div><div class="row"><span class="mut">Parcelas por mês (a pagar)</span><b>'+money(inst)+'</b></div>'+(miss?'<div class="mut">Algum saldo está “Não informado”.</div>':'')+'</div>';
+    h+='<h2>A pagar ('+pagar.length+')</h2>'+pagar.map(debtRow).join('');
   }
-  if(paid.length)h+='<h2>Pagas ('+paid.length+')</h2>'+paid.map(debtRow).join('');
+  if(receber.length){
+    const sum=receber.reduce((a,d)=>a+(d.data.balanceC||0),0),inst=receber.reduce((a,d)=>a+(d.data.installC||0),0);
+    h+='<div class="card"><div class="row"><span class="mut">Saldo a receber ('+receber.length+')</span><b class="rc">'+money(sum)+'</b></div><div class="row"><span class="mut">Parcelas por mês (a receber)</span><b class="rc">'+money(inst)+'</b></div></div>';
+    h+='<h2>A receber ('+receber.length+')</h2>'+receber.map(debtRow).join('');
+  }
+  if(feitas.length)h+='<h2>Pagas e recebidas ('+feitas.length+')</h2>'+feitas.map(debtRow).join('');
   return h+'</div>';
 }
 
@@ -911,7 +929,7 @@ function vStmt(){
 const CHAT_KINDS=['card','charge','invpay','bill','billmonth','debt','proposal','stmt'];
 function chatSnapshot(){
   return JSON.stringify({fin_snapshot:1,gerado_em:new Date().toISOString(),
-    regras:['Valores em centavos inteiros (R$ 10,50 = 1050). Dado ausente = null, nunca 0.','holder = MARCELO ou MARLENE (devedor/titular); payer = quem paga hoje.','Para mudar algo, devolva JSON {"fin_ops":1,"ops":[...]} com op create (kind,data), update (id,data = campos a mudar) ou delete (id). Máximo 60 ops.','Marcelo confere e confirma antes de salvar. O FIN nunca paga nem move dinheiro.','kinds: card, charge, invpay, bill, billmonth, debt, proposal (proposal com data.cfg=capacity guarda quanto dá para pagar por mês: capacityC).'],
+    regras:['debt.dir = PAGAR (padrão: eu devo) ou RECEBER (me devem); debt.paidYm = meses AAAA-MM já pagos ou recebidos; debt.firstDue = data da 1ª parcela.','Valores em centavos inteiros (R$ 10,50 = 1050). Dado ausente = null, nunca 0.','holder = MARCELO ou MARLENE (devedor/titular); payer = quem paga hoje.','Para mudar algo, devolva JSON {"fin_ops":1,"ops":[...]} com op create (kind,data), update (id,data = campos a mudar) ou delete (id). Máximo 60 ops.','Marcelo confere e confirma antes de salvar. O FIN nunca paga nem move dinheiro.','kinds: card, charge, invpay, bill, billmonth, debt, proposal (proposal com data.cfg=capacity guarda quanto dá para pagar por mês: capacityC).'],
     registros:S.recs.map(r=>({id:r.id,kind:r.kind,version:r.version,data:r.data}))},null,1);
 }
 function chatParse(txt){
@@ -1103,8 +1121,9 @@ async function chargeForm(card,rec,preset){
 async function debtForm(rec,preset){
   const d=rec?rec.data:Object.assign({status:'ATIVA'},preset||{});
   return form(rec?'Editar dívida':'Nova dívida',[
-    {k:'creditor',label:'Quem você deve',type:'text',req:true},
-    {k:'balanceC',label:'Saldo devedor',type:'money',hint:'Vazio = Não informado.'},
+    {k:'dir',label:'Esta parcela é…',type:'select',opts:[['PAGAR','A pagar (eu devo)'],['RECEBER','A receber (me devem)']]},
+    {k:'creditor',label:'Nome (a quem você deve ou quem te deve)',type:'text',req:true},
+    {k:'balanceC',label:'Saldo (quanto falta pagar ou receber)',type:'money',hint:'Vazio = Não informado.'},
     {k:'installC',label:'Valor da parcela',type:'money'},
     {k:'rateBp',label:'Juros ao mês, em % (se souber)',type:'money',hint:'Ex.: 1,99. Vazio = Não informado (não vira zero).'},
     {k:'dueDay',label:'Vence todo dia',type:'int',min:1,max:31},
@@ -1115,8 +1134,8 @@ async function debtForm(rec,preset){
     {k:'payer',label:'Quem paga hoje',type:'select',opts:HOLD_OPTS},
     {k:'account',label:'Conta de onde sai o pagamento (opcional)',type:'text'},
     {k:'note',label:'Observação',type:'text'}
-  ],Object.assign({holder:defHolder()},d),{
-    summary:o=>['Dívida: '+o.creditor,'Saldo: '+money(o.balanceC),'Parcela: '+money(o.installC),'Juros ao mês: '+(o.rateBp==null?'Não informado':(o.rateBp/100).toFixed(2).replace('.',',')+'%'),'Situação: '+o.status,'Tipo: '+(o.kindD||'Não definido'),'Devedor no contrato: '+pname(o.holder),'Quem paga hoje: '+pname(o.payer)],
+  ],Object.assign({holder:defHolder(),dir:'PAGAR'},d),{
+    summary:o=>[(o.dir==='RECEBER'?'A receber de: ':'Dívida: ')+o.creditor,'Saldo: '+money(o.balanceC),'Parcela: '+money(o.installC),'Juros ao mês: '+(o.rateBp==null?'Não informado':(o.rateBp/100).toFixed(2).replace('.',',')+'%'),'Situação: '+o.status,'Tipo: '+(o.kindD||'Não definido'),'Devedor no contrato: '+pname(o.holder),'Quem paga hoje: '+pname(o.payer)],
     save:async o=>{if(rec)await Api.update(rec,Object.assign({},rec.data,o));else await Api.create('debt',o);},
     onDelete:rec?async()=>{if(await confirmBox('Apagar esta dívida?',[d.creditor],'Sim, apagar',true)){try{await Api.remove(rec);}catch(e){S.msg=e.message;}render();}}:null
   });
