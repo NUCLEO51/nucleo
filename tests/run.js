@@ -426,7 +426,7 @@ global.__pend.push((async () => {
   ev(`__NUCLEO_TEST__.S.tab='hoje';__NUCLEO_TEST__.S.rview='l:lb';`);
   clickAct(q('#tab-lembretes'));
   clickAct(q('#main [data-act="open-rem"][data-id="r1"]'));
-  t('mover lembrete: a tela de leitura tem o botão Mover para outra lista', !!q('#sheetRoot [data-act="move-open"]') && /Mover para outra lista/.test(q('#sheetRoot').innerHTML), true);
+  t('mover lembrete: na leitura, Mover para outra lista é um botão redondo no topo, ao lado de Editar, e o botão largo saiu', !!q('#sheetRoot .sheet-hd .hd-r [data-act="move-open"].iconbtn') && /aria-label="Mover para outra lista"/.test(q('#sheetRoot').innerHTML) && !q('#sheetRoot .chip[data-act="move-open"]') && q('#sheetRoot .sheet-hd .hd-r [data-act="move-open"]').nextElementSibling.getAttribute('data-act') === 'view-edit', true);
   clickAct(q('#sheetRoot [data-act="move-open"]')); await wait(30);
   const mv = q('#mvRoot');
   t('mover lembrete: abre a escolha com listas, seção e a atual marcada', !!mv && mv.querySelectorAll('.mv-opt').length === 6 && /Contas e dinheiro/.test(mv.innerHTML) && /mv-opt sub/.test(mv.innerHTML) && /aria-current="true"[^>]*>(?:<span class="mv-dot"[^>]*><\/span>)?<span class="mv-t">Casa<\/span><span class="mv-now">agora<\/span>/.test(mv.innerHTML), true);
@@ -459,7 +459,7 @@ global.__pend.push((async () => {
   ev(`const S=__NUCLEO_TEST__.S;S.conf='del';S.sheet=null;S.tab='lembretes';S.rview=null;S.folder='f1';`);
   clickAct(q('#tab-notas'));
   clickAct(q('#main [data-act="open-note"][data-id="n1"]'));
-  t('mover nota: a tela de leitura tem o botão Mover para outra pasta', !!q('#sheetRoot [data-act="move-open"]') && /Mover para outra pasta/.test(q('#sheetRoot').innerHTML), true);
+  t('mover nota: na leitura, Mover para outra pasta é um botão redondo no topo, ao lado de Editar, e o botão largo saiu', !!q('#sheetRoot .sheet-hd .hd-r [data-act="move-open"].iconbtn') && /aria-label="Mover para outra pasta"/.test(q('#sheetRoot').innerHTML) && !q('#sheetRoot .chip[data-act="move-open"]') && q('#sheetRoot .sheet-hd .hd-r [data-act="move-open"]').nextElementSibling.getAttribute('data-act') === 'view-edit', true);
   clickAct(q('#sheetRoot [data-act="move-open"]')); await wait(30);
   const mn = q('#mvRoot');
   t('mover nota: escolha com Geral e as pastas em caminho, e a atual marcada', !!mn && /Geral \(sem pasta\)/.test(mn.innerHTML) && /Elisa › Documentos/.test(mn.innerHTML) && /<span class="mv-t">Elisa<\/span><span class="mv-now">agora<\/span>/.test(mn.innerHTML), true);
