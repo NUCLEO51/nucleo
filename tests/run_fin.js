@@ -130,7 +130,29 @@ const count = (h, s) => h.split(s).length - 1;
   click(doc.querySelector('.modal .mback'));
 
   t('código: Voltar fixo no topo em modal() e salvar da dívida não perde campos', /\.mbar\{position:sticky;top:0/.test(html) && /Object\.assign\(\{\},rec\.data,o\)/.test(html), true);
-  t('FIN: versão do cache subiu para v3', /fin-app-v3/.test(fs.readFileSync(path.join(__dirname, '..', 'fin', 'sw.js'), 'utf8')), true);
+  // ---- pendente com documento anexo
+  ev(`S.recs.push({id:'p0',kind:'proposal',version:1,data:{text:'Conta de luz vence dia 10',source:'nucleo',status:'pendente',at:'2026-10-16T10:00:00Z'}});
+      S.recs.push({id:'p1',kind:'proposal',version:1,data:{text:'📎 boleto.pdf',source:'nucleo',status:'pendente',at:'2026-10-16T10:00:00Z',files:[{id:'uid/1.pdf',name:'boleto.pdf',size:2048,type:'application/pdf'},{id:'uid/2.jpg',name:'foto.jpg',size:5000,type:'image/jpeg'}]}});`);
+  w.URL.createObjectURL = () => 'blob:teste';
+  ev(`Api.blob=async(p)=>new Blob(['x'],{type:p.endsWith('.jpg')?'image/jpeg':'application/pdf'})`);
+  ev(`reviewProp(S.recs.find(r=>r.id==='p0'))`);
+  t('pendente só de texto: não mostra área de documento', !doc.querySelector('.modal [data-vf]') && !/não lê a foto sozinho/.test(doc.querySelector('.modal').textContent), true);
+  click(doc.querySelector('.modal .mback'));
+  ev(`reviewProp(S.recs.find(r=>r.id==='p1'))`);
+  t('pendente com documento: um botão Ver para cada arquivo e o aviso de que o FIN não lê sozinho', doc.querySelectorAll('.modal [data-vf]').length === 2 && /não lê a foto sozinho/.test(doc.querySelector('.modal').textContent) && /Ver boleto\.pdf/.test(doc.querySelector('.modal').textContent), true);
+  click(doc.querySelector('.modal [data-vf="0"]')); await wait(30);
+  const vmods = doc.querySelectorAll('.modal');
+  t('ver documento PDF: abre outra janela com Abrir em tela cheia e Voltar no topo', vmods.length === 2 && /Abrir em tela cheia/.test(vmods[1].textContent) && !vmods[1].querySelector('img.vf-img') && !!vmods[1].querySelector('.mback'), true);
+  click(vmods[1].querySelector('.mback'));
+  t('visualizador: Voltar do topo fecha só ele e mantém a revisão do pendente', doc.querySelectorAll('.modal').length === 1 && !!doc.querySelector('.modal [data-vf]'), true);
+  click(doc.querySelector('.modal [data-vf="1"]')); await wait(30);
+  t('ver documento imagem: mostra a imagem na janela', !!doc.querySelectorAll('.modal')[1].querySelector('img.vf-img'), true);
+  click(doc.querySelectorAll('.modal')[1].querySelector('#vf-no')); click(doc.querySelector('.modal .mback'));
+  ev(`Api.blob=async()=>{throw new Error('Não consegui abrir o arquivo (404).')}`);
+  ev(`viewFile({id:'x',name:'sumiu.pdf',type:'application/pdf'})`); await wait(30);
+  t('arquivo que sumiu: mostra a mensagem em vez de travar', /Não consegui abrir o arquivo \(404\)/.test(doc.querySelector('.modal').textContent), true);
+  click(doc.querySelector('.modal .mback'));
+  t('FIN: versão do cache subiu para v4', /fin-app-v4/.test(fs.readFileSync(path.join(__dirname, '..', 'fin', 'sw.js'), 'utf8')), true);
 
   console.log(ok + ' ok, ' + bad + ' falhas (FIN)');
   process.exit(bad ? 1 : 0);

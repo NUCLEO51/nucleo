@@ -89,6 +89,7 @@ nav.tabs button.on{color:var(--accent)}
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:50;display:flex;align-items:flex-end;justify-content:center}
 .sheet{background:var(--bg);width:100%;max-width:34rem;max-height:92vh;overflow:auto;border-radius:1.2rem 1.2rem 0 0;padding:1rem 1rem calc(1rem + env(safe-area-inset-bottom,0px))}
 .sheet h3{margin:.2rem 0 .6rem;font-size:1.4rem}
+.vf-img{width:100%;border-radius:.8rem;margin:.4rem 0}
 .mbar{position:sticky;top:0;z-index:3;background:var(--bg);margin:-1rem -1rem .9rem;padding:.8rem 1rem .5rem}
 .mback{font:inherit;font-size:1.2rem;font-weight:800;min-height:3.2rem;padding:0 1.2rem;border:0;border-radius:1rem;background:var(--accent-soft);color:var(--accent);cursor:pointer}
 label.f{display:block;font-weight:800;margin:.8rem 0 .25rem}
@@ -184,6 +185,12 @@ const Api={
     if(!r.ok){const j=await r.json().catch(()=>({}));throw Object.assign(new Error(j.message||'erro'),{status:r.status,code:j.code});}
     S.recs=await r.json(); lsSet('fin-cache',JSON.stringify(S.recs));
   },
+  async blob(path){
+    const t=await this.token();
+    const r=await fetch(CFG.url+'/storage/v1/object/authenticated/anexos/'+path,{headers:{apikey:CFG.key,Authorization:'Bearer '+t}});
+    if(!r.ok)throw new Error('Não consegui abrir o arquivo ('+r.status+').');
+    return r.blob();
+  },
   async create(kind,data){
     const r=await this.rest('fin_records',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify({kind,data})});
     if(!r.ok)throw new Error('Não consegui salvar ('+r.status+').');
@@ -212,7 +219,7 @@ function modal(html){
   document.body.appendChild(m);
   /* o Voltar do topo faz o mesmo que o botão de sair que a janela já tem lá embaixo */
   m.querySelector('.mback').onclick=()=>{
-    for(const q of ['#f-no','#cf-no','#b-no','#p-no','#d-no','#c0','#no','#ok']){const c=m.querySelector(q);if(c){c.click();return;}}
+    for(const q of ['#f-no','#cf-no','#b-no','#p-no','#d-no','#vf-no','#c0','#no','#ok']){const c=m.querySelector(q);if(c){c.click();return;}}
     m.remove();
   };
   return m;
@@ -416,15 +423,34 @@ function parseText(t){
   return {type,amountC,n:nm?+nm[1]:1,dueDay:dm?+dm[1]:null,card,date,desc};
 }
 async function markProp(rec,status){try{await Api.update(rec,Object.assign({},rec.data,{status}));}catch(e){S.msg=e.message;}render();}
+const sizeTxt=n=>!n?'':n<1024?n+' B':n<1048576?Math.round(n/1024)+' KB':(n/1048576).toFixed(1).replace('.',',')+' MB';
+async function viewFile(f){
+  const m=modal('<h3>'+esc(f.name)+'</h3><div id="vf-body" class="card mut">Abrindo…</div><div id="vf-btns"></div><button class="btn sec" id="vf-no">Voltar</button>');
+  m.querySelector('#vf-no').onclick=()=>m.remove();
+  try{
+    const blob=await Api.blob(f.id),url=URL.createObjectURL(blob),type=f.type||blob.type||'',img=/^image\//.test(type);
+    const body=m.querySelector('#vf-body');
+    if(body)body.outerHTML=img?'<img class="vf-img" id="vf-body" alt="'+esc(f.name)+'" src="'+url+'">':'<div class="card" id="vf-body">Arquivo '+esc(f.name)+(f.size?' ('+sizeTxt(f.size)+')':'')+'. Toque em “Abrir” para ver.</div>';
+    let bt='<button class="btn sec" id="vf-open">Abrir em tela cheia</button>';
+    const file=new File([blob],f.name,{type:type||'application/octet-stream'});
+    if(navigator.canShare&&navigator.canShare({files:[file]}))bt+='<button class="btn sec" id="vf-share">Compartilhar com o chat</button>';
+    const box=m.querySelector('#vf-btns');box.innerHTML=bt;
+    box.querySelector('#vf-open').onclick=()=>{window.open(url,'_blank');};
+    const sh=box.querySelector('#vf-share');if(sh)sh.onclick=()=>{navigator.share({files:[file],title:f.name}).catch(()=>{});};
+  }catch(e){const body=m.querySelector('#vf-body');if(body)body.textContent=e.message||'Não consegui abrir.';}
+}
 async function reviewProp(rec){
-  const pr=parseText(rec.data.text),tx=rec.data.text;
+  const pr=parseText(rec.data.text),tx=rec.data.text,files=rec.data.files||[];
   const sug=pr.type;
-  const m=modal('<h3>Veio do Núcleo</h3><div class="card sum">'+esc(tx)+'</div><p class="mut">O que é isso?'+(sug?' Sugestão marcada.':' Escolha.')+'</p>'
+  const m=modal('<h3>Veio do Núcleo</h3><div class="card sum">'+esc(tx)+'</div>'
+    +(files.length?'<p class="mut">Documento anexo. O FIN não lê a foto sozinho: veja o documento, escolha o tipo abaixo e preencha. Dá para compartilhar com o chat.</p>'+files.map((f,i)=>'<button class="btn" data-vf="'+i+'">📎 Ver '+esc(f.name)+(f.size?' · '+sizeTxt(f.size):'')+'</button>').join(''):'')
+    +'<p class="mut">O que é isso?'+(sug?' Sugestão marcada.':' Escolha.')+'</p>'
     +'<button class="btn'+(sug==='charge'?'':' sec')+'" id="p-ch">💳 Compra no cartão</button>'
     +'<button class="btn'+(sug==='bill'?'':' sec')+'" id="p-bi">🧾 Conta do mês</button>'
     +'<button class="btn'+(sug==='debt'?'':' sec')+'" id="p-de">📉 Dívida</button>'
     +'<button class="btn bad" id="p-ig">Ignorar</button><button class="btn sec" id="p-no">Voltar</button>');
   m.querySelector('#p-no').onclick=()=>m.remove();
+  m.querySelectorAll('[data-vf]').forEach(b=>{b.onclick=()=>viewFile(files[+b.dataset.vf]);});
   m.querySelector('#p-ig').onclick=async()=>{m.remove();if(await confirmBox('Ignorar este item?',[tx,'Ele sai da lista de pendentes.'],'Sim, ignorar',true))markProp(rec,'ignorado');};
   m.querySelector('#p-ch').onclick=async()=>{m.remove();
     const cards=byKind('card');

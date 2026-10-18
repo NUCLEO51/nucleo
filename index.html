@@ -697,7 +697,7 @@ const S={tab:'hoje',raw:{},reminders:[],notes:[],events:[],inbox:[],folders:[],l
   folder:null,rview:null,q:'',rq:'',sheet:null,rings:[],assetsOk:false,dlOk:false,bw:true,weekend:false,fired:{},fs:20,theme:'auto',conf:'all',purged:false,gq:'',nsOpen:false,nx:{},nn:{},lc:{}};
 const lsGet=k=>{try{return localStorage.getItem(k);}catch(e){return null;}};
 const lsSet=(k,v)=>{try{localStorage.setItem(k,v);}catch(e){}};
-const APP_V='v49';
+const APP_V='v50';
 const ERRLOG_KEY='nucleo-errlog';
 function logErr(where,e){try{const a=JSON.parse(localStorage.getItem(ERRLOG_KEY)||'[]');a.push({t:Date.now(),w:String(where).slice(0,40),m:String((e&&e.message)||e||'').slice(0,160)});while(a.length>30)a.shift();localStorage.setItem(ERRLOG_KEY,JSON.stringify(a));}catch(x){}}
 addEventListener('error',ev=>logErr('tela',ev.message||ev.error));
@@ -1194,34 +1194,72 @@ function finSend(){
   let el=document.getElementById('finSend');if(el)el.remove();
   el=document.createElement('div');el.id='finSend';
   el.style.cssText='position:fixed;inset:0;z-index:80;background:var(--bg);color:var(--fg);display:flex;flex-direction:column;gap:.8rem;padding:calc(1rem + env(safe-area-inset-top,0px)) 1rem calc(1rem + env(safe-area-inset-bottom,0px));overflow:auto;font-size:1rem';
-  el.innerHTML='<button id="finTop" type="button" style="align-self:flex-start;font:inherit;font-size:1.2rem;font-weight:800;min-height:3.2rem;padding:0 1.2rem;border:0;border-radius:1rem;background:var(--surface-2);color:var(--fg);cursor:pointer">← Voltar</button><h1 style="font-size:1.9rem;margin:0">Enviar ao FIN</h1>'
-    +'<p style="margin:0;font-size:1.1rem">Escreva ou cole. <b>Cada linha</b> vira um pendente no FIN. Exemplos:</p>'
-    +'<div style="background:var(--surface);border-radius:.8rem;padding:.7rem .9rem;font-size:1rem;line-height:1.5">Mercado 230,50 no cartão Bradesco<br>Tênis 6x 349,99 cartão Santander<br>Conta de luz vence dia 10<br>Dívida Itaú 16000</div>'
-    +'<textarea id="finTx" rows="8" style="font:inherit;font-size:1.15rem;padding:.9rem;border-radius:.8rem;border:2px solid var(--line);background:var(--surface);color:var(--fg);width:100%;box-sizing:border-box"></textarea>'
+  const B='font:inherit;font-weight:800;border:0;border-radius:1rem;cursor:pointer;';
+  el.innerHTML='<div style="display:flex;gap:.6rem;align-items:center;justify-content:space-between"><button id="finTop" type="button" style="'+B+'font-size:1.2rem;min-height:3.2rem;padding:0 1.2rem;background:var(--surface-2);color:var(--fg)">← Voltar</button><button id="finGoTop" type="button" style="'+B+'font-size:1.2rem;min-height:3.2rem;padding:0 1.4rem;background:var(--accent);color:var(--accent-fg)">Enviar</button></div>'
+    +'<h1 style="font-size:1.9rem;margin:0">Enviar ao FIN</h1>'
+    +'<p style="margin:0;font-size:1.1rem">Escreva, cole, tire uma foto ou anexe um documento. <b>Cada linha e cada arquivo</b> vira um pendente no FIN.</p>'
+    +'<textarea id="finTx" rows="4" placeholder="Escreva ou cole aqui (texto ou imagem)" style="font:inherit;font-size:1.15rem;padding:.9rem;border-radius:.8rem;border:2px solid var(--line);background:var(--surface);color:var(--fg);width:100%;box-sizing:border-box"></textarea>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:.6rem"><button id="finCam" type="button" style="'+B+'font-size:1.1rem;min-height:3.6rem;background:var(--surface-2);color:var(--fg)">📷 Escanear</button><button id="finLib" type="button" style="'+B+'font-size:1.1rem;min-height:3.6rem;background:var(--surface-2);color:var(--fg)">🖼️ Fotos</button><button id="finDoc" type="button" style="'+B+'font-size:1.1rem;min-height:3.6rem;background:var(--surface-2);color:var(--fg);grid-column:1/-1">📎 Arquivo (PDF, imagem…)</button></div>'
+    +'<div id="finFiles"></div>'
     +'<div id="finErr" role="alert" style="min-height:1.4rem;font-weight:700;color:var(--danger)"></div>'
-    +'<button id="finGo" type="button" style="font:inherit;font-size:1.2rem;font-weight:700;min-height:3.8rem;border-radius:.9rem;border:0;background:var(--accent);color:var(--accent-fg);cursor:pointer">Enviar ao FIN</button>'
-    +'<button id="finNo" type="button" style="font:inherit;font-size:1.1rem;font-weight:700;min-height:3.4rem;border-radius:.9rem;border:0;background:var(--surface-2);color:var(--fg);cursor:pointer">Voltar</button>'
-    +'<p style="margin:0;font-size:.95rem;color:var(--muted)">Nada é cadastrado sozinho: no FIN você confere e confirma. Foto de extrato ainda não: por enquanto é texto.</p>';
+    +'<button id="finGo" type="button" style="'+B+'font-size:1.2rem;min-height:3.8rem;background:var(--accent);color:var(--accent-fg)">Enviar ao FIN</button>'
+    +'<button id="finNo" type="button" style="'+B+'font-size:1.1rem;min-height:3.4rem;background:var(--surface-2);color:var(--fg)">Voltar</button>'
+    +'<div style="background:var(--surface);border-radius:.8rem;padding:.7rem .9rem;font-size:1rem;line-height:1.5"><b>Exemplos de texto:</b><br>Mercado 230,50 no cartão Bradesco<br>Tênis 6x 349,99 cartão Santander<br>Conta de luz vence dia 10<br>Dívida Itaú 16000</div>'
+    +'<p style="margin:0;font-size:.95rem;color:var(--muted)">Nada é cadastrado sozinho: no FIN você confere e confirma. O FIN <b>não lê a foto sozinho</b>: o documento fica junto do pendente para você ver ao cadastrar e dá para compartilhar com o chat.</p>'
+    +'<input type="file" id="finFcam" accept="image/*" capture="environment" hidden><input type="file" id="finFlib" accept="image/*" multiple hidden><input type="file" id="finFdoc" multiple hidden>';
   document.body.appendChild(el);
+  const files=[],MAXF=10,MAXB=20*1048576;
+  const err=el.querySelector('#finErr'),tx=el.querySelector('#finTx');
+  const paint=()=>{
+    el.querySelector('#finFiles').innerHTML=files.length?'<div style="font-weight:800;margin-bottom:.3rem">Anexos ('+files.length+')</div>'+files.map((f,i)=>'<div style="display:flex;align-items:center;gap:.6rem;background:var(--surface);border-radius:.8rem;padding:.5rem .7rem;margin-bottom:.4rem"><span style="flex:1;min-width:0;overflow-wrap:anywhere">'+(/^image\//.test(f.type)?'🖼️ ':'📎 ')+esc(f.name)+' <span style="color:var(--muted)">'+fmtSize(f.size)+'</span></span><button type="button" data-rmf="'+i+'" aria-label="Tirar '+esc(f.name)+'" style="'+B+'min-width:3rem;min-height:3rem;background:var(--surface-2);color:var(--fg);font-size:1.2rem">✕</button></div>').join(''):'';
+    el.querySelectorAll('[data-rmf]').forEach(b=>{b.onclick=()=>{files.splice(+b.dataset.rmf,1);paint();};});
+  };
+  const addFiles=list=>{
+    err.textContent='';
+    Array.from(list||[]).forEach(f=>{
+      if(files.length>=MAXF){err.textContent='No máximo '+MAXF+' arquivos por envio.';return;}
+      if(f.size>MAXB){err.textContent='“'+f.name+'” passa de 20 MB. Mande um menor.';return;}
+      files.push(f);
+    });
+    paint();
+  };
+  [['finCam','finFcam'],['finLib','finFlib'],['finDoc','finFdoc']].forEach(p=>{
+    const inp=el.querySelector('#'+p[1]);
+    el.querySelector('#'+p[0]).onclick=()=>{inp.value='';inp.click();};
+    inp.onchange=()=>{addFiles(inp.files);inp.value='';};
+  });
+  /* colar uma imagem ou arquivo direto no campo */
+  tx.addEventListener('paste',e=>{const fl=Array.from((e.clipboardData&&e.clipboardData.files)||[]);if(fl.length){e.preventDefault();addFiles(fl);}});
   el.querySelector('#finNo').onclick=()=>el.remove();
   el.querySelector('#finTop').onclick=()=>el.remove();
-  el.querySelector('#finGo').onclick=async()=>{
-    const lines=el.querySelector('#finTx').value.split(/\n+/).map(x=>x.trim()).filter(Boolean).slice(0,40);
-    const err=el.querySelector('#finErr');err.textContent='';
-    if(!lines.length){err.textContent='Escreva pelo menos uma linha.';return;}
-    const ok=await ask({title:'Enviar '+lines.length+(lines.length>1?' itens':' item')+' ao FIN?',msg:lines.slice(0,5).join(' • ')+(lines.length>5?' …':''),ok:'Sim, enviar',cancel:'Voltar'});
+  const post=async data=>{
+    const r=await Supa.rest('fin_records',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify({kind:'proposal',data:Object.assign({source:'nucleo',status:'pendente',at:new Date().toISOString()},data)})});
+    if(!r.ok)throw new Error(r.status===404?'O FIN ainda não foi preparado no banco.':'Erro '+r.status);
+  };
+  const go=async()=>{
+    const lines=tx.value.split(/\n+/).map(x=>x.trim()).filter(Boolean).slice(0,40);
+    err.textContent='';
+    if(!lines.length&&!files.length){err.textContent='Escreva uma linha ou anexe um arquivo.';return;}
+    const total=lines.length+files.length;
+    const resumo=lines.slice(0,3).concat(files.slice(0,3).map(f=>'📎 '+f.name)).join(' • ')+(total>6?' …':'');
+    const ok=await ask({title:'Enviar '+total+(total>1?' itens':' item')+' ao FIN?',msg:resumo,ok:'Sim, enviar',cancel:'Voltar'});
     if(!ok)return;
-    const b=el.querySelector('#finGo');b.disabled=true;b.textContent='Enviando…';
-    let sent=0;
+    const g1=el.querySelector('#finGo'),g2=el.querySelector('#finGoTop');g1.disabled=g2.disabled=true;g1.textContent='Enviando…';
+    let sent=0,restoL=lines.slice();
     try{
-      for(const t of lines){
-        const r=await Supa.rest('fin_records',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify({kind:'proposal',data:{text:t,source:'nucleo',status:'pendente',at:new Date().toISOString()}})});
-        if(!r.ok)throw new Error(r.status===404?'O FIN ainda não foi preparado no banco.':'Erro '+r.status);
-        sent++;
+      for(const t of lines){await post({text:t});sent++;restoL.shift();tx.value=restoL.join('\n');}
+      for(const f of files.slice()){
+        let blob=f,type=f.type||'application/octet-stream',ext=(String(f.name).split('.').pop()||'bin');
+        if(/^image\//.test(type)){try{blob=await prepareImage(f,false);type='image/jpeg';ext='jpg';}catch(e){blob=f;}}
+        const up=await SupaAssets.upload(blob,{type,ext});
+        await post({text:'📎 '+f.name,files:[{id:up.id,name:f.name,size:blob.size,type}]});
+        sent++;files.splice(files.indexOf(f),1);paint();
       }
       el.remove();toast('Enviado ao FIN: '+sent+(sent>1?' itens':' item')+'. Abra o FIN para conferir.');
-    }catch(e){b.disabled=false;b.textContent='Enviar ao FIN';err.textContent=(sent?'Enviei '+sent+' e parei: ':'Não enviou: ')+(e.message||'sem internet')+(sent?' Os que já foram estão no FIN: envie só o resto.':'');}
+    }catch(e){g1.disabled=g2.disabled=false;g1.textContent='Enviar ao FIN';err.textContent=(sent?'Enviei '+sent+' e parei: ':'Não enviou: ')+(e.message||'sem internet')+(sent?' O que já foi está no FIN: tente de novo só com o resto.':'');}
   };
+  el.querySelector('#finGo').onclick=go;
+  el.querySelector('#finGoTop').onclick=go;
 }
 function pickMove(o){
   return new Promise(res=>{
@@ -3082,7 +3120,7 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden){checkAlar
 window.__nucleo={Store:Store,Supa:Supa,S:S};
 if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost')){addEventListener('load',()=>{navigator.serviceWorker.register('sw.js').catch(()=>{});});}
 /* gancho só para os testes (no uso normal a marca não existe) */
-try{if(window.__NUCLEO_TEST__)window.__NUCLEO_TEST__={S,gsFind,gsBody,viewBusca,viewHoje,viewCaixa,viewNotas,planView,planBtn,smart,viewLembretes};}catch(e){}
+try{if(window.__NUCLEO_TEST__)window.__NUCLEO_TEST__={S,gsFind,gsBody,viewBusca,viewHoje,viewCaixa,viewNotas,planView,planBtn,smart,viewLembretes,Supa,SupaAssets,finSend};}catch(e){}
 buildTabs();render();Store.init();
 getAssets().then(a=>{S.assetsOk=!!a;});
 getDl().then(d=>{S.dlOk=!!d;});

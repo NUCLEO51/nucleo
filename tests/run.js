@@ -473,4 +473,44 @@ global.__pend.push((async () => {
 
 // --- Enviar ao FIN: Voltar também no topo (v49) ---
 t('Enviar ao FIN: tem botão Voltar no topo, além do de baixo', /id="finTop"/.test(html) && /querySelector\('#finTop'\)\.onclick/.test(html) && /id="finNo"/.test(html), true);
+
+// --- Enviar ao FIN com fotos, escanear, arquivos e colar (v50) ---
+const __prevP = Promise.all((global.__pend || []).slice());   /* espera os testes assíncronos anteriores (usam a mesma janela de confirmação) */
+global.__pend.push((async () => {
+  await __prevP;
+  const doc = w.document, q = s => doc.querySelector(s), wait = ms => new Promise(r => setTimeout(r, ms)), TT = w.__NUCLEO_TEST__;
+  const posts = [], ups = [];
+  TT.Supa.sess = { access: 'a.b.c', refresh: 'r', exp: Date.now() + 3600000 };
+  TT.Supa.rest = async (path, opt) => { posts.push({ path, body: JSON.parse(opt.body) }); return { ok: true, status: 201 }; };
+  TT.SupaAssets.upload = async (blob, o) => { ups.push(o); return { id: 'uid/' + ups.length + '.pdf' }; };
+  TT.finSend();
+  t('Enviar ao FIN: Voltar e Enviar no topo (aparecem mesmo com o teclado aberto)', !!q('#finSend #finTop') && !!q('#finSend #finGoTop') && q('#finSend').firstElementChild.contains(q('#finGoTop')), true);
+  t('Enviar ao FIN: botões Escanear, Fotos e Arquivo', !!q('#finCam') && !!q('#finLib') && !!q('#finDoc') && /Escanear/.test(q('#finCam').textContent) && /Arquivo/.test(q('#finDoc').textContent), true);
+  t('Enviar ao FIN: Escanear usa a câmera traseira e Fotos aceita várias imagens', q('#finFcam').getAttribute('capture') === 'environment' && q('#finFcam').accept === 'image/*' && q('#finFlib').multiple === true, true);
+  t('Enviar ao FIN: avisa que o FIN não lê a foto sozinho', /não lê a foto sozinho/.test(q('#finSend').textContent), true);
+  const f = new w.File(['conteudo'], 'boleto.pdf', { type: 'application/pdf' });
+  const pe = new w.Event('paste', { bubbles: true, cancelable: true }); pe.clipboardData = { files: [f] };
+  q('#finTx').dispatchEvent(pe);
+  t('colar um arquivo no campo: ele entra na lista de anexos', /Anexos \(1\)/.test(q('#finFiles').textContent) && /boleto\.pdf/.test(q('#finFiles').textContent) && pe.defaultPrevented === true, true);
+  q('#finFiles [data-rmf="0"]').click();
+  t('anexo: o ✕ tira da lista', q('#finFiles').textContent.trim() === '', true);
+  q('#finTx').dispatchEvent(Object.assign(new w.Event('paste', { bubbles: true, cancelable: true }), { clipboardData: { files: [f] } }));
+  q('#finTx').value = 'Conta de luz vence dia 10';
+  q('#finGoTop').click(); await wait(40);
+  t('enviar: pede confirmação com o resumo (texto e arquivo)', /Enviar 2 itens ao FIN\?/.test(doc.body.textContent) && /boleto\.pdf/.test(doc.querySelector('#askRoot').textContent), true);
+  await wait(600);
+  doc.querySelector('#askRoot [data-ask="1"]').click(); await wait(120);
+  t('enviar: 2 pendentes, um do texto e outro do arquivo com o anexo', posts.length === 2 && posts[0].body.data.text === 'Conta de luz vence dia 10' && posts[1].body.data.text === '📎 boleto.pdf' && posts[1].body.data.files[0].id === 'uid/1.pdf' && posts[1].body.data.files[0].name === 'boleto.pdf' && posts[1].body.data.files[0].type === 'application/pdf', true);
+  t('enviar: os dois pendentes saem como "pendente" do Núcleo e a janela fecha', posts.every(p => p.path === 'fin_records' && p.body.kind === 'proposal' && p.body.data.status === 'pendente' && p.body.data.source === 'nucleo') && !q('#finSend'), true);
+  // sem nada para enviar
+  TT.finSend(); q('#finGo').click(); await wait(30);
+  t('enviar sem texto e sem arquivo: avisa em vez de enviar', /Escreva uma linha ou anexe um arquivo/.test(q('#finErr').textContent) && posts.length === 2, true);
+  // erro do servidor: o texto continua no campo
+  TT.Supa.rest = async () => ({ ok: false, status: 404 });
+  q('#finTx').value = 'Dívida Itaú 16000'; q('#finGo').click(); await wait(40); await wait(600);
+  doc.querySelector('#askRoot [data-ask="1"]').click(); await wait(100);
+  t('erro ao enviar: mostra o motivo, mantém o texto e não fecha', /O FIN ainda não foi preparado no banco/.test(q('#finErr').textContent) && q('#finTx').value === 'Dívida Itaú 16000' && !!q('#finSend'), true);
+  q('#finTop').click();
+  t('Voltar do topo fecha a tela', !q('#finSend'), true);
+})());
 Promise.all(global.__pend || []).then(() => { console.log(ok + ' ok, ' + bad + ' falhas'); process.exit(bad ? 1 : 0); });
