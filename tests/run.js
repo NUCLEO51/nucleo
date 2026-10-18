@@ -504,6 +504,48 @@ global.__pend.push((async () => {
   t('PDF: a tabela de endereços (xref) aponta exatamente para cada objeto', okOff && cnt === 9, true);
 }
 
+
+// --- Ordem das listas: motor puro (v57) ---
+{
+  const arg = JSON.stringify([{ id: 'a', name: 'banana', t: 2 }, { id: 'b', name: 'Abacate', t: 9 }, { id: 'c', name: 'cereja', t: 5 }, { id: 'd', name: 'Açaí', t: 1 }]);
+  const run = (mode, src) => ev(`sortGroup(${src || arg},'${mode}',{name:x=>x.name,date:x=>x.t}).map(x=>x.id).join('')`);
+  t('ordenar: A→Z (ignora acento e maiúscula) e Z→A', run('az') === 'bdac' && run('za') === 'cadb', true);
+  t('ordenar: por data, mais recentes primeiro e mais antigas primeiro', run('new') === 'bcad' && run('old') === 'dacb', true);
+  t('ordenar: padrão devolve como veio', run('def'), 'abcd');
+  const withOrd = JSON.stringify([{ id: 'a', name: 'x', t: 0, ord: 2 }, { id: 'b', name: 'x', t: 0, ord: 1 }, { id: 'c', name: 'x', t: 0, ord: 3 }, { id: 'd', name: 'x', t: 0 }]);
+  t('ordenar: minha ordem usa o campo ord e quem não tem fica por último', run('man', withOrd), 'bacd');
+  const items4 = JSON.stringify([{ id: 'a', ord: 1000 }, { id: 'b', ord: 2000 }, { id: 'c', ord: 3000 }, { id: 'd', ord: 4000 }]);
+  const mv = (id, to, src) => JSON.stringify(ev(`moveOrds(${src || items4},'${id}',${typeof to === 'string' ? "'" + to + "'" : JSON.stringify(to)})`));
+  t('mover: para o primeiro muda só 1 item (ord antes do primeiro)', mv('c', 'first'), JSON.stringify([{ id: 'c', ord: 0 }]));
+  t('mover: para o último muda só 1 item', mv('a', 'last'), JSON.stringify([{ id: 'a', ord: 5000 }]));
+  const aplicar = (src, id, to) => ev(`(function(){const items=${src};const ups=moveOrds(items,'${id}','${to}');ups.forEach(u=>{items.find(x=>x.id===u.id).ord=u.ord;});return {n:ups.length,ordem:sortGroup(items,'man',{name:x=>x.id,date:x=>0}).map(x=>x.id).join('')};})()`);
+  const su = aplicar(items4, 'c', 'up'), de = aplicar(items4, 'b', 'down');
+  t('mover: subir ou descer uma posição muda só 1 item (ponto médio) e dá a ordem certa', su.n === 1 && su.ordem === 'acbd' && de.n === 1 && de.ordem === 'acbd', true);
+  t('mover: já no limite não muda nada', mv('a', 'first') === '[]' && mv('d', 'last') === '[]' && mv('a', 'up') === '[]', true);
+  t('mover: arrastar para uma posição escolhida (índice)', mv('a', { index: 2 }), JSON.stringify([{ id: 'a', ord: 3500 }]));
+  const semOrd = JSON.stringify([{ id: 'a' }, { id: 'b' }, { id: 'c' }, { id: 'd' }]);
+  t('mover: quando ainda não há ordem, dá a ordem a todos já com a mudança (c primeiro)', mv('c', 'first', semOrd), JSON.stringify([{ id: 'c', ord: 1000 }, { id: 'a', ord: 2000 }, { id: 'b', ord: 3000 }, { id: 'd', ord: 4000 }]));
+  t('arrastar mais de um item de uma vez (inverter tudo) reescreve em sequência', JSON.stringify(ev(`ordsForOrder(${items4},['d','c','b','a'])`)), JSON.stringify([{ id: 'd', ord: 1000 }, { id: 'c', ord: 2000 }, { id: 'b', ord: 3000 }, { id: 'a', ord: 4000 }]));
+  t('quando os vizinhos estão colados demais, reescreve em sequência em vez de usar o ponto médio', JSON.stringify(ev(`moveOrds([{id:'a',ord:1},{id:'b',ord:1.0000001},{id:'c',ord:2},{id:'d',ord:3}],'d',{index:1})`)), JSON.stringify([{ id: 'a', ord: 1000 }, { id: 'd', ord: 2000 }, { id: 'b', ord: 3000 }, { id: 'c', ord: 4000 }]));
+  const prop = ev(`(function(){const items=[];for(let i=0;i<8;i++)items.push({id:'x'+i});let seed=7;const rnd=()=>{seed=(seed*16807)%2147483647;return seed/2147483647;};
+    let ok=true,puts=0;const apply=ups=>{ups.forEach(u=>{items.find(x=>x.id===u.id).ord=u.ord;});puts+=ups.length;};
+    const show=()=>sortGroup(items,'man',{name:x=>x.id,date:x=>0});let disp=show();
+    for(let step=0;step<400;step++){
+      const id=disp[Math.floor(rnd()*disp.length)].id,mv=['first','last','up','down'][Math.floor(rnd()*4)],exp=disp.map(x=>x.id),from=exp.indexOf(id);
+      let at=mv==='first'?0:mv==='last'?exp.length-1:mv==='up'?from-1:from+1;at=Math.max(0,Math.min(exp.length-1,at));exp.splice(from,1);exp.splice(at,0,id);
+      apply(moveOrds(disp,id,mv));disp=show();
+      if(disp.map(x=>x.id).join()!==exp.join()){ok=false;break;}
+    }
+    return {ok,puts};})()`);
+  t('mover: 400 movimentos aleatórios em 8 itens sempre dão a ordem esperada (e poucas gravações)', prop.ok === true && prop.puts < 700, true);
+  const perm = ev(`(function(){const items=[];for(let i=0;i<7;i++)items.push({id:'y'+i});let seed=11;const rnd=()=>{seed=(seed*48271)%2147483647;return seed/2147483647;};
+    const apply=ups=>{ups.forEach(u=>{items.find(x=>x.id===u.id).ord=u.ord;});};let ok=true;
+    for(let k=0;k<200;k++){const disp=sortGroup(items,'man',{name:x=>x.id,date:x=>0}),ids=disp.map(x=>x.id),nw=ids.slice();for(let i=nw.length-1;i>0;i--){const j=Math.floor(rnd()*(i+1));const tmp=nw[i];nw[i]=nw[j];nw[j]=tmp;}
+      apply(ordsForOrder(disp,nw));if(sortGroup(items,'man',{name:x=>x.id,date:x=>0}).map(x=>x.id).join()!==nw.join()){ok=false;break;}}
+    return ok;})()`);
+  t('arrastar: 200 reordenações completas aleatórias sempre resultam na ordem pedida', perm, true);
+}
+
 // --- Enviar ao FIN: Voltar também no topo (v49) ---
 t('Enviar ao FIN: tem botão Voltar no topo, além do de baixo', /id="finTop"/.test(html) && /querySelector\('#finTop'\)\.onclick/.test(html) && /id="finNo"/.test(html), true);
 
@@ -738,5 +780,101 @@ global.__pend.push((async () => {
   ev(`__NUCLEO_TEST__.S.folder='cr';`); q('#tab-hoje').click(); ev(`__NUCLEO_TEST__.S.folder='cr';`); q('#tab-notas').click(); await wait(10);
   t('subpastas: ao sair de Notas e voltar, as subpastas voltam a abrir recolhidas', ev(`JSON.stringify(__NUCLEO_TEST__.S.nx)`) === '{}' && !/Jeep/.test(q('#main').innerHTML), true);
   ev(`const S=__NUCLEO_TEST__.S;S.tab='hoje';S.folder=null;S.nx={};S.nn={};S.folders=[];S.notes=[];S.raw={reminders:[],lists:[],notes:[],folders:[],events:[],inbox:[]};S.conf='all';`);
+})());
+
+// --- Ordenar e arrastar na tela: Notas, Minhas listas e lembretes (v57) ---
+const __prevP7 = Promise.all((global.__pend || []).slice());
+global.__pend.push((async () => {
+  await __prevP7;
+  const doc = w.document, q = s => doc.querySelector(s), wait = ms => new Promise(r => setTimeout(r, ms)), TT = w.__NUCLEO_TEST__;
+  const nt = (id, title, ts) => ({ id, title, body: '', folder: 'cr', kind: 'nota', checklist: [], files: [], images: [], createdAt: ts, updatedAt: ts });
+  try { w.localStorage.removeItem('ord-sort'); } catch (e) {}
+  ev(`const S=__NUCLEO_TEST__.S;S.ready=true;S.tab='lembretes';S.sheet=null;S.conf='del';S.rview=null;S.nx={};S.nn={};S.q='';S.nsOpen=false;
+    S.folders=[{id:'cr',name:'Consulta'}];
+    S.notes=${JSON.stringify([nt('n1', 'Banana', 4), nt('n2', 'Abacate', 3), nt('n3', 'Cereja', 2), nt('n4', 'Damasco', 1)])};
+    S.lists=[];S.reminders=[];S.events=[];S.inbox=[];S.folder='cr';
+    S.raw={reminders:[],lists:[],notes:S.notes.slice(),folders:S.folders.slice(),events:[],inbox:[]};`);
+  const ids = () => Array.from(q('#main .notes-cards').children).map(c => c.getAttribute('data-rid')).join('');
+  const rerender = async () => { ev(`__NUCLEO_TEST__.S.tab='lembretes';`); q('#tab-notas').click(); await wait(20); };
+  await rerender();
+  t('notas: a barra "Ordem: Padrão" aparece e o grupo é marcado para arrastar', /Padrão/.test(q('#main .sortbar').textContent) && q('#main .notes-cards').getAttribute('data-rgroup') === 'notes:cr' && q('#main .notes-cards').getAttribute('data-rman') === '1' && ids() === 'n1n2n3n4', true);
+  q('#main .sortbar').click(); await wait(30);
+  const op = (txt) => Array.from(doc.querySelectorAll('#mvRoot .mv-opt')).find(b => b.textContent.indexOf(txt) >= 0);
+  t('notas: a barra abre a escolha com Padrão, datas, A→Z, Z→A e Minha ordem', !!q('#mvRoot') && ['Padrão', 'Data: mais recentes', 'Data: mais antigas', 'A → Z', 'Z → A', 'Minha ordem'].every(x => !!op(x)), true);
+  op('A → Z').click(); await wait(40);
+  t('notas: A → Z coloca Abacate, Banana, Cereja, Damasco', ids() === 'n2n1n3n4' && /A → Z/.test(q('#main .sortbar').textContent), true);
+  q('#main .sortbar').click(); await wait(30); op('Z → A').click(); await wait(40);
+  t('notas: Z → A inverte', ids() === 'n4n3n1n2', true);
+  q('#main .sortbar').click(); await wait(30); op('Data: mais antigas').click(); await wait(40);
+  t('notas: Data: mais antigas primeiro (Damasco, Cereja, Abacate, Banana)', ids() === 'n4n3n2n1', true);
+  t('a escolha fica guardada neste aparelho', JSON.parse(w.localStorage.getItem('ord-sort'))['notes:cr'] === 'old', true);
+  q('#main .sortbar').click(); await wait(30); op('Minha ordem').click(); await wait(120);
+  t('Minha ordem: todas as notas ganham um número de ordem seguindo o que estava na tela, sem mexer nas datas', ev(`__NUCLEO_TEST__.S.notes.every(n=>typeof n.ord==='number')`) === true && ev(`__NUCLEO_TEST__.S.notes.map(n=>n.updatedAt).join()`) === '4,3,2,1' && ids() === 'n4n3n2n1', true);
+  // botões de reserva: escolher a nota 3 sem arrastar (segurar e soltar)
+  const rowOf = id => q('#main .notes-cards [data-rid="' + id + '"]');
+  const stubRects = () => { const g = q('#main .notes-cards'); Array.from(g.children).forEach(c => { c.getBoundingClientRect = () => { const i = Array.from(g.children).indexOf(c); return { top: i * 100, height: 100, bottom: i * 100 + 100, left: 0, right: 300, width: 300 }; }; }); };
+  TT.roBegin(TT.roFind(rowOf('n3')));
+  await TT.roEnd();
+  t('segurar sem arrastar: a barra de botões aparece e o item fica em destaque', !!q('#roBar') && q('#roBar').querySelectorAll('[data-ro]').length === 5 && rowOf('n3').classList.contains('ro-sel') === true, true);
+  await TT.roBtn('first'); await wait(80);
+  t('botão Primeiro: a nota vai para o começo (mudando só 1 número) e continua em destaque', ids() === 'n3n4n2n1' && rowOf('n3').classList.contains('ro-sel') && !!q('#roBar'), true);
+  await TT.roBtn('down'); await wait(60); await TT.roBtn('down'); await wait(60);
+  t('botão Descer duas vezes', ids() === 'n4n2n3n1', true);
+  await TT.roBtn('last'); await wait(60);
+  t('botão Último', ids() === 'n4n2n1n3', true);
+  await TT.roBtn('up'); await wait(60);
+  t('botão Subir', ids() === 'n4n2n3n1', true);
+  await TT.roBtn('done'); await wait(10);
+  t('botão Pronto fecha a barra e tira o destaque', !q('#roBar') && !doc.querySelector('.ro-sel'), true);
+  t('mexer na ordem não muda a data das notas', ev(`__NUCLEO_TEST__.S.notes.map(n=>n.updatedAt).join()`), '4,3,2,1');
+  // arrastar (posições simuladas): leva a nota n4 (primeira) para entre n3 e n1
+  stubRects();
+  TT.roBegin(TT.roFind(rowOf('n4')));
+  TT.roMove(260);
+  t('arrastar: enquanto o dedo se move, a lista se reorganiza ao vivo e a nota levantada fica destacada', ids() === 'n2n3n4n1' && rowOf('n4').classList.contains('ro-drag'), true);
+  await TT.roEnd(); await wait(100);
+  t('arrastar: ao soltar, a nova ordem é gravada e a tela mostra a mesma ordem', ids() === 'n2n3n4n1' && ev(`__NUCLEO_TEST__.S.notes.slice().sort((a,b)=>a.ord-b.ord).map(n=>n.id).join('')`) === 'n2n3n4n1', true);
+  let abriu = false; ev(`__NUCLEO_TEST__.S.sheet=null;`);
+  rowOf('n4').dispatchEvent(new w.MouseEvent('click', { bubbles: true, cancelable: true }));
+  t('arrastar: soltar o dedo não "toca" na nota (não abre a leitura)', ev(`(__NUCLEO_TEST__.S.sheet||{}).type`) !== 'notev', true);
+  await TT.roBtn('done'); await wait(700);
+  rowOf('n2').dispatchEvent(new w.MouseEvent('click', { bubbles: true, cancelable: true })); await wait(20);
+  t('depois de um instante, tocar na nota volta a abri-la normalmente', ev(`(__NUCLEO_TEST__.S.sheet||{}).type`) === 'notev', true);
+  ev(`__NUCLEO_TEST__.S.sheet=null;`);
+  // toque longo de verdade (sem dedo: mouse): segura 450 ms e vira modo de arrastar
+  await rerender();
+  const r2 = rowOf('n2');
+  r2.dispatchEvent(new w.MouseEvent('mousedown', { bubbles: true, button: 0, clientX: 10, clientY: 10 }));
+  await wait(120); w.document.dispatchEvent(new w.MouseEvent('mouseup', { bubbles: true }));
+  t('toque curto (menos de 450 ms) não vira arrastar', !TT.RO.drag && !q('#roBar'), true);
+  r2.dispatchEvent(new w.MouseEvent('mousedown', { bubbles: true, button: 0, clientX: 10, clientY: 10 }));
+  await wait(40); w.document.dispatchEvent(new w.MouseEvent('mousemove', { bubbles: true, clientX: 10, clientY: 60 }));
+  await wait(520);
+  t('mexer o dedo antes de 450 ms cancela (é rolagem, não arrastar)', !TT.RO.drag, true);
+  w.document.dispatchEvent(new w.MouseEvent('mouseup', { bubbles: true }));
+  r2.dispatchEvent(new w.MouseEvent('mousedown', { bubbles: true, button: 0, clientX: 10, clientY: 10 }));
+  await wait(520);
+  t('segurar parado por 450 ms liga o modo de arrastar e mostra a barra de botões', !!TT.RO.drag && !!q('#roBar') && /ro-drag/.test(r2.className), true);
+  w.document.dispatchEvent(new w.MouseEvent('mouseup', { bubbles: true })); await wait(40);
+  await TT.roBtn('done'); await wait(700);
+  // Minhas listas e lembretes dentro de uma lista
+  const rm = (id, title, list, sec, ts) => ({ id, title, notes: '', date: '2030-01-1' + id.slice(1), time: '09:00', done: false, list, section: sec, alarms: [], subtasks: [], images: [], files: [], createdAt: ts });
+  ev(`const S=__NUCLEO_TEST__.S;S.tab='hoje';S.rview=null;S.folder=null;S.notes=[];S.folders=[];
+    S.lists=[{id:'L1',name:'Casa',color:'#5E8F6B',sections:[{id:'s1',t:'Cozinha'}]},{id:'L2',name:'Contas',color:'#B5584E',sections:[]},{id:'L3',name:'Amigos',color:'#2F8CFF',sections:[]}];
+    S.reminders=${JSON.stringify([rm('r1', 'Lavar louça', 'L1', 's1', 1), rm('r2', 'Arrumar gaveta', 'L1', 's1', 2), rm('r3', 'Comprar sal', 'L1', 's1', 3), rm('r4', 'Fora de seção', 'L1', '', 4)])};
+    S.raw={reminders:S.reminders.slice(),lists:S.lists.slice(),notes:[],folders:[],events:[],inbox:[]};`);
+  q('#tab-lembretes').click(); await wait(20);
+  const lg = q('#main [data-rgroup="lists"]');
+  t('Minhas listas: barra de ordem e grupo arrastável (Lembretes padrão fica fixo no topo, sem arrastar)', !!lg && lg.getAttribute('data-rman') === '1' && /Ordem/.test(q('#main').innerHTML) && !lg.children[0].hasAttribute('data-rid') && Array.from(lg.children).slice(1).every(c => c.hasAttribute('data-rid')), true);
+  t('Minhas listas: por padrão em A → Z (como era), e dá para trocar', Array.from(lg.children).slice(1).map(c => c.getAttribute('data-rid')).join('') === 'L3L1L2', true);
+  ev(`__NUCLEO_TEST__.S.rview='l:L1';`); q('#tab-hoje').click(); ev(`__NUCLEO_TEST__.S.rview='l:L1';`); q('#tab-lembretes').click(); await wait(20);
+  t('dentro de uma lista: barra de ordem no topo e cada seção é um grupo arrastável separado', /Ordem/.test(q('#main .sortbar').textContent) && !!q('#main [data-rgroup="rems:L1|s1"]') && !!q('#main [data-rgroup="rems:L1|_sem"]'), true);
+  const sec = q('#main [data-rgroup="rems:L1|s1"]'), rid = () => Array.from(q('#main [data-rgroup="rems:L1|s1"]').children).map(c => c.getAttribute('data-rid')).join('');
+  t('dentro de uma lista: ordem padrão da seção (por data)', rid(), 'r1r2r3');
+  q('#main .sortbar').click(); await wait(30);
+  Array.from(doc.querySelectorAll('#mvRoot .mv-opt')).find(b => b.textContent.indexOf('A → Z') >= 0).click(); await wait(40);
+  t('dentro de uma lista: A → Z reordena os lembretes de cada seção', rid() === 'r2r3r1', true);
+  ev(`const S=__NUCLEO_TEST__.S;S.sheet=null;S.tab='hoje';S.rview=null;S.lists=[];S.reminders=[];S.notes=[];S.folders=[];S.raw={reminders:[],lists:[],notes:[],folders:[],events:[],inbox:[]};S.conf='all';`);
+  try { w.localStorage.removeItem('ord-sort'); } catch (e) {}
 })());
 Promise.all(global.__pend || []).then(() => { console.log(ok + ' ok, ' + bad + ' falhas'); process.exit(bad ? 1 : 0); });

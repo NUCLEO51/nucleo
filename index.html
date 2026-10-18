@@ -398,6 +398,14 @@ input[type=date].inp,input[type=time].inp{display:block;width:100%;max-width:100
 .vtext .fs{height:.55rem}
 .vtext b.fl{color:var(--muted);font-weight:700}
 .vtext .fe{color:var(--muted);opacity:.6}
+.sortbar{display:flex;align-items:center;gap:.5rem;width:100%;margin:.5rem 0;padding:.65rem .9rem;border:0;border-radius:.9rem;background:var(--surface-2);color:var(--fg);font:inherit;font-size:1rem;font-weight:600;cursor:pointer;text-align:left}
+.sortbar b{color:var(--accent)}
+[data-rid]{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+.ro-drag{box-shadow:0 8px 24px rgba(0,0,0,.55);outline:3px solid var(--accent);border-radius:1rem;position:relative;z-index:5;background:var(--surface)}
+.ro-sel{outline:3px solid var(--accent);outline-offset:-3px;border-radius:1rem}
+#roBar{position:fixed;left:.4rem;right:.4rem;bottom:calc(5.2rem + env(safe-area-inset-bottom,0px));z-index:70;display:flex;gap:.3rem;padding:.4rem;border-radius:1.1rem;background:var(--surface);box-shadow:0 6px 24px rgba(0,0,0,.55)}
+#roBar button{flex:1;min-height:3.3rem;border:0;border-radius:.8rem;background:var(--surface-2);color:var(--fg);font:inherit;font-size:.78rem;font-weight:800;line-height:1.15;padding:.2rem .05rem}
+#roBar button.ok{background:var(--accent);color:var(--accent-fg)}
 .valarm{padding:.55rem 0;border-bottom:1px solid var(--line)}
 .valarm:last-child{border-bottom:0}
 .vchecks{display:flex;flex-direction:column}
@@ -817,6 +825,49 @@ function pdfFromJpegs(pages){
   const out=new Uint8Array(len);let o=0;for(const b of parts){out.set(b,o);o+=b.length;}
   return out;
 }
+/* ---------- ordem das listas: ordenar e mover (funções puras, testáveis) ---------- */
+const SORT_LABELS={def:'Padrão',new:'Data: mais recentes',old:'Data: mais antigas',az:'A → Z',za:'Z → A',man:'Minha ordem'};
+const hasOrd=x=>typeof x.ord==='number'&&isFinite(x.ord);
+/* g = {name:fn, date:fn}. 'def' devolve como veio. 'man' usa o campo ord (quem não tem fica depois, na ordem de entrada). */
+function sortGroup(items,mode,g){
+  const a=items.slice(),nm=x=>String(g.name(x)||''),cmp=(x,y)=>nm(x).localeCompare(nm(y),'pt-BR',{sensitivity:'base',numeric:true}),dt=x=>+g.date(x)||0;
+  if(mode==='az')return a.sort(cmp);
+  if(mode==='za')return a.sort((x,y)=>cmp(y,x));
+  if(mode==='new')return a.sort((x,y)=>dt(y)-dt(x)||cmp(x,y));
+  if(mode==='old')return a.sort((x,y)=>dt(x)-dt(y)||cmp(x,y));
+  if(mode==='man'){
+    const ix=new Map(a.map((it,i)=>[it,i])),o=x=>hasOrd(x)?x.ord:Infinity;
+    return a.sort((x,y)=>o(x)===o(y)?ix.get(x)-ix.get(y):(o(x)<o(y)?-1:1));
+  }
+  return a;
+}
+function seqOrds(ids,cur){const out=[];ids.forEach((id,i)=>{const o=(i+1)*1000;if(cur.get(id)!==o)out.push({id,ord:o});});return out;}
+/* items: como aparecem agora; newIds: a ordem desejada. Devolve só o que precisa mudar: [{id,ord}] */
+function ordsForOrder(items,newIds){
+  const cur=new Map(items.map(x=>[x.id,x.ord])),ids=items.map(x=>x.id);
+  if(ids.join('|')===newIds.join('|'))return [];
+  const consistent=items.every(hasOrd)&&items.every((x,i)=>i===0||items[i-1].ord<x.ord);
+  if(consistent){
+    for(let k=0;k<ids.length;k++){
+      const rest=ids.filter((_,i)=>i!==k),nrest=newIds.filter(id=>id!==ids[k]);
+      if(rest.length===nrest.length&&rest.every((id,i)=>id===nrest[i])){
+        const at=newIds.indexOf(ids[k]),p=at>0?cur.get(newIds[at-1]):null,n=at<newIds.length-1?cur.get(newIds[at+1]):null;
+        if(p!=null&&n!=null&&Math.abs(n-p)<1e-6)break;
+        let o;if(p==null&&n==null)o=1000;else if(p==null)o=n-1000;else if(n==null)o=p+1000;else o=(p+n)/2;
+        return [{id:ids[k],ord:o}];
+      }
+    }
+  }
+  return seqOrds(newIds,cur);
+}
+/* to: 'first' | 'last' | 'up' | 'down' | {index:n} */
+function moveOrds(items,id,to){
+  const ids=items.map(x=>x.id),from=ids.indexOf(id);if(from<0)return [];
+  let at=to==='first'?0:to==='last'?ids.length-1:to==='up'?from-1:to==='down'?from+1:(to&&typeof to.index==='number'?to.index:from);
+  at=Math.max(0,Math.min(ids.length-1,at));if(at===from)return [];
+  const order=ids.slice();order.splice(from,1);order.splice(at,0,id);
+  return ordsForOrder(items,order);
+}
 </script>
 
 <script>
@@ -831,7 +882,7 @@ const S={tab:'hoje',raw:{},reminders:[],notes:[],events:[],inbox:[],folders:[],l
   folder:null,rview:null,q:'',rq:'',sheet:null,rings:[],assetsOk:false,dlOk:false,bw:true,weekend:false,fired:{},fs:20,theme:'auto',conf:'all',purged:false,gq:'',nsOpen:false,nx:{},nn:{},lc:{}};
 const lsGet=k=>{try{return localStorage.getItem(k);}catch(e){return null;}};
 const lsSet=(k,v)=>{try{localStorage.setItem(k,v);}catch(e){}};
-const APP_V='v56';
+const APP_V='v57';
 const ERRLOG_KEY='nucleo-errlog';
 function logErr(where,e){try{const a=JSON.parse(localStorage.getItem(ERRLOG_KEY)||'[]');a.push({t:Date.now(),w:String(where).slice(0,40),m:String((e&&e.message)||e||'').slice(0,160)});while(a.length>30)a.shift();localStorage.setItem(ERRLOG_KEY,JSON.stringify(a));}catch(x){}}
 addEventListener('error',ev=>logErr('tela',ev.message||ev.error));
@@ -849,6 +900,113 @@ applyLook();
 
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+/* ---------- ordenar e arrastar (tela): segurar um item e levar para onde quiser ---------- */
+const RO={reg:{},sel:null,timer:null,pend:null,drag:null,noClick:0,x0:0,y0:0};
+const ROH={write:async()=>{},scroller:()=>window,rerender:()=>{},toast:()=>{},choose:async()=>null};
+const roPrefOf=gk=>String(gk).split('|')[0];
+function roPrefs(){try{return JSON.parse(localStorage.getItem('ord-sort')||'{}');}catch(e){return {};}}
+function roSetPref(p,m){const o=roPrefs();o[p]=m;try{localStorage.setItem('ord-sort',JSON.stringify(o));}catch(e){}}
+function roMode(pref,items,manual){let m=roPrefs()[pref];if(m==='man'&&!manual)m='def';return m||((manual&&items.some(hasOrd))?'man':'def');}
+/* ordena um grupo conforme a escolha (ou a ordem manual, se já existir) e registra o grupo para o arrastar */
+function ordSort(gk,col,items,g,manual){const pref=roPrefOf(gk),mode=roMode(pref,items,manual),out=mode==='def'?items:sortGroup(items,mode,g);RO.reg[gk]={col,items:out,pref,manual:!!manual,mode};return out;}
+const ordAttr=(gk,manual)=>' data-rgroup="'+esc(gk)+'" data-rman="'+(manual?1:0)+'"';
+function sortBar(pref,mode,manual){return '<button type="button" class="sortbar" data-act="sort-open" data-pref="'+esc(pref)+'" data-man="'+(manual?1:0)+'">↕ Ordem: <b>'+esc(SORT_LABELS[mode]||'Padrão')+'</b></button>';}
+function sortBarFor(gk){const r=RO.reg[gk];return r?sortBar(r.pref,r.mode,r.manual):'';}
+async function sortOpen(pref,manual){
+  const regs=Object.keys(RO.reg).filter(k=>RO.reg[k].pref===pref).map(k=>RO.reg[k]);
+  const cur=roPrefs()[pref]||(regs[0]?regs[0].mode:'def');
+  const ops=['def','new','old','az','za'].concat(manual?['man']:[]).map(k=>({k,label:k==='man'?'Minha ordem (segure e arraste)':SORT_LABELS[k],current:k===cur}));
+  const ch=await ROH.choose('Ordenar por…',manual?'Para mudar na mão: segure um item e arraste, ou use os botões que aparecem.':'',ops);
+  if(!ch)return;
+  if(ch.k==='man'){for(const r of regs){if(r.items.some(x=>!hasOrd(x)))await ROH.write(r.col,seqOrds(r.items.map(x=>x.id),new Map(r.items.map(x=>[x.id,x.ord]))));}}
+  roSetPref(pref,ch.k);ROH.rerender();
+}
+function roRidOf(m){const e=m.hasAttribute('data-rid')?m:m.querySelector('[data-rid]');return e?e.getAttribute('data-rid'):null;}
+function roSibs(g){return Array.from(g.children).filter(c=>c.hasAttribute('data-rid')||c.querySelector('[data-rid]'));}
+function roIds(g){return roSibs(g).map(roRidOf);}
+function roFind(t){
+  const el=t&&t.closest?t.closest('[data-rid]'):null;if(!el)return null;
+  const g=el.closest('[data-rgroup]');if(!g||g.getAttribute('data-rman')!=='1')return null;
+  let m=el;while(m&&m.parentElement!==g)m=m.parentElement;if(!m)return null;
+  return {el,g,m,id:el.getAttribute('data-rid'),key:g.getAttribute('data-rgroup')};
+}
+function roBar(){
+  let b=document.getElementById('roBar');
+  if(!b){
+    b=document.createElement('div');b.id='roBar';
+    b.innerHTML='<button type="button" data-ro="first">⇈<br>Primeiro</button><button type="button" data-ro="up">↑<br>Subir</button><button type="button" data-ro="down">↓<br>Descer</button><button type="button" data-ro="last">⇊<br>Último</button><button type="button" data-ro="done" class="ok">✓<br>Pronto</button>';
+    document.body.appendChild(b);
+    b.addEventListener('click',e=>{const t=e.target.closest('[data-ro]');if(t)roBtn(t.getAttribute('data-ro'));});
+  }
+}
+function roClear(){RO.sel=null;const b=document.getElementById('roBar');if(b)b.remove();document.querySelectorAll('.ro-sel').forEach(e=>e.classList.remove('ro-sel'));}
+async function roBtn(w){
+  if(w==='done'){roClear();return;}
+  const s=RO.sel,r=s&&RO.reg[s.key];if(!r)return;
+  const ups=moveOrds(r.items,s.id,w);
+  if(!ups.length){ROH.toast(w==='first'||w==='up'?'Já é o primeiro.':'Já é o último.');return;}
+  await ROH.write(r.col,ups);roSetPref(r.pref,'man');ROH.rerender();
+}
+function roBegin(f){
+  RO.drag={g:f.g,m:f.m,key:f.key,id:f.id,ids0:roIds(f.g)};
+  f.m.classList.add('ro-drag');document.body.classList.add('ro-on');
+  document.querySelectorAll('.ro-sel').forEach(e=>e.classList.remove('ro-sel'));f.el.classList.add('ro-sel');
+  RO.sel={key:f.key,id:f.id};roBar();
+  try{if(navigator.vibrate)navigator.vibrate(12);}catch(e){}
+}
+function roMove(y){
+  const d=RO.drag;if(!d)return;
+  const sib=roSibs(d.g).filter(c=>c!==d.m);let before=null;
+  for(const c of sib){const r=c.getBoundingClientRect();if(y<r.top+r.height/2){before=c;break;}}
+  if(before){if(d.m.nextElementSibling!==before)d.g.insertBefore(d.m,before);}
+  else if(sib.length){const last=sib[sib.length-1];if(last.nextElementSibling!==d.m)last.after(d.m);}
+  const sc=ROH.scroller();
+  if(sc===window){if(y<70)window.scrollBy(0,-14);else if(y>window.innerHeight-110)window.scrollBy(0,14);}
+  else{const r=sc.getBoundingClientRect();if(y<r.top+70)sc.scrollTop-=14;else if(y>r.bottom-110)sc.scrollTop+=14;}
+}
+async function roEnd(){
+  const d=RO.drag;RO.drag=null;if(!d)return;
+  d.m.classList.remove('ro-drag');document.body.classList.remove('ro-on');
+  RO.noClick=Date.now()+600;
+  const ids=roIds(d.g),r=RO.reg[d.key];
+  if(r&&ids.join('|')!==d.ids0.join('|')){
+    const ups=ordsForOrder(r.items,ids);
+    if(ups.length){await ROH.write(r.col,ups);roSetPref(r.pref,'man');ROH.toast('Ordem salva.');}
+    ROH.rerender();
+  }
+}
+/* depois de redesenhar a tela: o item escolhido continua em destaque (ou a barra some se ele não está mais ali) */
+function roAfterRender(){
+  if(!RO.sel){const b=document.getElementById('roBar');if(b)b.remove();return;}
+  const gs=Array.from(document.querySelectorAll('[data-rgroup]')).filter(x=>x.getAttribute('data-rgroup')===RO.sel.key);
+  let el=null;gs.forEach(g=>{const e=Array.from(g.querySelectorAll('[data-rid]')).find(z=>z.getAttribute('data-rid')===RO.sel.id);if(e)el=e;});
+  if(!el){roClear();return;}
+  el.classList.add('ro-sel');roBar();
+}
+function roInit(){
+  document.addEventListener('click',e=>{if(Date.now()<RO.noClick){e.preventDefault();e.stopPropagation();}},true);
+  const arm=(t,x,y)=>{const f=roFind(t);if(!f)return;RO.x0=x;RO.y0=y;RO.pend=f;clearTimeout(RO.timer);RO.timer=setTimeout(()=>{if(RO.pend){const p=RO.pend;RO.pend=null;roBegin(p);}},450);};
+  const move=(x,y,e)=>{
+    if(RO.drag){if(e&&e.cancelable)e.preventDefault();roMove(y);return;}
+    if(RO.pend&&(Math.abs(x-RO.x0)>10||Math.abs(y-RO.y0)>10)){clearTimeout(RO.timer);RO.pend=null;}
+  };
+  const up=()=>{clearTimeout(RO.timer);RO.pend=null;if(RO.drag)roEnd();};
+  document.addEventListener('touchstart',e=>{if(e.touches.length===1)arm(e.target,e.touches[0].clientX,e.touches[0].clientY);else up();},{passive:true});
+  document.addEventListener('touchmove',e=>{if(e.touches.length)move(e.touches[0].clientX,e.touches[0].clientY,e);},{passive:false});
+  document.addEventListener('touchend',up);document.addEventListener('touchcancel',up);
+  document.addEventListener('mousedown',e=>{if(e.button===0)arm(e.target,e.clientX,e.clientY);});
+  document.addEventListener('mousemove',e=>move(e.clientX,e.clientY,null));
+  document.addEventListener('mouseup',up);
+  document.addEventListener('contextmenu',e=>{if(RO.pend||RO.drag)e.preventDefault();});
+}
+
+const GN={name:n=>n.title||'',date:n=>n.updatedAt||n.createdAt||0};
+const GF={name:f=>f.name||'',date:f=>f.createdAt||0};
+const GL={name:l=>l.name||'',date:l=>l.createdAt||0};
+const GR={name:r=>r.title||'',date:r=>r.date?(+new Date(r.date+'T'+(r.time||'00:00')+':00')||0):0};
+const orderedKids=(pid,fm)=>ordSort('folders:'+pid,'folders',kids(pid,fm),GF,true);
+async function roWrite(col,ups){for(const u of ups){const it=(S[col]||[]).find(x=>x.id===u.id);if(it)await Store.put(col,Object.assign({},it,{ord:u.ord}));}}
+
 const $=id=>document.getElementById(id);
 const cap1=s=>s.charAt(0).toUpperCase()+s.slice(1);
 const clone=o=>JSON.parse(JSON.stringify(o));
@@ -1573,7 +1731,7 @@ function remRow(r,showDate){
   const nt=(r.notes||'').replace(/#[\p{L}\p{N}_-]{2,30}/gu,'').replace(/\s+/g,' ').trim().slice(0,90);
   const lc=leftChip(r),al=(nal&&r.time?'<span class="pill alarm">'+ic('bell',.7,2.4)+nal+'</span>':'');
   const pillsHtml=(lc||al)?'<div class="li-pills">'+lc+al+'</div>':'';
-  return '<div class="li chkd'+(r.done?' done':'')+'" data-act="open-rem" data-id="'+esc(r.id)+'">'+
+  return '<div class="li chkd'+(r.done?' done':'')+'" data-act="open-rem" data-id="'+esc(r.id)+'" data-rid="'+esc(r.id)+'">'+
     '<button class="chk" data-act="toggle-done" data-id="'+esc(r.id)+'" aria-label="'+(r.done?'Reabrir':'Concluir')+': '+esc(r.title)+'"><span class="chk-i'+(r.done?' on':'')+'">'+(r.done?ic('check',.8,3.2):'')+'</span></button>'+
     '<div class="li-main"><div class="li-t">'+(r.pinned?'<span class="pin-m" style="display:inline-flex;vertical-align:-.1em;margin-right:.3rem;color:var(--accent)">'+ic('pin',.85,2.4)+'</span>':'')+(r.priority?'<span class="prio">'+PRI[r.priority]+'</span>':'')+esc(r.title)+'</div>'+
       pillsHtml+
@@ -1722,9 +1880,11 @@ function remHomeBody(sm,lm,today,ws,cur){
     tile('rview','s:urg','alert','t-pink',sm.urg.length,'Urgentes')+
     tile('rview','s:pin','pin','t-green',sm.pin.length,'Fixados')+
     tile('rview','s:done','check','t-purple',sm.done.length,'Concluídos')+'</div>';
-  h+=secH('Minhas listas','<button class="txtbtn" data-act="new-list">'+ic('plus',1,2.4)+'Nova lista</button>');
   const cnt=id=>S.reminders.filter(r=>!r.done&&remList(r,lm)===id).length;
-  h+='<div class="group" style="margin-top:.8rem">'+listRow('','Lembretes',LCOL[0],cnt(''))+S.lists.filter(l=>!l.fin).sort(byName).map(l=>listRow(l.id,l.name||'Sem nome',lcol(l.color),cnt(l.id))).join('')+'</div>';
+  const ll=ordSort('lists','lists',S.lists.filter(l=>!l.fin).sort(byName),GL,true);
+  h+=secH('Minhas listas','<button class="txtbtn" data-act="new-list">'+ic('plus',1,2.4)+'Nova lista</button>');
+  h+=sortBarFor('lists');
+  h+='<div class="group" style="margin-top:.8rem"'+ordAttr('lists',true)+'>'+listRow('','Lembretes',LCOL[0],cnt(''))+ll.map(l=>listRow(l.id,l.name||'Sem nome',lcol(l.color),cnt(l.id))).join('')+'</div>';
   const nt=S.trash.filter(t=>t.c!=='notes').length;
   h+='<div class="group" style="margin-top:.8rem"><div class="li ic" data-act="rview" data-v="trash"><span class="li-ic" style="color:var(--muted)">'+ic('trash',1.25,2)+'</span><div class="li-main"><div class="li-t">Apagados recentemente</div><div class="li-s">recupere em até 30 dias</div></div><span class="li-n num">'+nt+'</span>'+chev()+'</div></div>';
   return h;
@@ -1754,7 +1914,7 @@ function finRemView(){
   return h;
 }
 function listRow(id,name,color,n){
-  return '<div class="li ic" data-act="rview" data-v="l:'+esc(id)+'"><span class="sq round" style="background:'+esc(color)+';color:'+inkOn(color)+'">'+ic('list',1,2.4)+'</span><div class="li-main"><div class="li-t">'+esc(name)+'</div></div><span class="li-n num">'+n+'</span>'+chev()+'</div>';
+  return '<div class="li ic" data-act="rview" data-v="l:'+esc(id)+'"'+(id?' data-rid="'+esc(id)+'"':'')+'><span class="sq round" style="background:'+esc(color)+';color:'+inkOn(color)+'">'+ic('list',1,2.4)+'</span><div class="li-main"><div class="li-t">'+esc(name)+'</div></div><span class="li-n num">'+n+'</span>'+chev()+'</div>';
 }
 const SMART={todos:'Todos',hoje:'Hoje',hojeso:'Lembretes de hoje',prog:'Programados',late:'Atrasados',pin:'Fixados',urg:'Urgentes',done:'Concluídos'};
 function remSub(){
@@ -1800,17 +1960,19 @@ function remSub(){
       +'<button class="iconbtn'+(hd?' on':'')+'" data-act="toggle-done-list" data-id="'+esc(id)+'" aria-pressed="'+hd+'" aria-label="'+(hd?'Mostrar':'Ocultar')+' concluídos ('+done.length+')">'+ic(hd?'eyeoff':'eye',1.2,2.2)+'</button>'
       +(real?'<button class="iconbtn" data-act="edit-list" data-id="'+esc(id)+'" aria-label="Renomear, cor, seções ou apagar lista">'+ic('edit',1.1,2.2)+'</button>':'')
       +'</div>';
+    h+=sortBar('rems:'+id,roMode('rems:'+id,open,true),true);
     const secs=real?(l.sections||[]).filter(x=>(x.t||'').trim()):[];
     const ids=new Set(secs.map(x=>x.id));
     const noSec=open.filter(r=>!r.section||!ids.has(r.section));
     /* cada parte (seção, sem seção, concluídos) abre e recolhe com a setinha */
     const head=(key,title,n)=>{const o=!S.lc[key];return '<div class="sec-h"><button class="sec-tog'+(o?' open':'')+'" data-act="lc-toggle" data-id="'+esc(key)+'" aria-expanded="'+o+'" aria-label="'+(o?'Recolher ':'Abrir ')+esc(title)+'">'+ic('right',1.05,2.6)+'<h2>'+esc(title)+' '+cnt(n,1)+'</h2></button></div>';};
-    const body=(key,items,empty)=>S.lc[key]?'':'<div class="group">'+(items.length?items.map(r=>remRow(r,true)).join(''):emptyRow('',empty))+'</div>';
-    secs.forEach(sc=>{const its=open.filter(r=>r.section===sc.id),key=id+':'+sc.id;h+=head(key,sc.t,its.length)+body(key,its,'Nada nesta seção.');});
+    const body=(key,items,empty,gk)=>S.lc[key]?'':'<div class="group"'+(gk?ordAttr(gk,true):'')+'>'+(items.length?items.map(r=>remRow(r,true)).join(''):emptyRow('',empty))+'</div>';
+    secs.forEach(sc=>{const gk='rems:'+id+'|'+sc.id,its=ordSort(gk,'reminders',open.filter(r=>r.section===sc.id),GR,true),key=id+':'+sc.id;h+=head(key,sc.t,its.length)+body(key,its,'Nada nesta seção.',gk);});
     if(secs.length){
-      if(noSec.length){const key=id+':_sem';h+=head(key,'Sem seção',noSec.length)+body(key,noSec,'');}
+      if(noSec.length){const gk='rems:'+id+'|_sem',ns=ordSort(gk,'reminders',noSec,GR,true),key=id+':_sem';h+=head(key,'Sem seção',ns.length)+body(key,ns,'',gk);}
     }else{
-      h+='<div class="group" style="margin-top:1rem">'+(noSec.length?noSec.map(r=>remRow(r,true)).join(''):emptyRow('Lista vazia.','Toque no + lá em cima para criar um lembrete.'))+'</div>';
+      const gk0='rems:'+id+'|_all',ns0=ordSort(gk0,'reminders',noSec,GR,true);
+      h+='<div class="group" style="margin-top:1rem"'+ordAttr(gk0,true)+'>'+(ns0.length?ns0.map(r=>remRow(r,true)).join(''):emptyRow('Lista vazia.','Toque no + lá em cima para criar um lembrete.'))+'</div>';
     }
     if(done.length&&!hd){const key=id+':_done';h+=head(key,'Concluídos',done.length)+body(key,done,'');}
     if(real&&!secs.length)h+='<div class="actbar"><button class="btn grow" data-act="edit-list" data-id="'+esc(id)+'">'+ic('plus',1,2.4)+'Criar seções nesta lista</button></div>';
@@ -1859,8 +2021,8 @@ function viewAgenda(){
 }
 
 /* ---------- Notas ---------- */
-function notesList(list,fm,showPath,emptyHtml){
-  return list.length?'<div class="notes-cards">'+list.map(n=>noteRow(n,fm,showPath)).join('')+'</div>':'<div class="group">'+emptyHtml+'</div>';
+function notesList(list,fm,showPath,emptyHtml,gk,man){
+  return list.length?'<div class="notes-cards"'+(gk?ordAttr(gk,man):'')+'>'+list.map(n=>noteRow(n,fm,showPath)).join('')+'</div>':'<div class="group">'+emptyHtml+'</div>';
 }
 function noteRow(n,fm,showPath){
   const img=(n.images||[])[0],ni=(n.images||[]).length,today=isoDate(new Date());
@@ -1874,13 +2036,13 @@ function noteRow(n,fm,showPath){
   const prev=(n.body||'').replace(/\s+/g,' ').trim().slice(0,70);
   if(prev&&!showPath)bits.push(prev);
   const kcls=isScan(n)?' k-scan':(isDraw(n)?' k-draw':(cl.length?' k-list':''));
-  return '<div class="li note'+kcls+'" data-act="open-note" data-id="'+esc(n.id)+'"><div class="thumb">'+(img?'<img src="'+imgSrc(img)+'" data-img="'+esc(img)+'" alt="" loading="lazy">':ic(n.kind==='scan'?'scan':(cl.length?'list':'note'),1.1))+'</div><div class="li-main"><div class="li-t">'+(n.pinned?'<span style="color:var(--link)">'+ic('pin',.75,2.4)+'</span> ':'')+esc(n.title||'Sem título')+'</div><div class="li-s">'+bits.map(esc).join(' · ')+'</div></div></div>';
+  return '<div class="li note'+kcls+'" data-act="open-note" data-id="'+esc(n.id)+'" data-rid="'+esc(n.id)+'"><div class="thumb">'+(img?'<img src="'+imgSrc(img)+'" data-img="'+esc(img)+'" alt="" loading="lazy">':ic(n.kind==='scan'?'scan':(cl.length?'list':'note'),1.1))+'</div><div class="li-main"><div class="li-t">'+(n.pinned?'<span style="color:var(--link)">'+ic('pin',.75,2.4)+'</span> ':'')+esc(n.title||'Sem título')+'</div><div class="li-s">'+bits.map(esc).join(' · ')+'</div></div></div>';
 }
 const isDraw=n=>n.kind==='desenho'||Object.keys(n.drawSrc||{}).length>0;
 const isScan=n=>n.kind==='scan'||((n.images||[]).length>Object.keys(n.drawSrc||{}).length&&n.kind!=='desenho');
 const noteSort=(a,b)=>(b.pinned?1:0)-(a.pinned?1:0)||(b.updatedAt||b.createdAt||0)-(a.updatedAt||a.createdAt||0);
 function folderRow(id,name,count,sub,icn,color){
-  return '<div class="li ic" data-act="open-folder" data-id="'+esc(id)+'"><span class="li-ic'+(icn?'':' folder')+'"'+(color?' style="color:'+color+'"':'')+'>'+ic(icn||'folder',1.35,1.9)+'</span><div class="li-main"><div class="li-t">'+esc(name)+'</div>'+(sub?'<div class="li-s">'+esc(sub)+'</div>':'')+'</div>'+cnt(count)+chev()+'</div>';
+  return '<div class="li ic" data-act="open-folder" data-id="'+esc(id)+'"'+(id&&String(id).indexOf(':')<0?' data-rid="'+esc(id)+'"':'')+'><span class="li-ic'+(icn?'':' folder')+'"'+(color?' style="color:'+color+'"':'')+'>'+ic(icn||'folder',1.35,1.9)+'</span><div class="li-main"><div class="li-t">'+esc(name)+'</div>'+(sub?'<div class="li-s">'+esc(sub)+'</div>':'')+'</div>'+cnt(count)+chev()+'</div>';
 }
 function subLabel(fid,fm){const k=kids(fid,fm).length;return k?k+(k===1?' subpasta':' subpastas'):'';}
 function curFolder(){
@@ -1890,8 +2052,10 @@ function curFolder(){
 }
 function notesFolders(){
   const fm=fmap();let h='';
+    const rk=orderedKids('',fm);
     h+=secH('Pastas','<button class="txtbtn" data-act="new-folder" data-parent="">'+ic('folderPlus',1.1,2.2)+'Nova pasta</button>');
-    h+='<div class="group">'+folderRow('','Geral',countIn('',fm),'notas sem pasta')+kids('',fm).map(f=>folderRow(f.id,f.name||'Sem nome',countIn(f.id,fm),subLabel(f.id,fm))).join('')+'</div>';
+    h+=sortBarFor('folders:');
+    h+='<div class="group"'+ordAttr('folders:',true)+'>'+folderRow('','Geral',countIn('',fm),'notas sem pasta')+rk.map(f=>folderRow(f.id,f.name||'Sem nome',countIn(f.id,fm),subLabel(f.id,fm))).join('')+'</div>';
   return h;
 }
 const NVN={'':'Geral','v:all':'Todas as notas','v:pin':'Fixadas','v:scan':'Scans e documentos','v:draw':'Desenhos','v:files':'Com arquivos'};
@@ -1916,17 +2080,17 @@ function notesScope(cf,fm){
 }
 /* uma subpasta na lista: setinha abre/recolhe aqui mesmo; tocar no nome abre a pasta */
 function subNode(f,fm,depth){
-  const open=!!S.nx[f.id],n=countIn(f.id,fm),k=kids(f.id,fm),nm=f.name||'Sem nome',sl=subLabel(f.id,fm);
-  let h='<div class="sub-node"><div class="li ic subrow">'
+  const open=!!S.nx[f.id],n=countIn(f.id,fm),k=orderedKids(f.id,fm),nm=f.name||'Sem nome',sl=subLabel(f.id,fm);
+  let h='<div class="sub-node"><div class="li ic subrow" data-rid="'+esc(f.id)+'">'
     +'<button class="arrbtn'+(open?' open':'')+'" data-act="nx-sub" data-id="'+esc(f.id)+'" aria-expanded="'+open+'" aria-label="'+(open?'Recolher ':'Abrir ')+esc(nm)+'">'+ic('right',1.05,2.6)+'</button>'
     +'<span class="li-ic folder">'+ic('folder',1.35,1.9)+'</span>'
     +'<div class="li-main" data-act="open-folder" data-id="'+esc(f.id)+'"><div class="li-t">'+esc(nm)+'</div>'+(sl?'<div class="li-s">'+esc(sl)+'</div>':'')+'</div>'
     +cnt(n,0,n+(n===1?' nota':' notas'))+'</div>';
   if(open){
-    const direct=S.notes.filter(x=>noteFolder(x,fm)===f.id).sort(noteSort);
+    const direct=ordSort('notes:'+f.id,'notes',S.notes.filter(x=>noteFolder(x,fm)===f.id).sort(noteSort),GN,true);
     h+='<div class="sub-body">'
-      +(direct.length?notesList(direct,fm,false,''):'')
-      +((k.length&&depth<8)?'<div class="group subtree">'+k.map(c=>subNode(c,fm,depth+1)).join('')+'</div>':'')
+      +(direct.length?notesList(direct,fm,false,'','notes:'+f.id,true):'')
+      +((k.length&&depth<8)?'<div class="group subtree"'+ordAttr('folders:'+f.id,true)+'>'+k.map(c=>subNode(c,fm,depth+1)).join('')+'</div>':'')
       +((!direct.length&&!k.length)?'<div class="sub-empty">Vazia</div>':'')
       +'</div>';
   }
@@ -1952,16 +2116,17 @@ function notesBody(){
   }
   const real=!!cf&&cf.indexOf('v:')!==0&&cf.indexOf('t:')!==0;
   if(!real){
-    const list=notesScope(cf,fm).sort(noteSort);
-    return secH('Notas '+cnt(list.length,1))+notesList(list,fm,cf!=='',emptyRow('Pasta vazia.','Crie uma nota ou escaneie um documento.'));
+    const man0=cf==='',list=ordSort('notes:'+cf,'notes',notesScope(cf,fm).sort(noteSort),GN,man0);
+    return secH('Notas '+cnt(list.length,1))+sortBarFor('notes:'+cf)+notesList(list,fm,cf!=='',emptyRow('Pasta vazia.','Crie uma nota ou escaneie um documento.'),'notes:'+cf,man0);
   }
   /* pasta de verdade: primeiro as notas dela (recolhíveis), depois as subpastas */
-  const direct=S.notes.filter(n=>noteFolder(n,fm)===cf).sort(noteSort),ks=kids(cf,fm),open=!S.nn[cf];
+  const direct=ordSort('notes:'+cf,'notes',S.notes.filter(n=>noteFolder(n,fm)===cf).sort(noteSort),GN,true),ks=orderedKids(cf,fm),open=!S.nn[cf];
   let h='<div class="sec-h"><button class="sec-tog'+(open?' open':'')+'" data-act="nx-notes" data-id="'+esc(cf)+'" aria-expanded="'+open+'" aria-label="'+(open?'Recolher':'Mostrar')+' as notas desta pasta">'+ic('right',1.05,2.6)+'<h2>Notas '+cnt(direct.length,1)+'</h2></button></div>';
-  if(open)h+=direct.length?notesList(direct,fm,false,''):'<div class="group">'+(ks.length?emptyRow('Nenhuma nota nesta pasta.','Use os botões de cima para criar.'):emptyRow('Pasta vazia.','Crie uma nota ou escaneie um documento.'))+'</div>';
+  if(open)h+=direct.length?sortBarFor('notes:'+cf)+notesList(direct,fm,false,'','notes:'+cf,true):'<div class="group">'+(ks.length?emptyRow('Nenhuma nota nesta pasta.','Use os botões de cima para criar.'):emptyRow('Pasta vazia.','Crie uma nota ou escaneie um documento.'))+'</div>';
   if(ks.length){
     h+=secH('Subpastas '+cnt(ks.length,1));
-    h+='<div class="group subtree">'+ks.map(k=>subNode(k,fm,1)).join('')+'</div>';
+    h+=sortBarFor('folders:'+cf);
+    h+='<div class="group subtree"'+ordAttr('folders:'+cf,true)+'>'+ks.map(k=>subNode(k,fm,1)).join('')+'</div>';
   }
   return h;
 }
@@ -2151,8 +2316,10 @@ function render(){
   if(S.tab==='lembretes'&&active&&active.id==='rq'&&$('remBody')){renderRemBody();return;}
   if(S.tab==='busca'&&active&&active.id==='gq'&&$('gsBody')){$('gsBody').innerHTML=gsBody();return;}
   const main=$('main'),st=main.scrollTop;
+  RO.reg={};
   main.innerHTML=({hoje:viewHoje,lembretes:viewLembretes,agenda:viewAgenda,notas:viewNotas,relogio:viewRelogio,busca:viewBusca,caixa:viewCaixa})[S.tab]();
   main.scrollTop=st;
+  roAfterRender();
 }
 function renderRemBody(){const b=$('remBody');if(!b)return;const ws=S.weekStart;b.innerHTML=remHomeBody(smart(),lmap(),isoDate(new Date()),ws,isoDate(ws)===isoDate(mondayOf(new Date())));}
 function go(fn){fn();render();$('main').scrollTop=0;}
@@ -3324,6 +3491,7 @@ const A={
     await Store.put('notes',Object.assign(newNote(''),{title:(r.title||'').slice(0,60),body:r.notes||'',updatedAt:Date.now()}));await softDelete('reminders',r);},
   'new-folder':d=>openSheet('folder',{name:'',parent:d.parent||'',createdAt:Date.now()}),
   'edit-folder':d=>{const f=S.folders.find(x=>x.id===d.id);if(f)openSheet('folder',clone(f));},
+  'sort-open':d=>sortOpen(d.pref,d.man==='1'),
   'fin-area-create':async()=>{
     await Store.put('lists',{name:'FIN — vencimentos',color:LCOL[3],sections:[],fin:true,createdAt:Date.now()});
     toast('Área do FIN criada.');go(()=>{S.tab='lembretes';S.rview='fin';S.rq='';});
@@ -3463,7 +3631,9 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden){checkAlar
 window.__nucleo={Store:Store,Supa:Supa,S:S};
 if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost')){addEventListener('load',()=>{navigator.serviceWorker.register('sw.js').catch(()=>{});});}
 /* gancho só para os testes (no uso normal a marca não existe) */
-try{if(window.__NUCLEO_TEST__)window.__NUCLEO_TEST__={fmtText,openScanner,handleScanFiles,Store,S,gsFind,gsBody,viewBusca,viewHoje,viewCaixa,viewNotas,planView,planBtn,smart,viewLembretes,Supa,SupaAssets,finSend,finCounts,dayCount};}catch(e){}
+try{if(window.__NUCLEO_TEST__)window.__NUCLEO_TEST__={ordSort,orderedKids,RO,roFind,roBegin,roMove,roEnd,roBtn,roSibs,roIds,sortOpen,roMode,fmtText,openScanner,handleScanFiles,Store,S,gsFind,gsBody,viewBusca,viewHoje,viewCaixa,viewNotas,planView,planBtn,smart,viewLembretes,Supa,SupaAssets,finSend,finCounts,dayCount};}catch(e){}
+Object.assign(ROH,{write:roWrite,scroller:()=>$('main'),rerender:render,toast:toast,choose:(title,msg,options)=>pickMove({title,msg,options})});
+roInit();
 buildTabs();render();Store.init();
 getAssets().then(a=>{S.assetsOk=!!a;});
 getDl().then(d=>{S.dlOk=!!d;});
