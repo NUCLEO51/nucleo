@@ -485,7 +485,7 @@ global.__pend.push((async () => {
   TT.SupaAssets.upload = async (blob, o) => { ups.push(o); return { id: 'uid/' + ups.length + '.pdf' }; };
   TT.finSend();
   t('Enviar ao FIN: Voltar e Enviar no topo (aparecem mesmo com o teclado aberto)', !!q('#finSend #finTop') && !!q('#finSend #finGoTop') && q('#finSend').firstElementChild.contains(q('#finGoTop')), true);
-  t('Enviar ao FIN: botões Escanear, Fotos e Arquivo', !!q('#finCam') && !!q('#finLib') && !!q('#finDoc') && /Escanear/.test(q('#finCam').textContent) && /Arquivo/.test(q('#finDoc').textContent), true);
+  t('Enviar ao FIN: botões Tirar foto, Fotos, Digitalizar documento e Arquivo', !!q('#finCam') && !!q('#finLib') && !!q('#finDoc') && !!q('#finScan') && /Tirar foto/.test(q('#finCam').textContent) && /Digitalizar documento/.test(q('#finScan').textContent) && /Arquivo/.test(q('#finDoc').textContent), true);
   t('Enviar ao FIN: Escanear usa a câmera traseira e Fotos aceita várias imagens', q('#finFcam').getAttribute('capture') === 'environment' && q('#finFcam').accept === 'image/*' && q('#finFlib').multiple === true, true);
   t('Enviar ao FIN: avisa que o FIN não lê a foto sozinho', /não lê a foto sozinho/.test(q('#finSend').textContent), true);
   const f = new w.File(['conteudo'], 'boleto.pdf', { type: 'application/pdf' });
@@ -593,5 +593,40 @@ global.__pend.push((async () => {
   q('#main [data-act="fin-area-create"]').click(); await wait(80);
   t('criar a área: nasce a lista "FIN — vencimentos" marcada como do FIN e abre a área', ev(`__NUCLEO_TEST__.S.lists.some(l=>l.fin&&/FIN/.test(l.name))`) === true && ev('__NUCLEO_TEST__.S.rview') === 'fin', true);
   ev(`const S=__NUCLEO_TEST__.S;S.tab='hoje';S.rview=null;S.lists=[];S.reminders=[];S.raw={reminders:[],lists:[],notes:[],folders:[],events:[],inbox:[]};S.conf='all';`);
+})());
+
+// --- Digitalizar documento (scanner do iPhone pelo seletor de arquivos) (v53) ---
+const __prevP4 = Promise.all((global.__pend || []).slice());
+global.__pend.push((async () => {
+  await __prevP4;
+  const doc = w.document, q = s => doc.querySelector(s), wait = ms => new Promise(r => setTimeout(r, ms)), TT = w.__NUCLEO_TEST__;
+  t('entrada do scanner: aceita PDF e imagem e NÃO força a câmera (assim o iPhone mostra Escolher Arquivo › Digitalizar documentos)', !!q('#fileScan') && q('#fileScan').accept === 'application/pdf,image/*' && !q('#fileScan').hasAttribute('capture'), true);
+  // Enviar ao FIN
+  TT.Supa.sess = { access: 'a.b.c', refresh: 'r', exp: Date.now() + 3600000 };
+  TT.finSend();
+  t('Enviar ao FIN: botão Digitalizar documento com o passo a passo do iPhone', /Digitalizar documentos/.test(q('#finSend').textContent) && /Escolher Arquivo/.test(q('#finSend').textContent) && q('#finFscan').accept === 'application/pdf,image/*' && !q('#finFscan').hasAttribute('capture'), true);
+  const f0 = new w.File(['x'], 'Digitalização.pdf', { type: 'application/pdf' });
+  Object.defineProperty(q('#finFscan'), 'files', { value: [f0], configurable: true });
+  q('#finFscan').dispatchEvent(new w.Event('change'));
+  t('Enviar ao FIN: o PDF digitalizado entra na lista de anexos', /Anexos \(1\)/.test(q('#finFiles').textContent) && /Digitalização\.pdf/.test(q('#finFiles').textContent), true);
+  q('#finTop').click();
+  // Notas: Escanear abre a escolha
+  ev(`const S=__NUCLEO_TEST__.S;S.ready=true;S.tab='lembretes';S.sheet=null;S.conf='del';S.folder=null;S.assetsOk=true;S.notes=[];S.folders=[];S.lists=[];S.reminders=[];S.events=[];S.inbox=[];
+    S.raw={reminders:[],lists:[],notes:[],folders:[],events:[],inbox:[]};`);
+  q('#tab-notas').click(); await wait(10);
+  q('#main [data-act="scan-new"]').click(); await wait(30);
+  const mv = q('#mvRoot');
+  t('Escanear (Notas): pergunta como escanear, com Digitalizar documento primeiro, Foto rápida e Foto da galeria, e o passo a passo', !!mv && mv.querySelectorAll('.mv-opt').length === 3 && /Digitalizar documento \(scanner do iPhone\)/.test(mv.querySelectorAll('.mv-opt')[0].textContent) && /Foto rápida/.test(mv.textContent) && /Foto da galeria/.test(mv.textContent) && /três pontinhos/.test(mv.textContent), true);
+  mv.querySelectorAll('.mv-opt')[0].click(); await wait(20);
+  t('escolher Digitalizar: já prepara a nota nova (aberta no toque, como o iPhone exige)', ev('__NUCLEO_TEST__.S.pendingNew') === true && !q('#mvRoot'), true);
+  const ups = [];
+  TT.SupaAssets.upload = async (blob, o) => { ups.push(o); return { id: 'uid/doc' + ups.length + '.pdf' }; };
+  const pdf = new w.File(['conteudo do pdf'], 'Digitalização 18-10.pdf', { type: 'application/pdf' });
+  Object.defineProperty(q('#fileScan'), 'files', { value: [pdf], configurable: true });
+  q('#fileScan').dispatchEvent(new w.Event('change', { bubbles: true })); await wait(150);
+  const nt = ev('__NUCLEO_TEST__.S.notes[0]');
+  t('PDF digitalizado: vira uma nota de scan com o arquivo anexado e abre para dar nome', !!nt && nt.kind === 'scan' && /^Documento de \d\d\/\d\d \d\d:\d\d$/.test(nt.title) && nt.files.length === 1 && nt.files[0].name === 'Digitalização 18-10.pdf' && nt.files[0].type === 'application/pdf' && nt.files[0].id === 'uid/doc1.pdf' && (nt.images || []).length === 0 && ev('(__NUCLEO_TEST__.S.sheet||{}).type') === 'note', true);
+  t('PDF digitalizado: enviado como PDF (sem converter em imagem)', ups.length === 1 && ups[0].type === 'application/pdf' && ups[0].ext === 'pdf', true);
+  ev(`const S=__NUCLEO_TEST__.S;S.sheet=null;S.tab='hoje';S.pendingNew=false;S.notes=[];S.raw={reminders:[],lists:[],notes:[],folders:[],events:[],inbox:[]};S.conf='all';`);
 })());
 Promise.all(global.__pend || []).then(() => { console.log(ok + ' ok, ' + bad + ' falhas'); process.exit(bad ? 1 : 0); });

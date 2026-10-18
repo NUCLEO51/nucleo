@@ -451,6 +451,7 @@ input[type=date].inp,input[type=time].inp{display:block;width:100%;max-width:100
 <input type="file" id="fileCam" accept="image/*" capture="environment" hidden>
 <input type="file" id="fileLib" accept="image/*" multiple hidden>
 <input type="file" id="fileAny" multiple hidden>
+<input type="file" id="fileScan" accept="application/pdf,image/*" hidden>
 
 <script id="lib">
 const pad=n=>String(n).padStart(2,'0');
@@ -704,7 +705,7 @@ const S={tab:'hoje',raw:{},reminders:[],notes:[],events:[],inbox:[],folders:[],l
   folder:null,rview:null,q:'',rq:'',sheet:null,rings:[],assetsOk:false,dlOk:false,bw:true,weekend:false,fired:{},fs:20,theme:'auto',conf:'all',purged:false,gq:'',nsOpen:false,nx:{},nn:{},lc:{}};
 const lsGet=k=>{try{return localStorage.getItem(k);}catch(e){return null;}};
 const lsSet=(k,v)=>{try{localStorage.setItem(k,v);}catch(e){}};
-const APP_V='v52';
+const APP_V='v53';
 const ERRLOG_KEY='nucleo-errlog';
 function logErr(where,e){try{const a=JSON.parse(localStorage.getItem(ERRLOG_KEY)||'[]');a.push({t:Date.now(),w:String(where).slice(0,40),m:String((e&&e.message)||e||'').slice(0,160)});while(a.length>30)a.shift();localStorage.setItem(ERRLOG_KEY,JSON.stringify(a));}catch(x){}}
 addEventListener('error',ev=>logErr('tela',ev.message||ev.error));
@@ -1206,14 +1207,14 @@ function finSend(){
     +'<h1 style="font-size:1.9rem;margin:0">Enviar ao FIN</h1>'
     +'<p style="margin:0;font-size:1.1rem">Escreva, cole, tire uma foto ou anexe um documento. <b>Cada linha e cada arquivo</b> vira um pendente no FIN.</p>'
     +'<textarea id="finTx" rows="4" placeholder="Escreva ou cole aqui (texto ou imagem)" style="font:inherit;font-size:1.15rem;padding:.9rem;border-radius:.8rem;border:2px solid var(--line);background:var(--surface);color:var(--fg);width:100%;box-sizing:border-box"></textarea>'
-    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:.6rem"><button id="finCam" type="button" style="'+B+'font-size:1.1rem;min-height:3.6rem;background:var(--surface-2);color:var(--fg)">📷 Escanear</button><button id="finLib" type="button" style="'+B+'font-size:1.1rem;min-height:3.6rem;background:var(--surface-2);color:var(--fg)">🖼️ Fotos</button><button id="finDoc" type="button" style="'+B+'font-size:1.1rem;min-height:3.6rem;background:var(--surface-2);color:var(--fg);grid-column:1/-1">📎 Arquivo (PDF, imagem…)</button></div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:.6rem"><button id="finCam" type="button" style="'+B+'font-size:1.1rem;min-height:3.6rem;background:var(--surface-2);color:var(--fg)">📷 Tirar foto</button><button id="finLib" type="button" style="'+B+'font-size:1.1rem;min-height:3.6rem;background:var(--surface-2);color:var(--fg)">🖼️ Fotos</button><button id="finScan" type="button" style="'+B+'font-size:1.1rem;min-height:3.6rem;background:var(--accent);color:var(--accent-fg);grid-column:1/-1">📄 Digitalizar documento</button><button id="finDoc" type="button" style="'+B+'font-size:1.1rem;min-height:3.6rem;background:var(--surface-2);color:var(--fg);grid-column:1/-1">📎 Arquivo (PDF, imagem…)</button></div><div style="font-size:.95rem;color:var(--muted)">Para digitalizar de verdade: toque em “Digitalizar documento”, depois em Escolher Arquivo, nos três pontinhos ⋯ e em Digitalizar documentos. O resultado volta como PDF.</div>'
     +'<div id="finFiles"></div>'
     +'<div id="finErr" role="alert" style="min-height:1.4rem;font-weight:700;color:var(--danger)"></div>'
     +'<button id="finGo" type="button" style="'+B+'font-size:1.2rem;min-height:3.8rem;background:var(--accent);color:var(--accent-fg)">Enviar ao FIN</button>'
     +'<button id="finNo" type="button" style="'+B+'font-size:1.1rem;min-height:3.4rem;background:var(--surface-2);color:var(--fg)">Voltar</button>'
     +'<div style="background:var(--surface);border-radius:.8rem;padding:.7rem .9rem;font-size:1rem;line-height:1.5"><b>Exemplos de texto:</b><br>Mercado 230,50 no cartão Bradesco<br>Tênis 6x 349,99 cartão Santander<br>Conta de luz vence dia 10<br>Dívida Itaú 16000</div>'
     +'<p style="margin:0;font-size:.95rem;color:var(--muted)">Nada é cadastrado sozinho: no FIN você confere e confirma. O FIN <b>não lê a foto sozinho</b>: o documento fica junto do pendente para você ver ao cadastrar e dá para compartilhar com o chat.</p>'
-    +'<input type="file" id="finFcam" accept="image/*" capture="environment" hidden><input type="file" id="finFlib" accept="image/*" multiple hidden><input type="file" id="finFdoc" multiple hidden>';
+    +'<input type="file" id="finFscan" accept="application/pdf,image/*" hidden><input type="file" id="finFcam" accept="image/*" capture="environment" hidden><input type="file" id="finFlib" accept="image/*" multiple hidden><input type="file" id="finFdoc" multiple hidden>';
   document.body.appendChild(el);
   const files=[],MAXF=10,MAXB=20*1048576;
   const err=el.querySelector('#finErr'),tx=el.querySelector('#finTx');
@@ -1230,7 +1231,7 @@ function finSend(){
     });
     paint();
   };
-  [['finCam','finFcam'],['finLib','finFlib'],['finDoc','finFdoc']].forEach(p=>{
+  [['finCam','finFcam'],['finLib','finFlib'],['finDoc','finFdoc'],['finScan','finFscan']].forEach(p=>{
     const inp=el.querySelector('#'+p[1]);
     el.querySelector('#'+p[0]).onclick=()=>{inp.value='';inp.click();};
     inp.onchange=()=>{addFiles(inp.files);inp.value='';};
@@ -1279,8 +1280,8 @@ function pickMove(o){
       e.stopPropagation();
       const b=e.target.closest('[data-mv]');
       if(!b&&e.target!==root)return;
-      const k=b?+b.dataset.mv:-1;
-      root.remove();res(k>=0?o.options[k]:null);
+      const k=b?+b.dataset.mv:-1,opt=k>=0?o.options[k]:null;
+      root.remove();if(opt&&opt.onPick)opt.onPick();res(opt);
     });
   });
 }
@@ -2848,6 +2849,30 @@ async function onFiles(inp){
     renderSheet();toast('Foto anexada');
   }
 }
+async function onScanDoc(inp){
+  const files=Array.from(inp.files||[]);if(!files.length)return;
+  const a=await getAssets();
+  if(!a){toast('Digitalizar precisa estar conectado à sua conta.');S.pendingNew=false;return;}
+  toast('Enviando o documento…');
+  const imgs=[],fl=[];
+  for(const f of files){
+    try{
+      if(/^image\//.test(f.type)){const blob=await prepareImage(f,false);const r=await a.upload(blob,{type:'image/jpeg'});imgs.push(r.id);}
+      else{
+        if(f.size>45*1048576){toast('“'+f.name+'” passa de 45 MB e não foi enviado.');continue;}
+        const ext=(f.name.match(/\.([A-Za-z0-9]{1,8})$/)||[])[1]||'pdf';
+        const r=await a.upload(f,{type:f.type||'application/pdf',ext});fl.push({id:r.id,name:f.name,size:f.size,type:f.type||'application/pdf'});
+      }
+    }catch(e){toast('Não consegui enviar “'+f.name+'”. Confira a internet.');}
+  }
+  if(!imgs.length&&!fl.length){S.pendingNew=false;return;}
+  S.pendingNew=false;
+  const now=new Date(),title='Documento de '+pad(now.getDate())+'/'+pad(now.getMonth()+1)+' '+pad(now.getHours())+':'+pad(now.getMinutes());
+  const doc=Object.assign(newNote(S.pendingFolder||''),{title,kind:'scan',images:imgs,files:fl,updatedAt:Date.now()});
+  const id=await Store.put('notes',doc);
+  const nn=S.notes.find(x=>x.id===id)||Object.assign({id},doc);
+  openSheet('note',clone(nn));toast('Documento salvo. Dê um nome se quiser.');
+}
 async function onAnyFiles(inp){
   const files=Array.from(inp.files||[]);if(!files.length||!S.sheet)return;
   const sh=S.sheet,a=await getAssets();
@@ -3009,7 +3034,14 @@ const A={
   'edit-draw':d=>{const sh=S.sheet;if(sh)editDrawing(d.id,sh.type==='notev'?'view':'sheet');},
   'draw-new':d=>{if(!S.assetsOk){toast('Desenhar precisa de conexão com a nuvem.');return;}S.pendingFolder=d.folder||'';openDraw(r=>saveDrawing(r,'new'));},
   'new-note':d=>openSheet('note',newNote(d.folder)),
-  'scan-new':d=>{if(!S.assetsOk){toast('Escanear precisa de permissão de edição neste navegador.');return;}S.pendingNew=true;S.pendingFolder=d.folder||'';pickFiles('cam');},
+  'scan-new':async d=>{
+    if(!S.assetsOk){toast('Escanear precisa de permissão de edição neste navegador.');return;}
+    const go=k=>()=>{S.pendingNew=true;S.pendingFolder=d.folder||'';if(k==='scan'){const i=$('fileScan');i.value='';i.click();}else pickFiles(k);};
+    await pickMove({title:'Como quer escanear?',msg:'Para digitalizar de verdade (como nas Notas do iPhone): toque em “Digitalizar documento”, depois em Escolher Arquivo, nos três pontinhos ⋯ e em Digitalizar documentos.',options:[
+      {k:'scan',label:'📄 Digitalizar documento (scanner do iPhone)',onPick:go('scan')},
+      {k:'cam',label:'📷 Foto rápida (câmera)',onPick:go('cam')},
+      {k:'lib',label:'🖼️ Foto da galeria',onPick:go('lib')}]});
+  },
   'open-folder':d=>go(()=>{S.folder=d.id;S.q='';S.nsOpen=false;}),
   'nx-sub':d=>{S.nx[d.id]=S.nx[d.id]?0:1;render();},
   'nx-notes':d=>{S.nn[d.id]=S.nn[d.id]?0:1;render();},
@@ -3154,6 +3186,7 @@ document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target&&e.target.i
 document.addEventListener('change',e=>{
   const t=e.target;
   if(t.id==='fileCam'||t.id==='fileLib'){onFiles(t);return;}
+  if(t.id==='fileScan'){onScanDoc(t);return;}
   if(t.id==='fileAny'){onAnyFiles(t);return;}
   if(t.id==='bw'){S.bw=t.checked;lsSet('ms-bw',S.bw?'1':'0');return;}
   if(!S.sheet)return;
@@ -3176,7 +3209,7 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden){checkAlar
 window.__nucleo={Store:Store,Supa:Supa,S:S};
 if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost')){addEventListener('load',()=>{navigator.serviceWorker.register('sw.js').catch(()=>{});});}
 /* gancho só para os testes (no uso normal a marca não existe) */
-try{if(window.__NUCLEO_TEST__)window.__NUCLEO_TEST__={S,gsFind,gsBody,viewBusca,viewHoje,viewCaixa,viewNotas,planView,planBtn,smart,viewLembretes,Supa,SupaAssets,finSend,finCounts,dayCount};}catch(e){}
+try{if(window.__NUCLEO_TEST__)window.__NUCLEO_TEST__={Store,S,gsFind,gsBody,viewBusca,viewHoje,viewCaixa,viewNotas,planView,planBtn,smart,viewLembretes,Supa,SupaAssets,finSend,finCounts,dayCount};}catch(e){}
 buildTabs();render();Store.init();
 getAssets().then(a=>{S.assetsOk=!!a;});
 getDl().then(d=>{S.dlOk=!!d;});
