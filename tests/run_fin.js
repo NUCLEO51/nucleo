@@ -275,7 +275,7 @@ const count = (h, s) => h.split(s).length - 1;
   const oc = (txt) => Array.from(doc.querySelectorAll('.modal [data-opt]')).find(b => b.textContent.indexOf(txt) >= 0);
   t('FIN: a barra abre a escolha com Padrão, datas, A→Z, Z→A e Minha ordem, com Voltar no topo', ['Padrão', 'Data: mais recentes', 'Data: mais antigas', 'A → Z', 'Z → A', 'Minha ordem'].every(x => !!oc(x)) && !!doc.querySelector('.modal .mback'), true);
   click(oc('A → Z')); await wait(30);
-  t('FIN dívidas: A → Z (Alfa, Banco, Zeta)', drows('debts:pagar') === 'x2x1x3' && doc.querySelector('#app [data-sortbtn]').classList.contains('on'), true);
+  t('FIN dívidas: A → Z (Alfa, Banco, Zeta)', drows('debts:pagar') === 'x2x1x3' && !doc.querySelector('#app [data-sortbtn]').classList.contains('on'), true);
   click(doc.querySelector('#app [data-sortbtn]')); await wait(20); click(oc('Data: mais antigas')); await wait(30);
   const ordemData = drows('debts:pagar');
   t('FIN dívidas: por data usa o próximo vencimento (mais antigas = vence antes primeiro)', ['x2', 'x3', 'x1'].every(id => ordemData.indexOf(id) >= 0) && ordemData.indexOf('x2') < ordemData.indexOf('x1') && ordemData.indexOf('x3') < ordemData.indexOf('x1') || ordemData.length === 6, true);
@@ -315,9 +315,9 @@ const count = (h, s) => h.split(s).length - 1;
   t('FIN mês: a escolha de ordem não oferece "Minha ordem" (a tabela mistura contas, faturas e parcelas)', !oc('Minha ordem') && !!oc('A → Z'), true);
   click(oc('A → Z')); await wait(30);
   t('FIN mês: A → Z põe "Alfa conta" primeiro', mrows() === 'AZ', true);
-  t('FIN: o botão Ordenar é redondo e fica no canto do título (↕), aceso quando a ordem não é a padrão', !!doc.querySelector('#app header.hd .ibtn[data-sortbtn]') && doc.querySelector('#app header.hd .ibtn[data-sortbtn]').textContent === '↕' && doc.querySelector('#app header.hd .ibtn[data-sortbtn]').classList.contains('on') && !doc.querySelector('#app .sortbar'), true);
+  t('FIN: o botão Ordenar é redondo e fica no canto do título (↕), sempre na cor padrão', !!doc.querySelector('#app header.hd .ibtn[data-sortbtn]') && doc.querySelector('#app header.hd .ibtn[data-sortbtn]').textContent === '↕' && !doc.querySelector('#app header.hd .ibtn[data-sortbtn]').classList.contains('on') && !doc.querySelector('#app .sortbar'), true);
   try { w.localStorage.removeItem('ord-sort'); } catch (e) {}
-  t('FIN: versão do cache subiu para v8', /fin-app-v8/.test(fs.readFileSync(path.join(__dirname, '..', 'fin', 'sw.js'), 'utf8')), true);
+  t('FIN: versão do cache subiu para v9', /fin-app-v9/.test(fs.readFileSync(path.join(__dirname, '..', 'fin', 'sw.js'), 'utf8')), true);
 
   console.log(ok + ' ok, ' + bad + ' falhas (FIN)');
   process.exit(bad ? 1 : 0);

@@ -17,6 +17,7 @@ const t = (nome, got, want) => {
 const NOW = 'new Date(2026,9,15,10,0,0)';
 const cap = (txt) => ev('(function(){const r=parseCapture(' + JSON.stringify(txt) + ',' + NOW + ');return {title:r.title,date:r.date,time:r.time,repeat:r.repeat,repN:r.repN,repU:r.repU};})()');
 
+t('ao abrir, o Núcleo mostra Lembretes (e não Hoje)', ev('__NUCLEO_TEST__.S.tab') === 'lembretes' && w.document.getElementById('tab-lembretes').classList.contains('on') && !w.document.getElementById('tab-hoje').classList.contains('on'), true);
 // --- captura por texto ---
 t('amanhã às 15h', cap('Dentista amanhã às 15h'), { title: 'Dentista', date: '2026-10-16', time: '15:00', repeat: 'none', repN: 0, repU: '' });
 t('de 8 em 8 horas', cap('Tomar remédio de 8 em 8 horas'), { title: 'Tomar remédio', date: '2026-10-15', time: '11:00', repeat: 'custom', repN: 8, repU: 'hour' });
@@ -132,7 +133,7 @@ ev(`__NUCLEO_TEST__.S.gq='';__NUCLEO_TEST__.S.tab='hoje';`);
   const hoje = TT.viewHoje();
   t('hoje: não mostra mais as listas de baixo', !/Lembretes de hoje<\/h2>/.test(hoje) && !/Agenda de hoje/.test(hoje) && !/inb-card/.test(hoje) && !/sec-today|sec-inbox|sec-late/.test(hoje), true);
   t('hoje: tem os 4 botões + FIN', ['s:hojeso', 'go-agenda', 's:late', 'go-caixa', 'fin-send', 'fin-open'].every(k => hoje.indexOf(k) > 0), true);
-  t('hoje: cronômetro é o último', hoje.indexOf('rl-open') > hoje.indexOf('fin-open') && hoje.indexOf('rl-open') > hoje.indexOf('go-caixa'), true);
+  t('hoje: o cronômetro é um botão redondo no topo, antes de Ajustes, e o botão largo de baixo saiu', /class="iconbtn" data-act="rl-open"/.test(hoje) && hoje.indexOf('rl-open') < hoje.indexOf('data-act="settings"') && hoje.indexOf('rl-open') < hoje.indexOf('go-rem') && !/⏱ Cronômetro/.test(hoje) && !/class="btn grow" data-act="rl-open"/.test(hoje), true);
   t('hoje: data grande (dia da semana e data em linhas próprias)', /class="dateW"/.test(hoje) && /class="dateD"/.test(hoje) && /\.dateW\{font-size:1\.9rem/.test(html) && /\.dateD\{font-size:1\.5rem/.test(html), true);
   t('hoje: continua com busca, ouvir e ajustes', hoje.indexOf('gs-open') > 0 && hoje.indexOf('gs-open') < hoje.indexOf('speak-day') && hoje.indexOf('speak-day') < hoje.indexOf('data-act="settings"'), true);
   // Atrasados: abre página inteira, só com atrasados, e Voltar leva para Hoje
@@ -802,7 +803,7 @@ global.__pend.push((async () => {
   const op = (txt) => Array.from(doc.querySelectorAll('#mvRoot .mv-opt')).find(b => b.textContent.indexOf(txt) >= 0);
   t('notas: a barra abre a escolha com Padrão, datas, A→Z, Z→A e Minha ordem', !!q('#mvRoot') && ['Padrão', 'Data: mais recentes', 'Data: mais antigas', 'A → Z', 'Z → A', 'Minha ordem'].every(x => !!op(x)), true);
   op('A → Z').click(); await wait(40);
-  t('notas: A → Z coloca Abacate, Banana, Cereja, Damasco', ids() === 'n2n1n3n4' && q('#main [data-sortbtn]').classList.contains('on'), true);
+  t('notas: A → Z coloca Abacate, Banana, Cereja, Damasco (e o botão continua na cor padrão dos outros)', ids() === 'n2n1n3n4' && !q('#main [data-sortbtn]').classList.contains('on') && q('#main [data-sortbtn]').classList.contains('iconbtn'), true);
   q('#main [data-sortbtn]').click(); await wait(30); op('Z → A').click(); await wait(40);
   t('notas: Z → A inverte', ids() === 'n4n3n1n2', true);
   q('#main [data-sortbtn]').click(); await wait(30); op('Data: mais antigas').click(); await wait(40);
