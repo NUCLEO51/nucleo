@@ -716,4 +716,27 @@ global.__pend.push((async () => {
   t('estilo: o corpo formatado quebra linhas sozinho (sem pre-wrap) e o título usa a cor de destaque', /\.vtext\.fmt\{white-space:normal\}/.test(html) && /\.vtext \.fh\{font-weight:800;color:var\(--accent\)/.test(html), true);
   ev(`const S=__NUCLEO_TEST__.S;S.sheet=null;S.tab='hoje';S.rview=null;S.notes=[];S.reminders=[];S.raw={reminders:[],lists:[],notes:[],folders:[],events:[],inbox:[]};S.conf='all';`);
 })());
+
+// --- Subpastas abrem RECOLHIDAS por padrão (ex.: Autos dentro da Consulta rápida) e voltam recolhidas ao sair de Notas ---
+const __prevP6 = Promise.all((global.__pend || []).slice());
+global.__pend.push((async () => {
+  await __prevP6;
+  const doc = w.document, q = s => doc.querySelector(s), wait = ms => new Promise(r => setTimeout(r, ms)), TT = w.__NUCLEO_TEST__;
+  const note = (id, title, folder) => ({ id, title, body: '# Dados\n- Placa: ', folder, kind: 'nota', checklist: [], files: [], images: [], createdAt: 1 });
+  ev(`const S=__NUCLEO_TEST__.S;S.ready=true;S.tab='lembretes';S.sheet=null;S.conf='del';S.rview=null;S.nx={};S.nn={};S.q='';S.nsOpen=false;
+    S.folders=[{id:'cr',name:'❇️ Consulta rápida'},{id:'au',name:'Autos',parent:'cr'},{id:'ou',name:'Outra',parent:'cr'}];
+    S.notes=${JSON.stringify([note('n1', 'Marcelo', 'cr'), note('n2', 'Jeep', 'au'), note('n3', 'Camionete', 'au'), note('n4', 'Algo', 'ou')])};
+    S.lists=[];S.reminders=[];S.events=[];S.inbox=[];S.folder='cr';
+    S.raw={reminders:[],lists:[],notes:S.notes.slice(),folders:S.folders.slice(),events:[],inbox:[]};`);
+  q('#tab-notas').click(); await wait(10);
+  const h0 = q('#main').innerHTML;
+  t('subpastas: Autos e Outra aparecem dentro da Consulta rápida, RECOLHIDAS (as notas delas não aparecem) e a ficha da pasta aparece', /Autos/.test(h0) && /Outra/.test(h0) && /Marcelo/.test(h0) && !/Jeep/.test(h0) && !/Camionete/.test(h0) && !/Algo/.test(h0), true);
+  q('#main [data-act="nx-sub"][data-id="au"]').click(); await wait(10);
+  const h1 = q('#main').innerHTML;
+  t('subpastas: tocar na setinha abre só a Autos (mostra Jeep e Camionete) e a outra continua recolhida', /Jeep/.test(h1) && /Camionete/.test(h1) && !/Algo/.test(h1), true);
+  ev(`__NUCLEO_TEST__.S.folder='cr';`); q('#tab-hoje').click(); await wait(10); q('#tab-notas').click(); await wait(10);
+  ev(`__NUCLEO_TEST__.S.folder='cr';`); q('#tab-hoje').click(); ev(`__NUCLEO_TEST__.S.folder='cr';`); q('#tab-notas').click(); await wait(10);
+  t('subpastas: ao sair de Notas e voltar, as subpastas voltam a abrir recolhidas', ev(`JSON.stringify(__NUCLEO_TEST__.S.nx)`) === '{}' && !/Jeep/.test(q('#main').innerHTML), true);
+  ev(`const S=__NUCLEO_TEST__.S;S.tab='hoje';S.folder=null;S.nx={};S.nn={};S.folders=[];S.notes=[];S.raw={reminders:[],lists:[],notes:[],folders:[],events:[],inbox:[]};S.conf='all';`);
+})());
 Promise.all(global.__pend || []).then(() => { console.log(ok + ' ok, ' + bad + ' falhas'); process.exit(bad ? 1 : 0); });
