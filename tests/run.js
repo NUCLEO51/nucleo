@@ -694,6 +694,9 @@ global.__pend.push((async () => {
   t('leitura: "* item" e "• item" também viram marcador; lista numerada mantém o número', /<span class="fd">•<\/span><span class="ft">um<\/span>/.test(f('* um')) && /<span class="fd">•<\/span><span class="ft">dois<\/span>/.test(f('• dois')) && /<span class="fd">1\.<\/span><span class="ft">primeiro<\/span>/.test(f('1. primeiro')), true);
   t('leitura: **negrito** funciona e HTML digitado é escapado (sem risco)', /<b>forte<\/b>/.test(f('isto é **forte**')) && !/<script>/.test(f('<script>alert(1)</script>')) && /&lt;script&gt;/.test(f('<script>alert(1)</script>')), true);
   t('leitura: texto vazio não dá erro', f('').length < 40, true);
+  t('leitura: campo vazio ("- CPF:") mostra o rótulo e um "—" apagado (só na tela)', /<b class="fl">CPF:<\/b> <span class="fe">—<\/span>/.test(f('- CPF: ')) && /<b class="fl">Telefone:<\/b> <span class="fe">—<\/span>/.test(f('- Telefone:')), true);
+  t('leitura: "Compras:" sozinha (sem marcador) não ganha o traço de campo vazio, e campo preenchido não muda', !/class="fe"/.test(f('Compras:')) && !/class="fe"/.test(f('- CPF: 123')) && /<b class="fl">CPF:<\/b> 123/.test(f('- CPF: 123')), true);
+  t('estilo do campo vazio: cinza apagado', /\.vtext \.fe\{color:var\(--muted\);opacity:\.6\}/.test(html), true);
   // as duas telas de leitura usam o formato
   ev(`const S=__NUCLEO_TEST__.S;S.ready=true;S.tab='hoje';S.sheet=null;S.conf='del';S.rview=null;S.folder=null;
     S.lists=[];S.folders=[{id:'f1',name:'Consulta rápida'}];S.events=[];S.inbox=[];

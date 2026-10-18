@@ -397,6 +397,7 @@ input[type=date].inp,input[type=time].inp{display:block;width:100%;max-width:100
 .vtext .fp{margin:.4rem 0}
 .vtext .fs{height:.55rem}
 .vtext b.fl{color:var(--muted);font-weight:700}
+.vtext .fe{color:var(--muted);opacity:.6}
 .valarm{padding:.55rem 0;border-bottom:1px solid var(--line)}
 .valarm:last-child{border-bottom:0}
 .vchecks{display:flex;flex-direction:column}
@@ -830,7 +831,7 @@ const S={tab:'hoje',raw:{},reminders:[],notes:[],events:[],inbox:[],folders:[],l
   folder:null,rview:null,q:'',rq:'',sheet:null,rings:[],assetsOk:false,dlOk:false,bw:true,weekend:false,fired:{},fs:20,theme:'auto',conf:'all',purged:false,gq:'',nsOpen:false,nx:{},nn:{},lc:{}};
 const lsGet=k=>{try{return localStorage.getItem(k);}catch(e){return null;}};
 const lsSet=(k,v)=>{try{localStorage.setItem(k,v);}catch(e){}};
-const APP_V='v55';
+const APP_V='v56';
 const ERRLOG_KEY='nucleo-errlog';
 function logErr(where,e){try{const a=JSON.parse(localStorage.getItem(ERRLOG_KEY)||'[]');a.push({t:Date.now(),w:String(where).slice(0,40),m:String((e&&e.message)||e||'').slice(0,160)});while(a.length>30)a.shift();localStorage.setItem(ERRLOG_KEY,JSON.stringify(a));}catch(x){}}
 addEventListener('error',ev=>logErr('tela',ev.message||ev.error));
@@ -2655,14 +2656,14 @@ const PRIO=['Nenhuma','Baixa !','Média !!','Alta !!!'];
 /* mostra o texto de nota/observação com títulos (#), marcadores (- * •), números e rótulos (Placa: …). O texto salvo NÃO muda. */
 function fmtText(raw){
   const inl=t=>esc(t).replace(/\*\*(.+?)\*\*/g,'<b>$1</b>');
-  const kv=t=>{const m=/^([A-Za-zÀ-ÿ][^:*]{0,34}):\s+(.+)$/.exec(t);return m?'<b class="fl">'+inl(m[1])+':</b> '+inl(m[2]):inl(t);};
+  const kv=(t,item)=>{let m=/^([A-Za-zÀ-ÿ][^:*]{0,34}):\s+(.+)$/.exec(t);if(m)return '<b class="fl">'+inl(m[1])+':</b> '+inl(m[2]);m=item?/^([A-Za-zÀ-ÿ][^:*]{0,34}):$/.exec(t):null;return m?'<b class="fl">'+inl(m[1])+':</b> <span class="fe">—</span>':inl(t);};
   let h='';
   String(raw==null?'':raw).replace(/\r/g,'').split('\n').forEach(line=>{
     const l=line.replace(/\s+$/,'');
     if(!l.trim()){h+='<div class="fs"></div>';return;}
     let m;
     if((m=/^\s*(#+)\s+(.+)$/.exec(l))){h+='<div class="fh">'+inl(m[2])+'</div>';return;}
-    if((m=/^\s*[-*•]\s+(.+)$/.exec(l))){h+='<div class="fb"><span class="fd">•</span><span class="ft">'+kv(m[1])+'</span></div>';return;}
+    if((m=/^\s*[-*•]\s+(.+)$/.exec(l))){h+='<div class="fb"><span class="fd">•</span><span class="ft">'+kv(m[1],true)+'</span></div>';return;}
     if((m=/^\s*(\d{1,2}[.)])\s+(.+)$/.exec(l))){h+='<div class="fb"><span class="fd">'+esc(m[1])+'</span><span class="ft">'+kv(m[2])+'</span></div>';return;}
     h+='<div class="fp">'+kv(l.trim())+'</div>';
   });
