@@ -263,6 +263,8 @@ input,textarea,select{font:inherit;font-size:1rem;color:var(--fg)}
 .thumb img{width:100%;height:100%;object-fit:cover;display:block}
 .li.note{--inset:4.15rem}
 .notes-tools{display:flex;justify-content:flex-end;gap:.4rem;margin:.1rem 0 .2rem}
+.notes-tools.dense{gap:.3rem}
+.notes-tools.dense .iconbtn{width:2.3rem;height:2.3rem}
 .iconbtn.on{background:var(--accent);color:var(--accent-fg)}
 .search .iconbtn{background:none;width:2.4rem;height:2.4rem}
 .sec-tog{display:flex;align-items:center;gap:.1rem;border:0;background:none;color:var(--fg);padding:0;margin-left:-.35rem;min-height:2.6rem;text-align:left}
@@ -882,7 +884,7 @@ const S={tab:'hoje',raw:{},reminders:[],notes:[],events:[],inbox:[],folders:[],l
   folder:null,rview:null,q:'',rq:'',sheet:null,rings:[],assetsOk:false,dlOk:false,bw:true,weekend:false,fired:{},fs:20,theme:'auto',conf:'all',purged:false,gq:'',nsOpen:false,nx:{},nn:{},lc:{}};
 const lsGet=k=>{try{return localStorage.getItem(k);}catch(e){return null;}};
 const lsSet=(k,v)=>{try{localStorage.setItem(k,v);}catch(e){}};
-const APP_V='v57';
+const APP_V='v58';
 const ERRLOG_KEY='nucleo-errlog';
 function logErr(where,e){try{const a=JSON.parse(localStorage.getItem(ERRLOG_KEY)||'[]');a.push({t:Date.now(),w:String(where).slice(0,40),m:String((e&&e.message)||e||'').slice(0,160)});while(a.length>30)a.shift();localStorage.setItem(ERRLOG_KEY,JSON.stringify(a));}catch(x){}}
 addEventListener('error',ev=>logErr('tela',ev.message||ev.error));
@@ -910,16 +912,21 @@ function roMode(pref,items,manual){let m=roPrefs()[pref];if(m==='man'&&!manual)m
 /* ordena um grupo conforme a escolha (ou a ordem manual, se já existir) e registra o grupo para o arrastar */
 function ordSort(gk,col,items,g,manual){const pref=roPrefOf(gk),mode=roMode(pref,items,manual),out=mode==='def'?items:sortGroup(items,mode,g);RO.reg[gk]={col,items:out,pref,manual:!!manual,mode};return out;}
 const ordAttr=(gk,manual)=>' data-rgroup="'+esc(gk)+'" data-rman="'+(manual?1:0)+'"';
-function sortBar(pref,mode,manual){return '<button type="button" class="sortbar" data-act="sort-open" data-pref="'+esc(pref)+'" data-man="'+(manual?1:0)+'">↕ Ordem: <b>'+esc(SORT_LABELS[mode]||'Padrão')+'</b></button>';}
-function sortBarFor(gk){const r=RO.reg[gk];return r?sortBar(r.pref,r.mode,r.manual):'';}
-async function sortOpen(pref,manual){
-  const regs=Object.keys(RO.reg).filter(k=>RO.reg[k].pref===pref).map(k=>RO.reg[k]);
-  const cur=roPrefs()[pref]||(regs[0]?regs[0].mode:'def');
-  const ops=['def','new','old','az','za'].concat(manual?['man']:[]).map(k=>({k,label:k==='man'?'Minha ordem (segure e arraste)':SORT_LABELS[k],current:k===cur}));
-  const ch=await ROH.choose('Ordenar por…',manual?'Para mudar na mão: segure um item e arraste, ou use os botões que aparecem.':'',ops);
+function sortBar(){return '';}
+function sortBarFor(){return '';}
+/* a escolha de ordem vale para todas as listas da tela de uma vez */
+async function sortOpenPage(){
+  const regs=Object.keys(RO.reg).map(k=>RO.reg[k]);
+  if(!regs.length){ROH.toast('Nada para ordenar aqui.');return;}
+  const man=regs.some(r=>r.manual),modes={};
+  regs.forEach(r=>{modes[r.mode]=(modes[r.mode]||0)+1;});
+  const cur=Object.keys(modes).sort((a,b)=>modes[b]-modes[a])[0];
+  const ops=['def','new','old','az','za'].concat(man?['man']:[]).map(k=>({k,label:k==='man'?'Minha ordem (segure e arraste)':SORT_LABELS[k],current:k===cur}));
+  const ch=await ROH.choose('Ordenar por…','Vale para as listas desta tela.'+(man?' Para mudar na mão: segure um item e arraste, ou use os botões que aparecem.':''),ops);
   if(!ch)return;
-  if(ch.k==='man'){for(const r of regs){if(r.items.some(x=>!hasOrd(x)))await ROH.write(r.col,seqOrds(r.items.map(x=>x.id),new Map(r.items.map(x=>[x.id,x.ord]))));}}
-  roSetPref(pref,ch.k);ROH.rerender();
+  if(ch.k==='man'){for(const r of regs){if(r.manual&&r.items.some(x=>!hasOrd(x)))await ROH.write(r.col,seqOrds(r.items.map(x=>x.id),new Map(r.items.map(x=>[x.id,x.ord]))));}}
+  const seen={};regs.forEach(r=>{if(!seen[r.pref]){seen[r.pref]=1;roSetPref(r.pref,ch.k);}});
+  ROH.rerender();
 }
 function roRidOf(m){const e=m.hasAttribute('data-rid')?m:m.querySelector('[data-rid]');return e?e.getAttribute('data-rid'):null;}
 function roSibs(g){return Array.from(g.children).filter(c=>c.hasAttribute('data-rid')||c.querySelector('[data-rid]'));}
@@ -977,6 +984,9 @@ async function roEnd(){
 }
 /* depois de redesenhar a tela: o item escolhido continua em destaque (ou a barra some se ele não está mais ali) */
 function roAfterRender(){
+  /* o botão redondo de ordem: aceso quando a ordem não é a padrão; some quando a tela não tem o que ordenar */
+  const regs=Object.keys(RO.reg).map(k=>RO.reg[k]),acesa=regs.some(r=>r.mode!=='def');
+  document.querySelectorAll('[data-sortbtn]').forEach(b=>{b.style.display=regs.length?'':'none';b.classList.toggle('on',acesa);});
   if(!RO.sel){const b=document.getElementById('roBar');if(b)b.remove();return;}
   const gs=Array.from(document.querySelectorAll('[data-rgroup]')).filter(x=>x.getAttribute('data-rgroup')===RO.sel.key);
   let el=null;gs.forEach(g=>{const e=Array.from(g.querySelectorAll('[data-rid]')).find(z=>z.getAttribute('data-rid')===RO.sel.id);if(e)el=e;});
@@ -1000,6 +1010,7 @@ function roInit(){
   document.addEventListener('contextmenu',e=>{if(RO.pend||RO.drag)e.preventDefault();});
 }
 
+const sortBtn=()=>'<button class="iconbtn" data-act="sort-open" data-sortbtn="1" aria-label="Ordenar">'+ic('sort',1.2,2.2)+'</button>';
 const GN={name:n=>n.title||'',date:n=>n.updatedAt||n.createdAt||0};
 const GF={name:f=>f.name||'',date:f=>f.createdAt||0};
 const GL={name:l=>l.name||'',date:l=>l.createdAt||0};
@@ -1021,6 +1032,7 @@ const P={
   bell:'<path d="M6 16V11a6 6 0 1112 0v5l1.5 2h-15z"/><path d="M10 21h4"/>',
   scan:'<path d="M4 8V5h3M17 5h3v3M20 16v3h-3M7 19H4v-3"/><path d="M4 12h16"/>',
   eye:'<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+  sort:'<path d="M7 4v16M3.5 7.5 7 4l3.5 3.5M17 20V4M13.5 16.5 17 20l3.5-3.5"/>',
   eyeoff:'<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/><path d="M4 4l16 16"/>',
   noteplus:'<path d="M6 3h9l4 4v14H6z"/><path d="M12.5 11v6M9.5 14h6"/>',
   brush:'<path d="M20 4l-9 9"/><path d="M9.5 12.5c-2.5 0-4 1.6-4 4 0 1.2-.6 2.2-1.5 3 3 .8 7-.5 7-4a2.5 2.5 0 00-1.5-3z"/>',
@@ -1861,7 +1873,7 @@ function planBody(ws,today){
 function remHome(){
   const sm=smart(),lm=lmap(),today=isoDate(new Date()),ws=S.weekStart;
   const cur=isoDate(ws)===isoDate(mondayOf(new Date()));
-  let h=hdr('Lembretes e planner','Lembretes');
+  let h=hdr('Lembretes e planner','Lembretes',sortBtn());
   h+='<div class="search">'+ic('search',1.05,2.2)+'<label for="rq" class="sr">Buscar lembretes</label><input id="rq" type="search" placeholder="Buscar lembretes" value="'+esc(S.rq)+'" autocomplete="off"></div>';
   h+='<div id="remBody">'+remHomeBody(sm,lm,today,ws,cur)+'</div>';
   return h;
@@ -1958,9 +1970,9 @@ function remSub(){
     h+='<div class="notes-tools">'
       +'<button class="iconbtn" data-act="new-rem" data-list="'+esc(id)+'" aria-label="Novo lembrete">'+ic('plus',1.2,2.4)+'</button>'
       +'<button class="iconbtn'+(hd?' on':'')+'" data-act="toggle-done-list" data-id="'+esc(id)+'" aria-pressed="'+hd+'" aria-label="'+(hd?'Mostrar':'Ocultar')+' concluídos ('+done.length+')">'+ic(hd?'eyeoff':'eye',1.2,2.2)+'</button>'
+      +sortBtn()
       +(real?'<button class="iconbtn" data-act="edit-list" data-id="'+esc(id)+'" aria-label="Renomear, cor, seções ou apagar lista">'+ic('edit',1.1,2.2)+'</button>':'')
       +'</div>';
-    h+=sortBar('rems:'+id,roMode('rems:'+id,open,true),true);
     const secs=real?(l.sections||[]).filter(x=>(x.t||'').trim()):[];
     const ids=new Set(secs.map(x=>x.id));
     const noSec=open.filter(r=>!r.section||!ids.has(r.section));
@@ -2142,7 +2154,7 @@ function viewNotas(){
   const fm=fmap(),cf=curFolder();
   if(cf==='v:trash')return trashView(['notes'],'Pastas','folder-back');
   let h='',ph='Buscar em todas as notas';
-  if(cf===null)h+=hdr('','Notas','')+'<div class="notes-tools">'+notesTools('',{})+'</div>';
+  if(cf===null)h+=hdr('','Notas',sortBtn())+'<div class="notes-tools">'+notesTools('',{})+'</div>';
   else{
     const isTag=cf.indexOf('t:')===0,real=cf&&cf.indexOf('v:')!==0&&!isTag,f=real?fm[cf]:null,par=real?parentOf(f,fm):'';
     const backTo=par?(fm[par].name||'Sem nome'):'Pastas';
@@ -2150,7 +2162,8 @@ function viewNotas(){
     const into0=cf&&cf.indexOf('v:')!==0&&cf.indexOf('t:')!==0?cf:'';
     ph='Buscar em '+scopeName(cf,fm);
     h+=subHdr(backTo,'folder-back',par?pathOf(par,fm).join(' › '):(isTag?'Etiqueta':''),real?(f.name||'Sem nome'):(isTag?'#'+cf.slice(2):NVN[cf]));
-    h+='<div class="notes-tools">'+notesTools(into0,{sub:!!real})+edit+'</div>';
+    const tl=notesTools(into0,{sub:!!real})+sortBtn()+edit;
+    h+='<div class="notes-tools'+((tl.match(/class="iconbtn/g)||[]).length>=7?' dense':'')+'">'+tl+'</div>';
   }
   if(S.nsOpen)h+='<div class="search">'+ic('search',1.05,2.2)+'<label for="q" class="sr">Buscar nas notas</label><input id="q" type="search" placeholder="'+esc(ph)+'" value="'+esc(S.q)+'" autocomplete="off"><button class="iconbtn" data-act="ns-toggle" aria-label="Fechar a busca">'+ic('close',.95,2.4)+'</button></div>';
   if(cf===null)h+='<div id="notesFolders"'+(S.nsOpen&&S.q?' style="display:none"':'')+'>'+notesFolders()+'</div>';
@@ -3491,7 +3504,7 @@ const A={
     await Store.put('notes',Object.assign(newNote(''),{title:(r.title||'').slice(0,60),body:r.notes||'',updatedAt:Date.now()}));await softDelete('reminders',r);},
   'new-folder':d=>openSheet('folder',{name:'',parent:d.parent||'',createdAt:Date.now()}),
   'edit-folder':d=>{const f=S.folders.find(x=>x.id===d.id);if(f)openSheet('folder',clone(f));},
-  'sort-open':d=>sortOpen(d.pref,d.man==='1'),
+  'sort-open':()=>sortOpenPage(),
   'fin-area-create':async()=>{
     await Store.put('lists',{name:'FIN — vencimentos',color:LCOL[3],sections:[],fin:true,createdAt:Date.now()});
     toast('Área do FIN criada.');go(()=>{S.tab='lembretes';S.rview='fin';S.rq='';});
@@ -3631,7 +3644,7 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden){checkAlar
 window.__nucleo={Store:Store,Supa:Supa,S:S};
 if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost')){addEventListener('load',()=>{navigator.serviceWorker.register('sw.js').catch(()=>{});});}
 /* gancho só para os testes (no uso normal a marca não existe) */
-try{if(window.__NUCLEO_TEST__)window.__NUCLEO_TEST__={ordSort,orderedKids,RO,roFind,roBegin,roMove,roEnd,roBtn,roSibs,roIds,sortOpen,roMode,fmtText,openScanner,handleScanFiles,Store,S,gsFind,gsBody,viewBusca,viewHoje,viewCaixa,viewNotas,planView,planBtn,smart,viewLembretes,Supa,SupaAssets,finSend,finCounts,dayCount};}catch(e){}
+try{if(window.__NUCLEO_TEST__)window.__NUCLEO_TEST__={ordSort,orderedKids,RO,roFind,roBegin,roMove,roEnd,roBtn,roSibs,roIds,sortOpenPage,roMode,fmtText,openScanner,handleScanFiles,Store,S,gsFind,gsBody,viewBusca,viewHoje,viewCaixa,viewNotas,planView,planBtn,smart,viewLembretes,Supa,SupaAssets,finSend,finCounts,dayCount};}catch(e){}
 Object.assign(ROH,{write:roWrite,scroller:()=>$('main'),rerender:render,toast:toast,choose:(title,msg,options)=>pickMove({title,msg,options})});
 roInit();
 buildTabs();render();Store.init();

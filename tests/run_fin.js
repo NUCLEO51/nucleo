@@ -270,16 +270,16 @@ const count = (h, s) => h.split(s).length - 1;
       R2('c2','card',{name:'Cartão Alfa',last4:'2222',limitC:100000,closeDay:10,dueDay:17,holder:'MARCELO'})];
     S.remErr='';render();`);
   const drows = (gk) => Array.from(doc.querySelectorAll('#app [data-rgroup="' + gk + '"] > [data-rid]')).map(e => e.getAttribute('data-rid')).join('');
-  t('FIN dívidas: cada seção é um grupo arrastável (a pagar, a receber) com a barra "Ordem" e as linhas marcadas', drows('debts:pagar') === 'x1x2x3' && drows('debts:receber') === 'x4' && doc.querySelectorAll('#app .sortbar').length === 2 && /Padrão/.test(doc.querySelector('#app .sortbar').textContent), true);
-  click(doc.querySelector('#app .sortbar[data-pref="debts:pagar"]')); await wait(20);
+  t('FIN dívidas: cada seção é um grupo arrastável (a pagar, a receber) com a barra "Ordem" e as linhas marcadas', drows('debts:pagar') === 'x1x2x3' && drows('debts:receber') === 'x4' && doc.querySelectorAll('#app [data-sortbtn]').length === 1 && !doc.querySelector('#app .sortbar'), true);
+  click(doc.querySelector('#app [data-sortbtn]')); await wait(20);
   const oc = (txt) => Array.from(doc.querySelectorAll('.modal [data-opt]')).find(b => b.textContent.indexOf(txt) >= 0);
   t('FIN: a barra abre a escolha com Padrão, datas, A→Z, Z→A e Minha ordem, com Voltar no topo', ['Padrão', 'Data: mais recentes', 'Data: mais antigas', 'A → Z', 'Z → A', 'Minha ordem'].every(x => !!oc(x)) && !!doc.querySelector('.modal .mback'), true);
   click(oc('A → Z')); await wait(30);
-  t('FIN dívidas: A → Z (Alfa, Banco, Zeta)', drows('debts:pagar') === 'x2x1x3' && /A → Z/.test(doc.querySelector('#app .sortbar[data-pref="debts:pagar"]').textContent), true);
-  click(doc.querySelector('#app .sortbar[data-pref="debts:pagar"]')); await wait(20); click(oc('Data: mais antigas')); await wait(30);
+  t('FIN dívidas: A → Z (Alfa, Banco, Zeta)', drows('debts:pagar') === 'x2x1x3' && doc.querySelector('#app [data-sortbtn]').classList.contains('on'), true);
+  click(doc.querySelector('#app [data-sortbtn]')); await wait(20); click(oc('Data: mais antigas')); await wait(30);
   const ordemData = drows('debts:pagar');
   t('FIN dívidas: por data usa o próximo vencimento (mais antigas = vence antes primeiro)', ['x2', 'x3', 'x1'].every(id => ordemData.indexOf(id) >= 0) && ordemData.indexOf('x2') < ordemData.indexOf('x1') && ordemData.indexOf('x3') < ordemData.indexOf('x1') || ordemData.length === 6, true);
-  click(doc.querySelector('#app .sortbar[data-pref="debts:pagar"]')); await wait(20); click(oc('Minha ordem')); await wait(80);
+  click(doc.querySelector('#app [data-sortbtn]')); await wait(20); click(oc('Minha ordem')); await wait(80);
   t('FIN: Minha ordem dá número de ordem a todas as dívidas do grupo, sem perder nenhum dado', ev(`S.recs.filter(r=>r.id==='x1'||r.id==='x2'||r.id==='x3').every(r=>typeof r.data.ord==='number'&&r.data.creditor&&r.data.balanceC)`) === true, true);
   const sel = ev(`roFind(document.querySelector('#app [data-rgroup="debts:pagar"] [data-rid="x3"]'))`);
   ev(`roBegin(roFind(document.querySelector('#app [data-rgroup="debts:pagar"] [data-rid="x3"]')))`); await ev('roEnd()');
@@ -302,21 +302,22 @@ const count = (h, s) => h.split(s).length - 1;
   await wait(700); await ev(`roBtn('done')`);
   // cartões
   ev(`S.tab='cards';S.cardId=null;render();`);
-  t('FIN cartões: grupo arrastável com a barra "Ordem"', drows('cards') === 'c1c2' && /Ordem/.test(doc.querySelector('#app .sortbar').textContent), true);
-  click(doc.querySelector('#app .sortbar[data-pref="cards"]')); await wait(20); click(oc('A → Z')); await wait(30);
+  t('FIN cartões: grupo arrastável com a barra "Ordem"', drows('cards') === 'c1c2' && !!doc.querySelector('#app [data-sortbtn]'), true);
+  click(doc.querySelector('#app [data-sortbtn]')); await wait(20); click(oc('A → Z')); await wait(30);
   t('FIN cartões: A → Z (Cartão Alfa antes de Cartão Zeta)', drows('cards') === 'c2c1', true);
   // planilha do mês: ordenar a tabela (sem arrastar)
   ev(`const ymx=ymOf(todayIso());const R3=(id,kind,data)=>({id,kind,version:1,data});S.tab='bills';S.mm=null;S.mf='all';
     S.recs=[R3('b1','bill',{name:'Zeta conta',dueDay:3,variable:false,amountC:1000,recurring:false,holder:'MARCELO',account:'',startYm:ymx}),R3('m1','billmonth',{billId:'b1',ym:ymx,amountC:1000,paidAt:null}),
       R3('b2','bill',{name:'Alfa conta',dueDay:28,variable:false,amountC:2000,recurring:false,holder:'MARCELO',account:'',startYm:ymx}),R3('m2','billmonth',{billId:'b2',ym:ymx,amountC:2000,paidAt:null})];render();`);
   const mrows = () => Array.from(doc.querySelectorAll('#app .tbl button.tr')).map(e => /Alfa/.test(e.textContent) ? 'A' : 'Z').join('');
-  t('FIN mês: por padrão a tabela vai por data; a barra "Ordem" aparece e a tabela não é arrastável', mrows() === 'ZA' && !!doc.querySelector('#app .sortbar[data-pref="month"]') && !doc.querySelector('#app .tbl [data-rid]'), true);
-  click(doc.querySelector('#app .sortbar[data-pref="month"]')); await wait(20);
+  t('FIN mês: por padrão a tabela vai por data; a barra "Ordem" aparece e a tabela não é arrastável', mrows() === 'ZA' && !!doc.querySelector('#app [data-sortbtn]') && !doc.querySelector('#app .tbl [data-rid]'), true);
+  click(doc.querySelector('#app [data-sortbtn]')); await wait(20);
   t('FIN mês: a escolha de ordem não oferece "Minha ordem" (a tabela mistura contas, faturas e parcelas)', !oc('Minha ordem') && !!oc('A → Z'), true);
   click(oc('A → Z')); await wait(30);
   t('FIN mês: A → Z põe "Alfa conta" primeiro', mrows() === 'AZ', true);
+  t('FIN: o botão Ordenar é redondo e fica no canto do título (↕), aceso quando a ordem não é a padrão', !!doc.querySelector('#app header.hd .ibtn[data-sortbtn]') && doc.querySelector('#app header.hd .ibtn[data-sortbtn]').textContent === '↕' && doc.querySelector('#app header.hd .ibtn[data-sortbtn]').classList.contains('on') && !doc.querySelector('#app .sortbar'), true);
   try { w.localStorage.removeItem('ord-sort'); } catch (e) {}
-  t('FIN: versão do cache subiu para v7', /fin-app-v7/.test(fs.readFileSync(path.join(__dirname, '..', 'fin', 'sw.js'), 'utf8')), true);
+  t('FIN: versão do cache subiu para v8', /fin-app-v8/.test(fs.readFileSync(path.join(__dirname, '..', 'fin', 'sw.js'), 'utf8')), true);
 
   console.log(ok + ' ok, ' + bad + ' falhas (FIN)');
   process.exit(bad ? 1 : 0);

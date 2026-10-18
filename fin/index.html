@@ -52,6 +52,8 @@ h2{font-size:1.25rem;margin:1.2rem 1rem .4rem}
 .sum3{display:grid;grid-template-columns:repeat(3,1fr);gap:.4rem;text-align:center;padding:.7rem .5rem}
 .sum3 .mut{font-size:.8rem}
 .rc{color:#34c27a}
+.ibtn{width:3rem;height:3rem;border-radius:50%;border:0;background:var(--surface-2);color:var(--fg);font-size:1.5rem;font-weight:800;line-height:1;cursor:pointer}
+.ibtn.on{background:var(--accent);color:#06281c}
 .sortbar{display:flex;align-items:center;gap:.5rem;width:100%;margin:.5rem 0;padding:.65rem .9rem;border:0;border-radius:.9rem;background:var(--surface-2);color:var(--fg);font:inherit;font-size:1rem;font-weight:600;cursor:pointer;text-align:left}
 .sortbar b{color:var(--accent)}
 [data-rid]{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
@@ -180,16 +182,21 @@ function roMode(pref,items,manual){let m=roPrefs()[pref];if(m==='man'&&!manual)m
 /* ordena um grupo conforme a escolha (ou a ordem manual, se já existir) e registra o grupo para o arrastar */
 function ordSort(gk,col,items,g,manual){const pref=roPrefOf(gk),mode=roMode(pref,items,manual),out=mode==='def'?items:sortGroup(items,mode,g);RO.reg[gk]={col,items:out,pref,manual:!!manual,mode};return out;}
 const ordAttr=(gk,manual)=>' data-rgroup="'+esc(gk)+'" data-rman="'+(manual?1:0)+'"';
-function sortBar(pref,mode,manual){return '<button type="button" class="sortbar" data-act="sort-open" data-pref="'+esc(pref)+'" data-man="'+(manual?1:0)+'">↕ Ordem: <b>'+esc(SORT_LABELS[mode]||'Padrão')+'</b></button>';}
-function sortBarFor(gk){const r=RO.reg[gk];return r?sortBar(r.pref,r.mode,r.manual):'';}
-async function sortOpen(pref,manual){
-  const regs=Object.keys(RO.reg).filter(k=>RO.reg[k].pref===pref).map(k=>RO.reg[k]);
-  const cur=roPrefs()[pref]||(regs[0]?regs[0].mode:'def');
-  const ops=['def','new','old','az','za'].concat(manual?['man']:[]).map(k=>({k,label:k==='man'?'Minha ordem (segure e arraste)':SORT_LABELS[k],current:k===cur}));
-  const ch=await ROH.choose('Ordenar por…',manual?'Para mudar na mão: segure um item e arraste, ou use os botões que aparecem.':'',ops);
+function sortBar(){return '';}
+function sortBarFor(){return '';}
+/* a escolha de ordem vale para todas as listas da tela de uma vez */
+async function sortOpenPage(){
+  const regs=Object.keys(RO.reg).map(k=>RO.reg[k]);
+  if(!regs.length){ROH.toast('Nada para ordenar aqui.');return;}
+  const man=regs.some(r=>r.manual),modes={};
+  regs.forEach(r=>{modes[r.mode]=(modes[r.mode]||0)+1;});
+  const cur=Object.keys(modes).sort((a,b)=>modes[b]-modes[a])[0];
+  const ops=['def','new','old','az','za'].concat(man?['man']:[]).map(k=>({k,label:k==='man'?'Minha ordem (segure e arraste)':SORT_LABELS[k],current:k===cur}));
+  const ch=await ROH.choose('Ordenar por…','Vale para as listas desta tela.'+(man?' Para mudar na mão: segure um item e arraste, ou use os botões que aparecem.':''),ops);
   if(!ch)return;
-  if(ch.k==='man'){for(const r of regs){if(r.items.some(x=>!hasOrd(x)))await ROH.write(r.col,seqOrds(r.items.map(x=>x.id),new Map(r.items.map(x=>[x.id,x.ord]))));}}
-  roSetPref(pref,ch.k);ROH.rerender();
+  if(ch.k==='man'){for(const r of regs){if(r.manual&&r.items.some(x=>!hasOrd(x)))await ROH.write(r.col,seqOrds(r.items.map(x=>x.id),new Map(r.items.map(x=>[x.id,x.ord]))));}}
+  const seen={};regs.forEach(r=>{if(!seen[r.pref]){seen[r.pref]=1;roSetPref(r.pref,ch.k);}});
+  ROH.rerender();
 }
 function roRidOf(m){const e=m.hasAttribute('data-rid')?m:m.querySelector('[data-rid]');return e?e.getAttribute('data-rid'):null;}
 function roSibs(g){return Array.from(g.children).filter(c=>c.hasAttribute('data-rid')||c.querySelector('[data-rid]'));}
@@ -247,6 +254,9 @@ async function roEnd(){
 }
 /* depois de redesenhar a tela: o item escolhido continua em destaque (ou a barra some se ele não está mais ali) */
 function roAfterRender(){
+  /* o botão redondo de ordem: aceso quando a ordem não é a padrão; some quando a tela não tem o que ordenar */
+  const regs=Object.keys(RO.reg).map(k=>RO.reg[k]),acesa=regs.some(r=>r.mode!=='def');
+  document.querySelectorAll('[data-sortbtn]').forEach(b=>{b.style.display=regs.length?'':'none';b.classList.toggle('on',acesa);});
   if(!RO.sel){const b=document.getElementById('roBar');if(b)b.remove();return;}
   const gs=Array.from(document.querySelectorAll('[data-rgroup]')).filter(x=>x.getAttribute('data-rgroup')===RO.sel.key);
   let el=null;gs.forEach(g=>{const e=Array.from(g.querySelectorAll('[data-rid]')).find(z=>z.getAttribute('data-rid')===RO.sel.id);if(e)el=e;});
@@ -270,6 +280,7 @@ function roInit(){
   document.addEventListener('contextmenu',e=>{if(RO.pend||RO.drag)e.preventDefault();});
 }
 
+const sortBtn=()=>'<button class="ibtn" data-act="sort-open" data-sortbtn="1" aria-label="Ordenar">↕</button>';
 const GD={name:d=>d.data.creditor||'',date:d=>{const dt=debtNext(d.data,true);return dt?+new Date(dt+'T12:00:00'):0;}};
 const GC={name:c=>c.data.name||'',date:c=>+c.data.dueDay||0};
 const GB={name:b=>b.data.name||'',date:b=>+b.data.dueDay||0};
@@ -950,13 +961,13 @@ function vMonth(){
   const tP=sum(pagar),pP=sum(pagar.filter(feita)),tR=sum(receber),pR=sum(receber.filter(feita)),semV=fazer.filter(i=>i.amountC==null).length;
   const shown0=S.mf==='pay'?pagar.filter(i=>!feita(i)):(S.mf==='rec'?receber.filter(i=>!feita(i)):(S.mf==='done'?all.filter(feita):all));
   const mmode=roMode('month',shown0,false),shown=mmode==='def'?shown0:sortGroup(shown0,mmode,GM);
-  let h=header('Mês','')+whoBar()+'<div class="wrap">';
+  RO.reg['month']={col:'',items:shown,pref:'month',manual:false,mode:mmode};
+  let h=header('Mês',sortBtn())+whoBar()+'<div class="wrap">';
   h+='<div class="mnav"><button class="arr" data-act="m-prev" aria-label="Mês anterior">‹</button><button class="mid" data-act="m-today">'+esc(ymLabel(ym))+(ym===cur?' · este mês':'')+'</button><button class="arr" data-act="m-next" aria-label="Próximo mês">›</button></div>';
   h+='<div class="card sum3"><div><div class="mut">A pagar</div><b>'+money(tP)+'</b></div><div><div class="mut">Já pago</div><b>'+money(pP)+'</b></div><div><div class="mut">Falta pagar</div><b>'+money(tP-pP)+'</b></div></div>';
   if(receber.length)h+='<div class="card sum3"><div><div class="mut">A receber</div><b class="rc">'+money(tR)+'</b></div><div><div class="mut">Já recebido</div><b class="rc">'+money(pR)+'</b></div><div><div class="mut">Falta receber</div><b class="rc">'+money(tR-pR)+'</b></div></div><div class="hint" style="margin:-.2rem .3rem .4rem">O que falta: você recebe '+money(tR-pR)+' e paga '+money(tP-pP)+' (diferença '+money((tR-pR)-(tP-pP))+').</div>';
   if(semV)h+='<div class="hint" style="margin:-.2rem .3rem .4rem">'+semV+' sem valor não entra na soma.</div>';
   h+='<div class="chips2">'+[['all','Tudo',all.length],['pay','A pagar',pagar.filter(i=>!feita(i)).length]].concat(receber.length?[['rec','A receber',receber.filter(i=>!feita(i)).length]]:[]).concat([['done','Feitas',all.filter(feita).length]]).map(f=>'<button data-act="m-filter" data-v="'+f[0]+'" class="'+(S.mf===f[0]?'on':'')+'">'+f[1]+'<small>'+f[2]+'</small></button>').join('')+'</div>';
-  if(all.length)h+=sortBar('month',mmode,false);
   if(!all.length)h+='<div class="card mut">Nada vence neste mês. Contas, faturas de cartão e parcelas de dívidas aparecem aqui sozinhas.</div>';
   else if(!shown.length)h+='<div class="card mut">Nada nesta lista.</div>';
   else h+='<div class="tbl" role="table"><div class="tr th" role="row"><span>Dia</span><span>O que</span><span>Valor</span></div>'+shown.map(mRow).join('')+'</div>';
@@ -974,7 +985,7 @@ function vMonth(){
 }
 function vCards(){
   const cards=byKind('card').filter(c=>mine(c.data));
-  let h=header('Cartões')+whoBar()+'<div class="wrap"><button class="btn" data-act="card-new">+ Novo cartão</button>';
+  let h=header('Cartões',sortBtn())+whoBar()+'<div class="wrap"><button class="btn" data-act="card-new">+ Novo cartão</button>';
   if(!cards.length)h+='<div class="card mut">Cadastre cada cartão uma vez: apelido, últimos 4 dígitos, limite, dia do fechamento e dia do vencimento. Nunca coloque o número completo, validade ou código de segurança.</div>';
   let tot=0;
   const cl=ordRecs('cards',cards,GC);
@@ -1039,7 +1050,7 @@ function debtRow(d){
 function vDebts(){
   const ds=byKind('debt').filter(d=>mine(d.data));
   const abertas=ds.filter(d=>d.data.status!=='PAGA'),pagar=abertas.filter(d=>d.data.dir!=='RECEBER'),receber=abertas.filter(d=>d.data.dir==='RECEBER'),feitas=ds.filter(d=>d.data.status==='PAGA');
-  let h=header('Dívidas')+whoBar()+'<div class="wrap"><button class="btn" data-act="debt-new">+ Nova dívida ou parcela</button>';
+  let h=header('Dívidas',sortBtn())+whoBar()+'<div class="wrap"><button class="btn" data-act="debt-new">+ Nova dívida ou parcela</button>';
   if(!ds.length)h+='<div class="card mut">Nada cadastrado. Use “Nova dívida ou parcela” para o que você deve e também para o que te devem.</div>';
   if(pagar.length){
     const sum=pagar.reduce((a,d)=>a+(d.data.balanceC||0),0),inst=pagar.reduce((a,d)=>a+(d.data.installC||0),0),miss=pagar.some(d=>d.data.balanceC==null);
@@ -1460,7 +1471,7 @@ document.addEventListener('click',async ev=>{
     else if(k==='inv'){S.cardId=id;S.tab='cards';S.invYm=ym;render();window.scrollTo(0,0);}
     else if(k==='debt')debtPay(get(id),ym);
   }
-  else if(act==='sort-open')sortOpen(b.dataset.pref,b.dataset.man==='1');
+  else if(act==='sort-open')sortOpenPage();
   else if(act==='bill-new')billForm(null);
   else if(act==='bill-edit')billForm(get(id));
   else if(act==='bill-open'){const r=get(id);billMonthForm({r,bill:get(r.data.billId)});}

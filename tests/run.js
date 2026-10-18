@@ -797,18 +797,18 @@ global.__pend.push((async () => {
   const ids = () => Array.from(q('#main .notes-cards').children).map(c => c.getAttribute('data-rid')).join('');
   const rerender = async () => { ev(`__NUCLEO_TEST__.S.tab='lembretes';`); q('#tab-notas').click(); await wait(20); };
   await rerender();
-  t('notas: a barra "Ordem: Padrão" aparece e o grupo é marcado para arrastar', /Padrão/.test(q('#main .sortbar').textContent) && q('#main .notes-cards').getAttribute('data-rgroup') === 'notes:cr' && q('#main .notes-cards').getAttribute('data-rman') === '1' && ids() === 'n1n2n3n4', true);
-  q('#main .sortbar').click(); await wait(30);
+  t('notas: o botão redondo Ordenar aparece (apagado = ordem padrão), sem barra larga, e o grupo é marcado para arrastar', !!q('#main [data-sortbtn]') && q('#main [data-sortbtn]').classList.contains('iconbtn') && !q('#main [data-sortbtn]').classList.contains('on') && !doc.querySelector('.sortbar') && q('#main .notes-cards').getAttribute('data-rgroup') === 'notes:cr' && q('#main .notes-cards').getAttribute('data-rman') === '1' && ids() === 'n1n2n3n4', true);
+  q('#main [data-sortbtn]').click(); await wait(30);
   const op = (txt) => Array.from(doc.querySelectorAll('#mvRoot .mv-opt')).find(b => b.textContent.indexOf(txt) >= 0);
   t('notas: a barra abre a escolha com Padrão, datas, A→Z, Z→A e Minha ordem', !!q('#mvRoot') && ['Padrão', 'Data: mais recentes', 'Data: mais antigas', 'A → Z', 'Z → A', 'Minha ordem'].every(x => !!op(x)), true);
   op('A → Z').click(); await wait(40);
-  t('notas: A → Z coloca Abacate, Banana, Cereja, Damasco', ids() === 'n2n1n3n4' && /A → Z/.test(q('#main .sortbar').textContent), true);
-  q('#main .sortbar').click(); await wait(30); op('Z → A').click(); await wait(40);
+  t('notas: A → Z coloca Abacate, Banana, Cereja, Damasco', ids() === 'n2n1n3n4' && q('#main [data-sortbtn]').classList.contains('on'), true);
+  q('#main [data-sortbtn]').click(); await wait(30); op('Z → A').click(); await wait(40);
   t('notas: Z → A inverte', ids() === 'n4n3n1n2', true);
-  q('#main .sortbar').click(); await wait(30); op('Data: mais antigas').click(); await wait(40);
+  q('#main [data-sortbtn]').click(); await wait(30); op('Data: mais antigas').click(); await wait(40);
   t('notas: Data: mais antigas primeiro (Damasco, Cereja, Abacate, Banana)', ids() === 'n4n3n2n1', true);
   t('a escolha fica guardada neste aparelho', JSON.parse(w.localStorage.getItem('ord-sort'))['notes:cr'] === 'old', true);
-  q('#main .sortbar').click(); await wait(30); op('Minha ordem').click(); await wait(120);
+  q('#main [data-sortbtn]').click(); await wait(30); op('Minha ordem').click(); await wait(120);
   t('Minha ordem: todas as notas ganham um número de ordem seguindo o que estava na tela, sem mexer nas datas', ev(`__NUCLEO_TEST__.S.notes.every(n=>typeof n.ord==='number')`) === true && ev(`__NUCLEO_TEST__.S.notes.map(n=>n.updatedAt).join()`) === '4,3,2,1' && ids() === 'n4n3n2n1', true);
   // botões de reserva: escolher a nota 3 sem arrastar (segurar e soltar)
   const rowOf = id => q('#main .notes-cards [data-rid="' + id + '"]');
@@ -865,16 +865,42 @@ global.__pend.push((async () => {
     S.raw={reminders:S.reminders.slice(),lists:S.lists.slice(),notes:[],folders:[],events:[],inbox:[]};`);
   q('#tab-lembretes').click(); await wait(20);
   const lg = q('#main [data-rgroup="lists"]');
-  t('Minhas listas: barra de ordem e grupo arrastável (Lembretes padrão fica fixo no topo, sem arrastar)', !!lg && lg.getAttribute('data-rman') === '1' && /Ordem/.test(q('#main').innerHTML) && !lg.children[0].hasAttribute('data-rid') && Array.from(lg.children).slice(1).every(c => c.hasAttribute('data-rid')), true);
+  t('Minhas listas: barra de ordem e grupo arrastável (Lembretes padrão fica fixo no topo, sem arrastar)', !!lg && lg.getAttribute('data-rman') === '1' && !!q('#main [data-sortbtn]') && !lg.children[0].hasAttribute('data-rid') && Array.from(lg.children).slice(1).every(c => c.hasAttribute('data-rid')), true);
   t('Minhas listas: por padrão em A → Z (como era), e dá para trocar', Array.from(lg.children).slice(1).map(c => c.getAttribute('data-rid')).join('') === 'L3L1L2', true);
   ev(`__NUCLEO_TEST__.S.rview='l:L1';`); q('#tab-hoje').click(); ev(`__NUCLEO_TEST__.S.rview='l:L1';`); q('#tab-lembretes').click(); await wait(20);
-  t('dentro de uma lista: barra de ordem no topo e cada seção é um grupo arrastável separado', /Ordem/.test(q('#main .sortbar').textContent) && !!q('#main [data-rgroup="rems:L1|s1"]') && !!q('#main [data-rgroup="rems:L1|_sem"]'), true);
+  t('dentro de uma lista: o botão Ordenar fica na fileira de botões do topo e cada seção é um grupo arrastável separado', !!q('#main .notes-tools [data-sortbtn]') && !!q('#main [data-rgroup="rems:L1|s1"]') && !!q('#main [data-rgroup="rems:L1|_sem"]'), true);
   const sec = q('#main [data-rgroup="rems:L1|s1"]'), rid = () => Array.from(q('#main [data-rgroup="rems:L1|s1"]').children).map(c => c.getAttribute('data-rid')).join('');
   t('dentro de uma lista: ordem padrão da seção (por data)', rid(), 'r1r2r3');
-  q('#main .sortbar').click(); await wait(30);
+  q('#main [data-sortbtn]').click(); await wait(30);
   Array.from(doc.querySelectorAll('#mvRoot .mv-opt')).find(b => b.textContent.indexOf('A → Z') >= 0).click(); await wait(40);
   t('dentro de uma lista: A → Z reordena os lembretes de cada seção', rid() === 'r2r3r1', true);
   ev(`const S=__NUCLEO_TEST__.S;S.sheet=null;S.tab='hoje';S.rview=null;S.lists=[];S.reminders=[];S.notes=[];S.folders=[];S.raw={reminders:[],lists:[],notes:[],folders:[],events:[],inbox:[]};S.conf='all';`);
   try { w.localStorage.removeItem('ord-sort'); } catch (e) {}
+})());
+
+// --- Botão redondo Ordenar nas barras do topo (v58) ---
+const __prevP8 = Promise.all((global.__pend || []).slice());
+global.__pend.push((async () => {
+  await __prevP8;
+  const doc = w.document, q = s => doc.querySelector(s), wait = ms => new Promise(r => setTimeout(r, ms));
+  try { w.localStorage.removeItem('ord-sort'); } catch (e) {}
+  ev(`const S=__NUCLEO_TEST__.S;S.ready=true;S.tab='hoje';S.sheet=null;S.conf='del';S.rview=null;S.folder=null;S.nx={};S.nn={};S.q='';S.nsOpen=false;
+    S.folders=[{id:'f1',name:'Autos'},{id:'f2',name:'Sub',parent:'f1'}];
+    S.notes=[{id:'n1',title:'Jeep',body:'',folder:'f1',kind:'nota',checklist:[],files:[],images:[],createdAt:2,updatedAt:2}];
+    S.lists=[{id:'L1',name:'Casa',color:'#5E8F6B',sections:[]}];S.reminders=[];S.events=[];S.inbox=[];
+    S.raw={reminders:[],lists:S.lists.slice(),notes:S.notes.slice(),folders:S.folders.slice(),events:[],inbox:[]};`);
+  q('#tab-notas').click(); await wait(20);
+  const b1 = q('#main .hd-r [data-sortbtn]');
+  t('Notas (início): o botão Ordenar é redondo e fica no canto do título, ao lado de Ajustes', !!b1 && b1.classList.contains('iconbtn') && b1.nextElementSibling && b1.nextElementSibling.getAttribute('data-act') === 'settings', true);
+  ev(`__NUCLEO_TEST__.S.tab='lembretes';__NUCLEO_TEST__.S.folder='f1';`); q('#tab-notas').click(); await wait(20);
+  const tools = q('#main .notes-tools');
+  t('Notas (dentro da pasta): o botão Ordenar entra na fileira de botões redondos e, com 7 botões, a fileira fica compacta para caber', !!tools.querySelector('[data-sortbtn]') && tools.querySelectorAll('.iconbtn').length === 7 && tools.classList.contains('dense'), true);
+  ev(`__NUCLEO_TEST__.S.tab='hoje';__NUCLEO_TEST__.S.folder=null;`); q('#tab-lembretes').click(); await wait(20);
+  const b3 = q('#main .hd-r [data-sortbtn]');
+  t('Lembretes (início): o botão Ordenar fica ao lado de Ajustes', !!b3 && b3.nextElementSibling && b3.nextElementSibling.getAttribute('data-act') === 'settings', true);
+  ev(`__NUCLEO_TEST__.S.tab='hoje';__NUCLEO_TEST__.S.rview='l:L1';`); q('#tab-lembretes').click(); await wait(20);
+  t('dentro de uma lista de lembretes: o botão Ordenar fica na fileira do topo, antes do lápis de editar', !!q('#main .notes-tools [data-sortbtn]') && q('#main .notes-tools [data-sortbtn]').nextElementSibling.getAttribute('data-act') === 'edit-list', true);
+  t('o ícone do botão existe e não sobrou nenhuma barra larga "Ordem" em lugar nenhum', /<path d="M7 4v16M3.5 7.5 7 4l3.5 3.5M17 20V4M13.5 16.5 17 20l3.5-3.5"\/>/.test(doc.documentElement.outerHTML) && !doc.querySelector('.sortbar'), true);
+  ev(`const S=__NUCLEO_TEST__.S;S.sheet=null;S.tab='hoje';S.rview=null;S.folder=null;S.lists=[];S.folders=[];S.notes=[];S.raw={reminders:[],lists:[],notes:[],folders:[],events:[],inbox:[]};S.conf='all';`);
 })());
 Promise.all(global.__pend || []).then(() => { console.log(ok + ' ok, ' + bad + ' falhas'); process.exit(bad ? 1 : 0); });
