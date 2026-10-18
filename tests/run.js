@@ -471,6 +471,39 @@ global.__pend.push((async () => {
 })());
 
 
+
+// --- Scanner de documentos: o motor (achar o papel, endireitar, melhorar, PDF) com imagens sintéticas (v54) ---
+{
+  const near = (a, b, tol) => Math.abs(a - b) <= tol;
+  const quad = ev(`(function(){const w=120,h=160,g=new Uint8Array(w*h).fill(30);
+    const Q=[[25,20],[100,30],[95,140],[15,130]];
+    function inside(x,y){let c=false;for(let i=0,j=3;i<4;j=i++){const xi=Q[i][0],yi=Q[i][1],xj=Q[j][0],yj=Q[j][1];if(((yi>y)!==(yj>y))&&(x<(xj-xi)*(y-yi)/(yj-yi)+xi))c=!c;}return c;}
+    for(let y=0;y<h;y++)for(let x=0;x<w;x++)if(inside(x,y))g[y*w+x]=230;
+    const q=docDetect(g,w,h);return q?q.map(p=>[Math.round(p.x*w),Math.round(p.y*h)]):null;})()`);
+  const want = [[25, 20], [100, 30], [95, 140], [15, 130]];
+  t('scanner: acha os 4 cantos de um papel claro inclinado sobre fundo escuro (erro até 4 px)', !!quad && quad.every((p, i) => near(p[0], want[i][0], 4) && near(p[1], want[i][1], 4)), true);
+  t('scanner: imagem sem papel (tudo igual) não inventa cantos', ev(`docDetect(new Uint8Array(100*100).fill(128),100,100)`), null);
+  const idn = ev(`(function(){const sw=100,sh=100,src=new Uint8ClampedArray(sw*sh*4);for(let y=0;y<sh;y++)for(let x=0;x<sw;x++){const i=(y*sw+x)*4;src[i]=x*2;src[i+1]=y*2;src[i+2]=50;src[i+3]=255;}
+    const o=docWarp(src,sw,sh,[{x:10,y:10},{x:60,y:10},{x:60,y:60},{x:10,y:60}],50,50);const at=(u,v)=>[o[(v*50+u)*4],o[(v*50+u)*4+1]];return [at(0,0),at(25,25),at(49,49)];})()`);
+  t('scanner: recortar um quadrado da foto devolve os pontos certos (cantos e meio)', near(idn[0][0], 20, 3) && near(idn[0][1], 20, 3) && near(idn[1][0], 70, 3) && near(idn[1][1], 70, 3) && near(idn[2][0], 118, 3) && near(idn[2][1], 118, 3), true);
+  const rot = ev(`(function(){const sw=100,sh=100,src=new Uint8ClampedArray(sw*sh*4);for(let y=0;y<sh;y++)for(let x=0;x<sw;x++){const i=(y*sw+x)*4;src[i]=x*2;src[i+1]=y*2;src[i+2]=50;src[i+3]=255;}
+    const o=docWarp(src,sw,sh,[{x:50,y:10},{x:90,y:50},{x:50,y:90},{x:10,y:50}],56,56);const at=(u,v)=>[o[(v*56+u)*4],o[(v*56+u)*4+1]];return [at(0,0),at(55,0),at(55,55)];})()`);
+  t('scanner: endireita um papel girado 45° (os cantos da foto viram os cantos da página)', near(rot[0][0], 100, 5) && near(rot[0][1], 20, 5) && near(rot[1][0], 180, 5) && near(rot[1][1], 100, 5) && near(rot[2][0], 100, 5) && near(rot[2][1], 180, 5), true);
+  const enh = ev(`(function(){const w=600,h=400,px=new Uint8ClampedArray(w*h*4);
+    for(let y=0;y<h;y++)for(let x=0;x<w;x++){let v=120+100*x/599;if(x>=100&&x<500&&y>=100&&y<300&&((y-100)%12)<3)v*=0.25;const i=(y*w+x)*4;px[i]=v;px[i+1]=v;px[i+2]=v*0.95;px[i+3]=255;}
+    const r={};for(const m of ['doc','gray','color']){const o=docEnhance(px,w,h,m);const at=(x,y)=>o[(y*w+x)*4];r[m]={bgL:at(10,50),bgR:at(590,350),txt:at(300,101),a:o[3]};}return r;})()`);
+  t('scanner: modo Documento tira a sombra (fundo esquerdo e direito viram branco) e mantém o texto preto', enh.doc.bgL >= 250 && enh.doc.bgR >= 250 && enh.doc.txt <= 30 && enh.doc.a === 255, true);
+  t('scanner: modos Cinza e Colorido também clareiam o papel sem apagar o texto', enh.gray.bgL >= 240 && enh.gray.bgR >= 240 && enh.gray.txt <= 80 && enh.color.bgL >= 235 && enh.color.bgR >= 235 && enh.color.txt <= 100, true);
+  const pdf = ev(`(function(){const j=(n)=>{const a=new Uint8Array(n);a[0]=0xFF;a[1]=0xD8;a[n-2]=0xFF;a[n-1]=0xD9;for(let i=2;i<n-2;i++)a[i]=(i*7)&255;return a;};
+    const b=pdfFromJpegs([{jpeg:j(300),w:600,h:800},{jpeg:j(500),w:800,h:600}]);let s='';for(let i=0;i<b.length;i++)s+=String.fromCharCode(b[i]);return {len:b.length,txt:s};})()`);
+  const txt = pdf.txt, sx = +txt.match(/startxref\n(\d+)\n%%EOF/)[1];
+  const xr = txt.slice(sx).split('\n'), cnt = +xr[1].split(' ')[1];
+  let okOff = txt.slice(sx, sx + 4) === 'xref';
+  for (let id = 1; id < cnt; id++) { const off = +xr[2 + id].slice(0, 10); okOff = okOff && txt.slice(off, off + (id + ' 0 obj').length) === id + ' 0 obj'; }
+  t('PDF: cabeçalho, fim, 2 páginas, tamanho de cada página pela proporção da foto', txt.startsWith('%PDF-1.4') && txt.trimEnd().endsWith('%%EOF') && /\/Count 2/.test(txt) && /MediaBox \[0 0 595 793\]/.test(txt) && /MediaBox \[0 0 595 446\]/.test(txt) && /\/Filter \/DCTDecode \/Length 300/.test(txt) && /\/Filter \/DCTDecode \/Length 500/.test(txt), true);
+  t('PDF: a tabela de endereços (xref) aponta exatamente para cada objeto', okOff && cnt === 9, true);
+}
+
 // --- Enviar ao FIN: Voltar também no topo (v49) ---
 t('Enviar ao FIN: tem botão Voltar no topo, além do de baixo', /id="finTop"/.test(html) && /querySelector\('#finTop'\)\.onclick/.test(html) && /id="finNo"/.test(html), true);
 
@@ -485,7 +518,7 @@ global.__pend.push((async () => {
   TT.SupaAssets.upload = async (blob, o) => { ups.push(o); return { id: 'uid/' + ups.length + '.pdf' }; };
   TT.finSend();
   t('Enviar ao FIN: Voltar e Enviar no topo (aparecem mesmo com o teclado aberto)', !!q('#finSend #finTop') && !!q('#finSend #finGoTop') && q('#finSend').firstElementChild.contains(q('#finGoTop')), true);
-  t('Enviar ao FIN: botões Tirar foto, Fotos, Digitalizar documento e Arquivo', !!q('#finCam') && !!q('#finLib') && !!q('#finDoc') && !!q('#finScan') && /Tirar foto/.test(q('#finCam').textContent) && /Digitalizar documento/.test(q('#finScan').textContent) && /Arquivo/.test(q('#finDoc').textContent), true);
+  t('Enviar ao FIN: botões Tirar foto, Fotos, Escanear documento e Arquivo', !!q('#finCam') && !!q('#finLib') && !!q('#finDoc') && !!q('#finScan') && /Tirar foto/.test(q('#finCam').textContent) && /Escanear documento/.test(q('#finScan').textContent) && /Arquivo/.test(q('#finDoc').textContent), true);
   t('Enviar ao FIN: Escanear usa a câmera traseira e Fotos aceita várias imagens', q('#finFcam').getAttribute('capture') === 'environment' && q('#finFcam').accept === 'image/*' && q('#finFlib').multiple === true, true);
   t('Enviar ao FIN: avisa que o FIN não lê a foto sozinho', /não lê a foto sozinho/.test(q('#finSend').textContent), true);
   const f = new w.File(['conteudo'], 'boleto.pdf', { type: 'application/pdf' });
@@ -595,38 +628,55 @@ global.__pend.push((async () => {
   ev(`const S=__NUCLEO_TEST__.S;S.tab='hoje';S.rview=null;S.lists=[];S.reminders=[];S.raw={reminders:[],lists:[],notes:[],folders:[],events:[],inbox:[]};S.conf='all';`);
 })());
 
-// --- Digitalizar documento (scanner do iPhone pelo seletor de arquivos) (v53) ---
+// --- Scanner dentro do app: tela, páginas, PDF, Notas e Enviar ao FIN (v54) ---
 const __prevP4 = Promise.all((global.__pend || []).slice());
 global.__pend.push((async () => {
   await __prevP4;
   const doc = w.document, q = s => doc.querySelector(s), wait = ms => new Promise(r => setTimeout(r, ms)), TT = w.__NUCLEO_TEST__;
-  t('entrada do scanner: aceita PDF e imagem e NÃO força a câmera (assim o iPhone mostra Escolher Arquivo › Digitalizar documentos)', !!q('#fileScan') && q('#fileScan').accept === 'application/pdf,image/*' && !q('#fileScan').hasAttribute('capture'), true);
+  t('entrada de arquivo já digitalizado: aceita PDF e imagem e NÃO força a câmera', !!q('#fileScan') && q('#fileScan').accept === 'application/pdf,image/*' && !q('#fileScan').hasAttribute('capture'), true);
   // Enviar ao FIN
   TT.Supa.sess = { access: 'a.b.c', refresh: 'r', exp: Date.now() + 3600000 };
   TT.finSend();
-  t('Enviar ao FIN: botão Digitalizar documento com o passo a passo do iPhone', /Digitalizar documentos/.test(q('#finSend').textContent) && /Escolher Arquivo/.test(q('#finSend').textContent) && q('#finFscan').accept === 'application/pdf,image/*' && !q('#finFscan').hasAttribute('capture'), true);
-  const f0 = new w.File(['x'], 'Digitalização.pdf', { type: 'application/pdf' });
-  Object.defineProperty(q('#finFscan'), 'files', { value: [f0], configurable: true });
-  q('#finFscan').dispatchEvent(new w.Event('change'));
-  t('Enviar ao FIN: o PDF digitalizado entra na lista de anexos', /Anexos \(1\)/.test(q('#finFiles').textContent) && /Digitalização\.pdf/.test(q('#finFiles').textContent), true);
+  t('Enviar ao FIN: botão Escanear documento (em destaque) com a explicação, e o botão Arquivo continua', /Escanear documento/.test(q('#finScan').textContent) && /acha as bordas do papel/.test(q('#finSend').textContent) && !q('#finFscan') && !!q('#finDoc'), true);
+  q('#finScan').click(); await wait(10);
+  t('Enviar ao FIN: Escanear documento abre a tela do scanner por cima (câmera traseira ou foto da galeria)', !!q('#scanUI') && !!q('#scCam') && !!q('#scLib') && /Escanear documento/.test(q('#scanUI').textContent) && q('#scFcam').getAttribute('capture') === 'environment' && q('#scFlib').accept === 'image/*' && !q('#scFlib').hasAttribute('capture'), true);
+  q('#scBack').click(); await wait(10);
+  t('scanner: Voltar sem páginas fecha direto', !q('#scanUI'), true);
+  const jp = ev(`(function(){const a=new Uint8Array(200);a[0]=0xFF;a[1]=0xD8;a[198]=0xFF;a[199]=0xD9;return a;})()`);
+  let got = null;
+  TT.openScanner(f => { got = f; }, [{ jpeg: jp, w: 600, h: 800, url: 'blob:a' }, { jpeg: jp, w: 600, h: 800, url: 'blob:b' }]);
+  t('scanner com 2 páginas: lista as páginas e oferece Concluir', /Páginas \(2\)/.test(q('#scanUI').textContent) && !!q('#scDone') && /Concluir e criar o PDF \(2 páginas\)/.test(q('#scFinish').textContent), true);
+  q('#scanUI [data-rmp="1"]').click();
+  t('scanner: o ✕ tira uma página', /Páginas \(1\)/.test(q('#scanUI').textContent) && /\(1 página\)/.test(q('#scFinish').textContent), true);
+  q('#scFinish').click(); await wait(10);
+  t('scanner: Concluir cria o PDF "Documento dd-mm HHhMM.pdf" e fecha a tela', !q('#scanUI') && !!got && /^Documento \d\d-\d\d \d\dh\d\d\.pdf$/.test(got.name) && got.type === 'application/pdf' && got.size > 200, true);
+  TT.openScanner(() => {}, [{ jpeg: jp, w: 600, h: 800, url: 'blob:c' }]);
+  q('#scBack').click(); await wait(40);
+  t('scanner: Voltar com páginas pergunta antes de descartar (e a tela continua aberta)', /Descartar o que escaneou\?/.test(doc.body.textContent) && !!q('#scanUI'), true);
+  await wait(600); doc.querySelector('#askRoot [data-ask="1"]').click(); await wait(40);
+  t('scanner: confirmar descarta e fecha', !q('#scanUI'), true);
   q('#finTop').click();
   // Notas: Escanear abre a escolha
   ev(`const S=__NUCLEO_TEST__.S;S.ready=true;S.tab='lembretes';S.sheet=null;S.conf='del';S.folder=null;S.assetsOk=true;S.notes=[];S.folders=[];S.lists=[];S.reminders=[];S.events=[];S.inbox=[];
     S.raw={reminders:[],lists:[],notes:[],folders:[],events:[],inbox:[]};`);
   q('#tab-notas').click(); await wait(10);
   q('#main [data-act="scan-new"]').click(); await wait(30);
-  const mv = q('#mvRoot');
-  t('Escanear (Notas): pergunta como escanear, com Digitalizar documento primeiro, Foto rápida e Foto da galeria, e o passo a passo', !!mv && mv.querySelectorAll('.mv-opt').length === 3 && /Digitalizar documento \(scanner do iPhone\)/.test(mv.querySelectorAll('.mv-opt')[0].textContent) && /Foto rápida/.test(mv.textContent) && /Foto da galeria/.test(mv.textContent) && /três pontinhos/.test(mv.textContent), true);
+  const mv = q('#mvRoot'), ops = mv ? Array.from(mv.querySelectorAll('.mv-opt')).map(b => b.textContent) : [];
+  t('Escanear (Notas): 4 opções — Escanear documento (vira PDF), Foto rápida, Foto da galeria e Arquivo (PDF já digitalizado) — e a explicação', ops.length === 4 && /Escanear documento \(vira PDF\)/.test(ops[0]) && /Foto rápida/.test(ops[1]) && /Foto da galeria/.test(ops[2]) && /Arquivo \(PDF já digitalizado\)/.test(ops[3]) && /acha as bordas do papel/.test(mv.textContent), true);
   mv.querySelectorAll('.mv-opt')[0].click(); await wait(20);
-  t('escolher Digitalizar: já prepara a nota nova (aberta no toque, como o iPhone exige)', ev('__NUCLEO_TEST__.S.pendingNew') === true && !q('#mvRoot'), true);
+  t('escolher Escanear documento: abre o scanner do app (dentro do toque) e prepara a nota nova', !!q('#scanUI') && ev('__NUCLEO_TEST__.S.pendingNew') === true && !q('#mvRoot'), true);
+  q('#scBack').click(); await wait(10);
+  // arquivo já digitalizado (PDF do app Arquivos)
+  q('#main [data-act="scan-new"]').click(); await wait(30);
+  q('#mvRoot').querySelectorAll('.mv-opt')[3].click(); await wait(20);
+  t('escolher Arquivo (PDF já digitalizado): prepara a nota nova', ev('__NUCLEO_TEST__.S.pendingNew') === true && !q('#mvRoot'), true);
   const ups = [];
   TT.SupaAssets.upload = async (blob, o) => { ups.push(o); return { id: 'uid/doc' + ups.length + '.pdf' }; };
   const pdf = new w.File(['conteudo do pdf'], 'Digitalização 18-10.pdf', { type: 'application/pdf' });
   Object.defineProperty(q('#fileScan'), 'files', { value: [pdf], configurable: true });
   q('#fileScan').dispatchEvent(new w.Event('change', { bubbles: true })); await wait(150);
   const nt = ev('__NUCLEO_TEST__.S.notes[0]');
-  t('PDF digitalizado: vira uma nota de scan com o arquivo anexado e abre para dar nome', !!nt && nt.kind === 'scan' && /^Documento de \d\d\/\d\d \d\d:\d\d$/.test(nt.title) && nt.files.length === 1 && nt.files[0].name === 'Digitalização 18-10.pdf' && nt.files[0].type === 'application/pdf' && nt.files[0].id === 'uid/doc1.pdf' && (nt.images || []).length === 0 && ev('(__NUCLEO_TEST__.S.sheet||{}).type') === 'note', true);
-  t('PDF digitalizado: enviado como PDF (sem converter em imagem)', ups.length === 1 && ups[0].type === 'application/pdf' && ups[0].ext === 'pdf', true);
+  t('PDF (do scanner ou do app Arquivos): vira nota de scan com o arquivo anexado, sem converter em imagem', !!nt && nt.kind === 'scan' && /^Documento de \d\d\/\d\d \d\d:\d\d$/.test(nt.title) && nt.files.length === 1 && nt.files[0].name === 'Digitalização 18-10.pdf' && nt.files[0].type === 'application/pdf' && nt.files[0].id === 'uid/doc1.pdf' && (nt.images || []).length === 0 && ups.length === 1 && ups[0].type === 'application/pdf' && ups[0].ext === 'pdf', true);
   ev(`const S=__NUCLEO_TEST__.S;S.sheet=null;S.tab='hoje';S.pendingNew=false;S.notes=[];S.raw={reminders:[],lists:[],notes:[],folders:[],events:[],inbox:[]};S.conf='all';`);
 })());
 Promise.all(global.__pend || []).then(() => { console.log(ok + ' ok, ' + bad + ' falhas'); process.exit(bad ? 1 : 0); });
