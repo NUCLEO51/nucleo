@@ -180,7 +180,84 @@ const count = (h, s) => h.split(s).length - 1;
   ev(`viewFile({id:'x',name:'sumiu.pdf',type:'application/pdf'})`); await wait(30);
   t('arquivo que sumiu: mostra a mensagem em vez de travar', /Não consegui abrir o arquivo \(404\)/.test(doc.querySelector('.modal').textContent), true);
   click(doc.querySelector('.modal .mback'));
-  t('FIN: versão do cache subiu para v5', /fin-app-v5/.test(fs.readFileSync(path.join(__dirname, '..', 'fin', 'sw.js'), 'utf8')), true);
+  // ---- lembretes automáticos no Núcleo (1 dia antes, 09:00, alarme)
+  const items = [], calls = [];
+  w.__rest = async (path, opt) => {
+    opt = opt || {}; calls.push({ path, method: opt.method || 'GET', body: opt.body ? JSON.parse(opt.body) : null });
+    const res = (data, ok = true, status = 200) => ({ ok, status, json: async () => data });
+    const clone = o => JSON.parse(JSON.stringify(o));
+    if (!opt.method || opt.method === 'GET') {
+      if (w.__restFail) return res([], false, 500);
+      const m = path.replace(/^items\?/, '');
+      if (m.includes('kind=eq.list')) return res(items.filter(i => i.kind === 'list' && !i.deleted_at && i.data.fin === true).map(i => ({ id: i.id, data: i.data })));
+      if (m.includes('finRef=not.is.null')) return res(items.filter(i => i.kind === 'reminder' && !i.deleted_at && i.data.finRef).map(clone));
+      const mm = m.match(/finRef=eq\.([^&]+)/); if (mm) return res(items.filter(i => i.kind === 'reminder' && !i.deleted_at && i.data.finRef === mm[1]).map(clone));
+    }
+    if (opt.method === 'POST' && path === 'items') { const b = JSON.parse(opt.body); items.push({ id: b.id, kind: b.kind, data: b.data, version: 1, deleted_at: null }); return res([b]); }
+    if (opt.method === 'PATCH') {
+      const id = path.match(/id=eq\.([^&]+)/)[1], ver = +path.match(/version=eq\.(\d+)/)[1], it = items.find(i => i.id === id && i.version === ver);
+      if (!it) return res([]); const b = JSON.parse(opt.body); if (b.data) it.data = b.data; if (b.deleted_at) it.deleted_at = b.deleted_at; it.version++; return res([clone(it)]);
+    }
+    return res([], false, 404);
+  };
+  ev(`Api.rest=(p,o)=>window.__rest(p,o)`);
+  const mut = () => calls.filter(c => c.method !== 'GET').length;
+  const remOf = id => items.find(i => i.kind === 'reminder' && i.data.finRef === id);
+  const dd = (a) => ev(`dateOf(addMonths('${ym}',1),${a})`);
+  ev(`S.sess={access:'x',refresh:'y',exp:Date.now()+3600000};S.remMap={};S.remErr='';S.syncRem=false;
+    const R2=(id,kind,data)=>({id,kind,version:1,data});
+    S.recs=[
+      R2('da','debt',{creditor:'Banco A',balanceC:120000,installC:10000,rateBp:null,dueDay:16,firstDue:'${dd(16)}',status:'ATIVA',kindD:'Empréstimo',holder:'MARCELO',payer:'MARCELO',account:'',note:''}),
+      R2('db','debt',{creditor:'Fulano devolve',balanceC:30000,installC:10000,rateBp:null,dueDay:20,status:'ATIVA',holder:'MARCELO',payer:'',account:'',note:'',dir:'RECEBER'}),
+      R2('dc','debt',{creditor:'Já quitada',balanceC:0,installC:0,dueDay:9,status:'PAGA',holder:'MARCELO',payer:'MARCELO'}),
+      R2('dd','debt',{creditor:'Sem dia de vencimento',balanceC:5000,installC:1000,status:'ATIVA',holder:'MARCELO',payer:'MARCELO'})];`);
+  await ev('syncFinReminders()');
+  const lists = items.filter(i => i.kind === 'list'), rems = items.filter(i => i.kind === 'reminder');
+  t('lembretes automáticos: cria a lista do FIN (marcada fin) e 1 lembrete por dívida com vencimento (a pagar e a receber), nenhum para a quitada nem para a sem dia', lists.length === 1 && lists[0].data.fin === true && rems.length === 2 && !!remOf('da') && !!remOf('db') && !remOf('dc') && !remOf('dd'), true);
+  const ra = remOf('da').data;
+  t('lembrete da dívida a pagar: 1 dia antes do vencimento, às 09:00, todo mês, 12 vezes, alarme na hora, na lista do FIN', ra.date === ev(`isoMinus1('${dd(16)}')`) && ra.time === '09:00' && ra.repeat === 'monthly' && ra.repTimes === 12 && ra.alarms.length === 1 && ra.alarms[0].min === 0 && ra.list === lists[0].data._id && ra.finRef === 'da' && ra.priority === 2, true);
+  t('lembrete da dívida a pagar: título com o credor, o valor da parcela e o dia', /^Pagar parcela — Banco A · R\$ 100,00 \(vence dia 16\)$/.test(ra.title) && /1 dia antes do vencimento/.test(ra.notes), true);
+  const rb = remOf('db').data;
+  t('lembrete da dívida a receber: "Receber de…", mesma regra (1 dia antes, 09:00, alarme)', /^Receber de Fulano devolve · R\$ 100,00 \(vence dia 20\)$/.test(rb.title) && rb.time === '09:00' && rb.alarms[0].min === 0 && rb.date === ev(`remSpecForDebt(S.recs.find(r=>r.id==='db')).date`) && /marque no FIN: Mês › a parcela › Marcar como recebida/.test(rb.notes), true);
+  const m0 = mut(); await ev('syncFinReminders()');
+  t('conferir de novo não cria nem muda nada (sem duplicar)', mut() === m0 && items.filter(i => i.kind === 'reminder').length === 2, true);
+  t('a dívida mostra que tem lembrete no Núcleo', /Lembrete no Núcleo: 1 dia antes/.test(ev('vDebts()')), true);
+  // mudou a parcela: atualiza o título e o número de vezes, sem mexer na data
+  const dataAntes = remOf('da').data.date;
+  ev(`S.recs.find(r=>r.id==='da').data.installC=12000`);
+  await ev('syncFinReminders()');
+  t('mudou o valor da parcela: o título e o limite de vezes acompanham (10 vezes), e a data não anda', /R\$ 120,00/.test(remOf('da').data.title) && remOf('da').data.repTimes === 10 && remOf('da').data.date === dataAntes, true);
+  // mudou o dia do vencimento: recalcula a data
+  ev(`S.recs.find(r=>r.id==='da').data.dueDay=10`);
+  await ev('syncFinReminders()');
+  t('mudou o dia do vencimento: o lembrete vai para 1 dia antes do novo dia', remOf('da').data.date === ev(`isoMinus1('${dd(10)}')`) && /vence dia 10/.test(remOf('da').data.title), true);
+  // avançar com a parcela paga no FIN
+  ev(`S.recs.find(r=>r.id==='da').data.firstDue='';S.recs.find(r=>r.id==='da').data.dueDay=16`);
+  await ev('syncFinReminders()');
+  const dtAntes = remOf('da').data.date;
+  await ev(`bumpFinReminder('da','${dtAntes.slice(0, 7)}',S.recs.find(r=>r.id==='da').data)`);
+  const dep = remOf('da').data;
+  t('parcela marcada como paga no FIN: o lembrete anda um mês e conta 1', dep.repDone === 1 && dep.date === ev(`dateOf(addMonths('${dtAntes.slice(0, 7)}',1),${+dtAntes.slice(8, 10)})`), true);
+  await ev(`bumpFinReminder('da','${dtAntes.slice(0, 7)}',S.recs.find(r=>r.id==='da').data)`);
+  t('marcar de novo o mesmo mês não faz o lembrete andar duas vezes', remOf('da').data.repDone === 1, true);
+  // dívida quitada ou apagada: o lembrete sai
+  ev(`S.recs.find(r=>r.id==='da').data.status='PAGA'`);
+  ev(`S.recs=S.recs.filter(r=>r.id!=='db')`);
+  await ev('syncFinReminders()');
+  t('dívida quitada e dívida apagada: os dois lembretes vão para a lixeira', !!remOf('da') === true && remOf('da').deleted_at != null && remOf('db').deleted_at != null, true);
+  // lembrete concluído no Núcleo mas a dívida continua: reabre com a próxima data
+  ev(`S.recs=[{id:'de',kind:'debt',version:1,data:{creditor:'Banco E',balanceC:30000,installC:10000,dueDay:25,status:'ATIVA',holder:'MARCELO',payer:'MARCELO',account:'',note:''}}]`);
+  await ev('syncFinReminders()');
+  remOf('de').data.done = true;
+  await ev('syncFinReminders()');
+  t('lembrete concluído mas a dívida ainda deve: o FIN reabre com a data certa', remOf('de').data.done === false && remOf('de').data.repDone === 0, true);
+  // sem internet / erro: não quebra e avisa no Início
+  w.__restFail = true; ev(`S.remErr='';`);
+  await ev('syncFinReminders()');
+  t('erro ao falar com o Núcleo: não quebra e o Início avisa', /Não consegui conferir os lembretes no Núcleo/.test(ev('vHome()')), true);
+  w.__restFail = false; ev(`S.remErr='';`);
+  t('as gravações de dívida e o carregamento chamam a conferência (ganchos no Api)', /if\(kind==='debt'\)finSyncSoon\(true\)/.test(html) && /if\(rec\.kind==='debt'\)finSyncSoon\(true\)/.test(html) && /finSyncSoon\(false\)/.test(html) && /bumpFinReminder\(rec\.id,ym,x\)/.test(html), true);
+  t('FIN: versão do cache subiu para v6', /fin-app-v6/.test(fs.readFileSync(path.join(__dirname, '..', 'fin', 'sw.js'), 'utf8')), true);
 
   console.log(ok + ' ok, ' + bad + ' falhas (FIN)');
   process.exit(bad ? 1 : 0);

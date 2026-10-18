@@ -186,7 +186,7 @@ const Api={
   async load(){
     const r=await this.rest('fin_records?select=*&deleted_at=is.null&order=created_at.asc&limit=5000');
     if(!r.ok){const j=await r.json().catch(()=>({}));throw Object.assign(new Error(j.message||'erro'),{status:r.status,code:j.code});}
-    S.recs=await r.json(); lsSet('fin-cache',JSON.stringify(S.recs));
+    S.recs=await r.json(); lsSet('fin-cache',JSON.stringify(S.recs)); finSyncSoon(false);
   },
   async blob(path){
     const t=await this.token();
@@ -197,21 +197,21 @@ const Api={
   async create(kind,data){
     const r=await this.rest('fin_records',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify({kind,data})});
     if(!r.ok)throw new Error('Não consegui salvar ('+r.status+').');
-    const j=await r.json(); S.recs.push(j[0]); lsSet('fin-cache',JSON.stringify(S.recs)); return j[0];
+    const j=await r.json(); S.recs.push(j[0]); lsSet('fin-cache',JSON.stringify(S.recs)); if(kind==='debt')finSyncSoon(true); return j[0];
   },
   async update(rec,data){
     const r=await this.rest('fin_records?id=eq.'+rec.id+'&version=eq.'+rec.version,{method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify({data})});
     if(!r.ok)throw new Error('Não consegui salvar ('+r.status+').');
     const j=await r.json();
     if(!j.length){await this.load();throw new Error('Este item mudou em outro aparelho. Atualizei a tela. Tente de novo.');}
-    const i=S.recs.findIndex(x=>x.id===rec.id); if(i>=0)S.recs[i]=j[0]; lsSet('fin-cache',JSON.stringify(S.recs)); return j[0];
+    const i=S.recs.findIndex(x=>x.id===rec.id); if(i>=0)S.recs[i]=j[0]; lsSet('fin-cache',JSON.stringify(S.recs)); if(rec.kind==='debt')finSyncSoon(true); return j[0];
   },
   async remove(rec){
     const r=await this.rest('fin_records?id=eq.'+rec.id+'&version=eq.'+rec.version,{method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify({deleted_at:new Date().toISOString()})});
     if(!r.ok)throw new Error('Não consegui apagar ('+r.status+').');
     const j=await r.json();
     if(!j.length){await this.load();throw new Error('Este item mudou em outro aparelho. Atualizei a tela.');}
-    S.recs=S.recs.filter(x=>x.id!==rec.id); lsSet('fin-cache',JSON.stringify(S.recs));
+    S.recs=S.recs.filter(x=>x.id!==rec.id); lsSet('fin-cache',JSON.stringify(S.recs)); if(rec.kind==='debt')finSyncSoon(true);
   }
 };
 
@@ -558,6 +558,7 @@ function vHome(){
     if(recvs.length){const sr=recvs.reduce((a,d)=>a+(d.data.balanceC||0),0);inner+='<div class="row"><span class="mut">Saldo a receber ('+recvs.length+')</span><b class="rc">'+money(sr)+'</b></div>';}
     h+='<h2>Dívidas e parcelas</h2><div class="card">'+inner+'</div>';
   }
+  if(S.remErr)h+='<div class="note"><span class="tag warn">Lembretes</span> Não consegui conferir os lembretes no Núcleo agora ('+esc(S.remErr)+'). Tento de novo na próxima vez.</div>';
   h+='<div class="note">Projeção parcial não é dinheiro disponível. O FIN só organiza e lembra: quem paga é você.</div>';
   h+=hasDemo()?'<button class="btn sec" data-act="demo-off">Apagar os exemplos de teste</button>':(S.recs.length?'':'<button class="btn sec" data-act="demo-on">Carregar exemplos de teste</button>');
   h+='<button class="btn" data-act="tab" data-v="stmt">📄 Extratos do banco</button>';
@@ -617,9 +618,110 @@ async function debtPay(rec,ym){
     if(nx.status!==x.status)lines.push('Situação: '+dstTxt(x)+' → '+dstTxt(nx));
     lines.push(paid?(rv?'Volta para “a receber”.':'Volta para “a pagar”.'):(rv?'O FIN não recebe nada. Só registra que você recebeu.':'O FIN não paga nada. Só registra que você pagou.'));
     if(await confirmBox(paid?(rv?'Desfazer “recebida”?':'Desfazer “paga”?'):(rv?'Marcar como recebida?':'Marcar como paga?'),lines,'Sim')){
-      m.remove();try{await Api.update(rec,nx);S.msg='';}catch(e){S.msg=e.message;}render();
+      m.remove();try{await Api.update(rec,nx);S.msg='';if(!paid){try{await bumpFinReminder(rec.id,ym,x);}catch(z){}}}catch(e){S.msg=e.message;}render();
     }
   };
+}
+
+/* ---------- lembretes automáticos no Núcleo (regra do Marcelo: 1 dia antes do vencimento, às 09:00, com alarme) ---------- */
+const REM_TIME='09:00';
+const uuid=()=>(window.crypto&&crypto.randomUUID)?crypto.randomUUID():'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{const r=Math.random()*16|0;return(c==='x'?r:(r&3|8)).toString(16);});
+const isoMinus1=iso=>isoDate(new Date(new Date(iso+'T12:00:00').getTime()-864e5));
+const plain=t=>String(t).replace(/\u00a0/g,' ');
+async function itemsGet(q){
+  const r=await Api.rest('items?'+q);
+  if(!r.ok)throw new Error('lembretes '+r.status);
+  return r.json();
+}
+async function itemsPatch(ex,body){
+  const r=await Api.rest('items?id=eq.'+ex.id+'&version=eq.'+ex.version,{method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify(body)});
+  if(!r.ok)throw new Error('lembretes '+r.status);
+  return r.json();
+}
+async function finListId(create){
+  const l=await itemsGet('kind=eq.list&deleted_at=is.null&data->>fin=eq.true&select=id,data&limit=1');
+  if(l.length)return l[0].data._id||l[0].id;
+  if(!create)return null;
+  const id=uuid(),now=Date.now();
+  const r=await Api.rest('items',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify({id,kind:'list',data:{_id:id,name:'FIN — vencimentos',color:'#1FC95B',sections:[],fin:true,createdAt:now,updatedAt:now}})});
+  if(!r.ok)throw new Error('lista do FIN '+r.status);
+  return id;
+}
+/* o que o lembrete desta dívida deve ser (ou null: sem lembrete) */
+function remSpecForDebt(d){
+  const x=d.data;if(x.status==='PAGA'||!x.dueDay)return null;
+  const due=debtNext(x,true);if(!due)return null;
+  const rv=x.dir==='RECEBER',td=todayIso();
+  let date=isoMinus1(due);if(date<td)date=td;
+  const val=x.installC!=null?' · '+plain(money(x.installC)):'';
+  return {
+    title:(rv?'Receber de ':'Pagar parcela — ')+x.creditor+val+' (vence dia '+x.dueDay+')',
+    notes:'Lembrete automático do FIN: 1 dia antes do vencimento, às '+REM_TIME+'. '+(rv?'Depois de receber, marque no FIN: Mês › a parcela › Marcar como recebida.':'Depois de pagar, marque no FIN: Mês › a parcela › Marcar como paga.'),
+    date,remaining:(x.balanceC!=null&&x.installC)?Math.ceil(x.balanceC/x.installC):0
+  };
+}
+function remDataFor(d,spec,listId,old,resched){
+  const x=d.data,o=old||{};
+  const repDone=(!old||resched)?0:(parseInt(o.repDone,10)||0);
+  let repTimes=parseInt(o.repTimes,10)||0;
+  if(!old||resched||(o.finRem||0)!==spec.remaining)repTimes=spec.remaining?repDone+spec.remaining:0;
+  return Object.assign({},o,{
+    title:spec.title,notes:spec.notes,date:(!old||resched)?spec.date:o.date,time:REM_TIME,
+    repeat:'monthly',repN:1,repU:'week',repDays:[],repUntil:'',repTimes,repDone,
+    agenda:false,list:listId,section:'',flag:false,priority:2,alarms:[{id:'a-fin',min:0}],
+    subtasks:o.subtasks||[],images:o.images||[],done:false,
+    finRef:d.id,finDueDay:x.dueDay,finFirstDue:x.firstDue||'',finRem:spec.remaining,updatedAt:Date.now()
+  });
+}
+const remKey=o=>JSON.stringify([o.title,o.notes,o.date,o.time,o.repeat,o.repTimes,o.repDone,o.list,!!o.done,JSON.stringify(o.alarms),o.finDueDay,o.finFirstDue||'',o.finRem]);
+/* confere TODAS as dívidas e deixa 1 lembrete por dívida no Núcleo (cria, atualiza ou tira) */
+async function syncFinReminders(){
+  if(!S.sess||S.syncRem)return;
+  S.syncRem=true;S.remLast=Date.now();
+  try{
+    const debts=S.recs.filter(r=>r.kind==='debt');
+    const have=await itemsGet('kind=eq.reminder&deleted_at=is.null&data->>finRef=not.is.null&select=id,version,data&limit=1000');
+    const byRef={};have.forEach(x=>{byRef[x.data.finRef]=x;});
+    const map={};let listId=null;
+    for(const d of debts){
+      const spec=remSpecForDebt(d),ex=byRef[d.id];
+      if(!spec){if(ex)await itemsPatch(ex,{deleted_at:new Date().toISOString()});continue;}
+      if(!listId)listId=await finListId(true);
+      if(!ex){
+        const id=uuid();
+        const data=Object.assign(remDataFor(d,spec,listId,null,true),{_id:id,createdAt:Date.now()});
+        const r=await Api.rest('items',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify({id,kind:'reminder',data})});
+        if(!r.ok)throw new Error('lembretes '+r.status);
+        map[d.id]=true;continue;
+      }
+      const o=ex.data,x=d.data;
+      const resched=(o.finDueDay!==x.dueDay)||((o.finFirstDue||'')!==(x.firstDue||''))||!!o.done;
+      const next=remDataFor(d,spec,listId,o,resched);
+      if(remKey(next)!==remKey(o))await itemsPatch(ex,{data:next});
+      map[d.id]=true;
+    }
+    for(const ref of Object.keys(byRef)){if(!debts.some(d=>d.id===ref))await itemsPatch(byRef[ref],{deleted_at:new Date().toISOString()});}
+    S.remMap=map;S.remErr='';
+  }catch(e){S.remErr=e.message||'erro';}
+  finally{S.syncRem=false;}
+  try{if(!document.querySelector('.modal'))render();}catch(e){}
+}
+let finSyncT=null;
+function finSyncSoon(force){
+  if(!S.sess)return;
+  if(!force&&Date.now()-(S.remLast||0)<20000)return;
+  clearTimeout(finSyncT);finSyncT=setTimeout(()=>{syncFinReminders();},force?300:800);
+}
+/* ao marcar a parcela como paga/recebida no FIN, o lembrete daquele mês também anda (se ainda não andou) */
+async function bumpFinReminder(debtId,ym,x){
+  const l=await itemsGet('kind=eq.reminder&deleted_at=is.null&data->>finRef=eq.'+debtId+'&select=id,version,data&limit=1');
+  const ex=l[0];if(!ex)return;
+  const o=ex.data,remDate=isoMinus1(dateOf(ym,x.dueDay));
+  if(o.done||o.date>remDate)return;
+  const used=(parseInt(o.repDone,10)||0)+1,max=parseInt(o.repTimes,10)||0,nd=Object.assign({},o,{repDone:used,updatedAt:Date.now()});
+  if(max&&used>=max){nd.done=true;nd.doneAt=Date.now();}
+  else nd.date=dateOf(addMonths(o.date.slice(0,7),1),+o.date.slice(8,10));
+  await itemsPatch(ex,{data:nd});
 }
 
 /* ---------- a planilha do mês: tudo que vence, com data, valor e situação ---------- */
@@ -750,7 +852,7 @@ const DSTR={ATIVA:'A receber',ATRASADA:'Atrasada',PAGA:'Recebida',DESCONHECIDA:'
 const dstTxt=x=>(x.dir==='RECEBER'?DSTR:DST)[x.status]||x.status;
 function debtRow(d){
   const x=d.data,rv=x.dir==='RECEBER';
-  return '<button class="item" data-act="debt-edit" data-id="'+d.id+'"><div class="row"><span class="t">'+esc(x.creditor)+'</span><span class="tag '+(x.status==='PAGA'?'ok':(x.status==='ATRASADA'?'bad':''))+'">'+esc(dstTxt(x))+'</span></div><div class="row"><span class="mut">'+(rv?'Falta receber':'Saldo')+'</span><b'+(rv?' class="rc"':'')+'>'+money(x.balanceC)+'</b></div><div class="row"><span class="mut">Parcela</span><b'+(rv?' class="rc"':'')+'>'+money(x.installC)+'</b></div><div class="mut">'+(rv?'A receber · quem recebe: '+esc(pname(x.holder)):'Devedor no contrato: '+esc(pname(x.holder))+(x.payer?' · paga hoje: '+esc(pname(x.payer)):''))+(x.kindD?' · '+esc(x.kindD):'')+(x.rateBp!=null?' · juros '+(x.rateBp/100).toFixed(2).replace('.',',')+'% ao mês':'')+(x.account?' · conta '+esc(x.account):'')+'</div>'+(x.dueDay?'<div class="mut">Vence dia '+x.dueDay+(debtNext(x,true)?' · próxima parcela em '+brDate(debtNext(x,true)):'')+'</div>':'')+(x.note?'<div class="mut">'+esc(x.note)+'</div>':'')+'</button>';
+  return '<button class="item" data-act="debt-edit" data-id="'+d.id+'"><div class="row"><span class="t">'+esc(x.creditor)+'</span><span class="tag '+(x.status==='PAGA'?'ok':(x.status==='ATRASADA'?'bad':''))+'">'+esc(dstTxt(x))+'</span></div><div class="row"><span class="mut">'+(rv?'Falta receber':'Saldo')+'</span><b'+(rv?' class="rc"':'')+'>'+money(x.balanceC)+'</b></div><div class="row"><span class="mut">Parcela</span><b'+(rv?' class="rc"':'')+'>'+money(x.installC)+'</b></div><div class="mut">'+(rv?'A receber · quem recebe: '+esc(pname(x.holder)):'Devedor no contrato: '+esc(pname(x.holder))+(x.payer?' · paga hoje: '+esc(pname(x.payer)):''))+(x.kindD?' · '+esc(x.kindD):'')+(x.rateBp!=null?' · juros '+(x.rateBp/100).toFixed(2).replace('.',',')+'% ao mês':'')+(x.account?' · conta '+esc(x.account):'')+'</div>'+(x.dueDay?'<div class="mut">Vence dia '+x.dueDay+(debtNext(x,true)?' · próxima parcela em '+brDate(debtNext(x,true)):'')+'</div>':'')+(S.remMap&&S.remMap[d.id]?'<div class="mut">🔔 Lembrete no Núcleo: 1 dia antes, às '+REM_TIME+'</div>':'')+(x.note?'<div class="mut">'+esc(x.note)+'</div>':'')+'</button>';
 }
 function vDebts(){
   const ds=byKind('debt').filter(d=>mine(d.data));
