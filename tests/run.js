@@ -11,6 +11,7 @@ const ev = s => w.eval(s);
 let ok = 0, bad = 0;
 const t = (nome, got, want) => {
   const g = JSON.stringify(got), e = JSON.stringify(want);
+  if (process.env.VERBOSE) console.log('· ' + nome);
   if (g === e) ok++; else { bad++; console.log('FALHOU:', nome, '\n   veio :', g, '\n   queria:', e); }
 };
 // 15/10/2026 (quinta-feira) 10:00
