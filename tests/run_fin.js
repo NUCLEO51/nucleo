@@ -11,6 +11,7 @@ const dom = new JSDOM(html, {
 const w = dom.window, ev = c => w.eval(c), doc = w.document;
 let ok = 0, bad = 0;
 function t(name, got, want) {
+  if (process.env.VERBOSE) console.log('· ' + name);
   const a = JSON.stringify(got), b = JSON.stringify(want);
   if (a === b) ok++; else { bad++; console.log('FALHOU:', name, '\n   veio :', a, '\n   queria:', b); }
 }
@@ -498,7 +499,85 @@ const count = (h, s) => h.split(s).length - 1;
   t('plano de quitação: cada dívida mostra o mês e o ano em que acaba e uma barra do caminho', (ph.match(/class="plan-bar"/g) || []).length >= 4 && /Banco Alfa/.test(ph) && /Banco Beta/.test(ph) && /de 20\d\d · mês \d+/.test(ph), true);
   t('plano de quitação: compara os dois caminhos e diz quanto um custa a menos', /Comparando os dois caminhos/.test(ph) && /a menos no total|os dois custam o mesmo/.test(ph), true);
   ev(`S.tab='home';render();`);
-  t('FIN: versão do cache subiu para v13', /fin-app-v13/.test(fs.readFileSync(path.join(__dirname, '..', 'fin', 'sw.js'), 'utf8')), true);
+  // ---- gastos por categoria (v14)
+  t('lugar: a chave do nome tira MP*, LTDA, números, acento e fica com as 2 primeiras palavras', ev(`[gKey('SPASSO SABORES'),gKey('MP*MARCIANOSADEG'),gKey('ALAMEDA DO CHOPP LTDA'),gKey('Posto Shell 1234 Amparo'),gKey('PIX 98765'),gKey('')].join('|')`), 'spasso sabores|marcianosadeg|alameda chopp|posto shell|pix|');
+  ev(`Api.create=async(kind,data)=>{const r={id:'cfgcat',kind,version:1,data};S.recs.push(r);return r;};Api.update=async(rec,data)=>{rec.data=data;rec.version++;return rec;};`);
+  const en = (i, d, c, k, tt, g) => ({ i, d, c, k, t: tt, g: g || 'Cartão final 2273' });
+  const entradas = [en('a1', '2030-03-02', -6000, 'EXPENSE', 'SPASSO SABORES'), en('a2', '2030-03-09', -5759, 'EXPENSE', 'SPASSO SABORES 02'), en('a3', '2030-03-10', -10000, 'EXPENSE', 'JEVERSONVANDERLEI'),
+    en('a4', '2030-03-11', -20000, 'EXPENSE', 'POSTO SHELL AMPARO', 'Carro'), en('a5', '2030-03-12', -412000, 'CARD_SETTLEMENT', 'PAGAMENTO FATURA'), en('a6', '2030-03-13', 500000, 'INCOME', 'SALARIO'),
+    en('a7', '2030-03-14', -3000, 'EXPENSE', 'MP*MARCIANOSADEG'), en('a8', '2030-02-05', -30000, 'EXPENSE', 'POSTO SHELL AMPARO', 'Carro'), en('a9', '2030-02-06', -8000, 'EXPENSE', 'SPASSO SABORES')];
+  ev(`S.who='ALL';S.sp={ym:'2030-03',cat:null,all:false};S.recs=[
+    {id:'s1',kind:'stmt',version:1,data:{account:'Bradesco teste',holder:'MARCELO',entries:${JSON.stringify(entradas)}}},
+    {id:'c9',kind:'card',version:1,data:{name:'Bradesco',closeDay:21,dueDay:1,holder:'MARCELO'}},
+    {id:'ch1',kind:'charge',version:1,data:{cardId:'c9',date:'2030-03-15',desc:'Padaria Central',totalC:2500,n:1}},
+    {id:'ch2',kind:'charge',version:1,data:{cardId:'c9',date:'2030-03-18',desc:'Fatura aberta Bradesco · saldo consolidado',totalC:95774,n:1}},
+    {id:'ch3',kind:'charge',version:1,data:{cardId:'c9',date:'2030-03-19',desc:'Tênis',totalC:34999,n:6}}];`);
+  const rowsG = ev(`gastosRows().map(r=>r.i).sort().join(',')`);
+  t('gastos: entram só os gastos de verdade (não entram pagamento de fatura, renda, a fatura consolidada e compra parcelada)', rowsG, 'a1,a2,a3,a4,a7,a8,a9,ch1');
+  const gm = ev(`(function(){const g=gastosMes('2030-03');return {total:g.total,semN:g.semN,semV:g.semV,cats:g.list.map(x=>x.c+':'+x.v).join(',')};})()`);
+  t('gastos: total do mês, o que tem categoria (a do Mobills "Carro" vale) e o que ficou sem', gm.total === 47259 && gm.semN === 5 && gm.semV === 27259 && gm.cats === 'Carro:20000', true);
+  ev(`S.recs.push({id:'cfgcat',kind:'proposal',version:1,data:{cfg:'cats',rules:[{m:'spasso sabores',c:'Mercado',s:'Compras da casa'}],over:{a3:{c:'Lazer',s:'Passeios'}},extra:{}}});`);
+  t('categoria: a escolhida só para o lançamento ganha da regra do lugar, e a regra ganha da categoria do Mobills', ev(`JSON.stringify([catOf({i:'a3',t:'JEVERSONVANDERLEI',g:'Carro'}),catOf({i:'x',t:'SPASSO SABORES 07',g:'Carro'}),catOf({i:'y',t:'POSTO X',g:'Carro'}),catOf({i:'z',t:'LOJA QUALQUER',g:'Cartão final 2273'})])`),
+    JSON.stringify([{ c: 'Lazer', s: 'Passeios' }, { c: 'Mercado', s: 'Compras da casa' }, { c: 'Carro', s: '' }, null]));
+  const d3 = ev(`(function(){const x=donutSvg(gastosMes('2030-03').list,gastosMes('2030-03').total,gastosMes('2030-03').semV);const n=[...x.matchAll(/stroke-dasharray="([\\d.]+) /g)].map(m=>+m[1]);return {n:n.length,soma:Math.round(n.reduce((a,b)=>a+b,0))};})()`);
+  t('pizza: as fatias somam 100% do círculo', d3.soma === 100 && d3.n >= 3, true);
+  ev(`S.tab='home';render();`);
+  t('Financeiro Início: tem o botão Gastos', !!doc.querySelector('#app [data-act="tab"][data-v="spend"]'), true);
+  ev(`S.tab='spend';S.sp={ym:'2030-03',cat:null,all:false};render();`);
+  let ap = doc.querySelector('#app').textContent;
+  t('Gastos: mostra o mês, o total, o mês passado e a diferença', /março de 2030|Março de 2030|03\/2030|março/i.test(ap) && /R\$\s*472,59/.test(ap) && /Mês passado/.test(ap) && /R\$\s*380,00/.test(ap) && /\+R\$\s*92,59/.test(ap), true);
+  t('Gastos: tem a pizza, as categorias com % e a seta contra o mês passado, e o aviso de sem categoria com o botão Categorizar agora', !!doc.querySelector('#app svg.donut') && /Carro/.test(ap) && /↓ R\$\s*100,00/.test(ap) && /lançamentos sem categoria/.test(ap) && !!doc.querySelector('#app [data-act="sp-queue"]'), true);
+  click(doc.querySelector('#app [data-act="sp-prev"]')); await wait(20);
+  ap = doc.querySelector('#app').textContent;
+  t('Gastos: ‹ vai para o mês anterior (fevereiro) com o total dele', /fevereiro/i.test(ap) && /R\$\s*380,00/.test(ap), true);
+  click(doc.querySelector('#app [data-act="sp-next"]')); await wait(20);
+  click(doc.querySelector('#app [data-act="sp-cat"][data-c="Carro"]')); await wait(20);
+  ap = doc.querySelector('#app').textContent;
+  t('Gastos: tocar numa categoria abre o detalhe (lançamentos dela)', /POSTO SHELL AMPARO/.test(ap) && !!doc.querySelector('#app [data-act="sp-pick"]'), true);
+  click(doc.querySelector('#app [data-act="sp-all"]')); await wait(20);
+  t('Gastos: a planilha mostra todos os lançamentos do mês (data, onde, categoria, valor)', doc.querySelectorAll('#app [data-act="sp-pick"]').length >= 6 && /sem categoria/.test(doc.querySelector('#app').textContent), true);
+  click(doc.querySelector('#app [data-act="sp-all"]')); await wait(20);
+  // categorizar de verdade (fila)
+  ev(`S.recs=S.recs.filter(r=>r.id!=='cfgcat');S.sp={ym:'2030-03',cat:null,all:false};render();`);
+  click(doc.querySelector('#app [data-act="sp-queue"]')); await wait(30);
+  t('categorizar: a fila começa pelo maior gasto sem categoria e pede a categoria (com Parar)', /JEVERSONVANDERLEI/.test(doc.querySelector('.modal').textContent) && /Que gasto foi este\?/.test(doc.querySelector('.modal').textContent) && /Parar/.test(doc.querySelector('.modal').textContent) && !!doc.querySelector('.modal [data-c="Mercado"]'), true);
+  click(doc.querySelector('.modal [data-c="Outros"]')); await wait(20);
+  click(doc.querySelector('.modal #cp-nosub')); await wait(20);
+  t('categorizar: sem lançamentos parecidos pergunta só "Sim, categorizar" com o resumo', /Categoria: Outros/.test(doc.querySelector('.modal').textContent) && !!doc.querySelector('.modal #cp-one') && !doc.querySelector('.modal #cp-all'), true);
+  click(doc.querySelector('.modal #cp-one')); await wait(40);
+  t('categorizar: salvou só para aquele lançamento (override) e a fila passou para o próximo (SPASSO)', ev(`catData().over.a3.c`) === 'Outros' && /SPASSO SABORES/.test(doc.querySelector('.modal').textContent), true);
+  click(doc.querySelector('.modal [data-c="Mercado"]')); await wait(20);
+  t('categorizar: depois da categoria vêm as subcategorias (e dá para deixar sem)', !!doc.querySelector('.modal [data-s="Compras da casa"]') && !!doc.querySelector('.modal [data-s="Lanches e salgadinhos"]') && !!doc.querySelector('.modal [data-s="Bebidas e energéticos"]') && !!doc.querySelector('.modal #cp-nosub'), true);
+  click(doc.querySelector('.modal [data-s="Lanches e salgadinhos"]')); await wait(20);
+  t('categorizar: avisa quantos lançamentos parecidos existem (inclusive de outros meses) e oferece valer para todos', /mais 2 lançamento/.test(doc.querySelector('.modal').textContent) && /todos os parecidos \(3\)/.test(doc.querySelector('#cp-all').textContent) && !!doc.querySelector('.modal #cp-one'), true);
+  click(doc.querySelector('.modal #cp-all')); await wait(40);
+  const regra = ev(`catData().rules[0]`);
+  t('categorizar: guardou a REGRA do lugar (spasso sabores → Mercado › Lanches e salgadinhos) e todos os parecidos já aparecem categorizados, inclusive de fevereiro', regra.m === 'spasso sabores' && regra.c === 'Mercado' && regra.s === 'Lanches e salgadinhos' && ev(`gastosMes('2030-02').semN`) === 0 && ev(`catOf({i:'a1',t:'SPASSO SABORES'}).s`) === 'Lanches e salgadinhos', true);
+  t('categorizar: a fila continua no próximo sem categoria (MARCIANO) e Parar encerra', /MARCIANOSADEG/.test(doc.querySelector('.modal').textContent), true);
+  click(doc.querySelector('.modal #c0')); await wait(40);
+  t('categorizar: ao parar, a janela fecha e a tela mostra o que falta (2 sem categoria)', !doc.querySelector('.modal') && /2 lançamentos sem categoria/.test(doc.querySelector('#app').textContent), true);
+  // categoria nova e subcategoria nova
+  click(doc.querySelector('#app [data-act="sp-cat"][data-c="__sem"]')); await wait(20);
+  click(doc.querySelector('#app [data-act="sp-pick"][data-i="ch1"]')); await wait(20);
+  doc.querySelector('.modal #cp-new').value = 'Padaria';
+  click(doc.querySelector('.modal #cp-add')); await wait(20);
+  click(doc.querySelector('.modal #cp-nosub')); await wait(20);
+  click(doc.querySelector('.modal #cp-one')); await wait(40);
+  t('categoria nova: digitar um nome novo cria a categoria (guardada) e já vale para o lançamento', ev(`Object.keys(catTree()).indexOf('Padaria')`) >= 0 && ev(`catOf({i:'ch1',t:'x'}).c`) === 'Padaria', true);
+  click(doc.querySelector('#app [data-act="sp-pick"][data-i="a7"]')); await wait(20);
+  click(doc.querySelector('.modal [data-c="Alimentação fora"]')); await wait(20);
+  doc.querySelector('.modal #cp-new').value = 'Cafeteria do mercado';
+  click(doc.querySelector('.modal #cp-add')); await wait(20);
+  click(doc.querySelector('.modal #cp-one')); await wait(40);
+  t('subcategoria nova: digitar uma subcategoria nova a guarda dentro da categoria (ex.: Alimentação fora › Cafeteria do mercado)', ev(`catTree()['Alimentação fora'].indexOf('Cafeteria do mercado')`) >= 0 && ev(`catOf({i:'a7',t:'x'}).s`) === 'Cafeteria do mercado', true);
+  t('Gastos: sem nada sem categoria, o aviso e o botão Categorizar agora somem', !doc.querySelector('#app [data-act="sp-queue"]'), true);
+  click(doc.querySelector('#app [data-act="sp-cat"][data-c="Carro"]')); await wait(20);
+  click(doc.querySelector('#app [data-act="sp-pick"]')); await wait(20);
+  t('mudar de ideia: tocar num lançamento já categorizado mostra a categoria de hoje e deixa trocar', /Hoje: /.test(doc.querySelector('.modal').textContent), true);
+  click(doc.querySelector('.modal #c0')); await wait(20);
+  t('desfazer: categorizar entra na fila do desfazer como "Categorizar gasto"', ev(`undoLabel([{op:'update',kind:'proposal',before:{cfg:'cats'},after:{cfg:'cats'}}])`), 'Categorizar gasto');
+  ev(`S.tab='home';S.sp=null;render();`);
+  t('FIN: versão do cache subiu para v14', /fin-app-v14/.test(fs.readFileSync(path.join(__dirname, '..', 'fin', 'sw.js'), 'utf8')), true);
 
   console.log(ok + ' ok, ' + bad + ' falhas (FIN)');
   process.exit(bad ? 1 : 0);
