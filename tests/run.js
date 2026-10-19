@@ -984,4 +984,113 @@ global.__pend.push((async () => {
   t('fichas: data já vencida há tempo não cria lembrete novo', ev(`__NUCLEO_TEST__.S.reminders.filter(r=>r.ficRef&&r.ficDue==='2020-01-10').length`), 0);
   ev(`const S=__NUCLEO_TEST__.S;S.lists=[];S.raw.lists=[];S.reminders=[];S.raw.reminders=[];S.trash=[];S.raw.notes=[];S.notes=[];`);
 })());
+
+// --- Senha (PIN) para abrir o app (v62) ---
+const __prevP10 = Promise.all((global.__pend || []).slice());
+global.__pend.push((async () => {
+  await __prevP10;
+  const doc = w.document, wait = ms => new Promise(r => setTimeout(r, ms)), TT = w.__NUCLEO_TEST__;
+  try { Object.defineProperty(w, 'crypto', { value: require('crypto').webcrypto, configurable: true }); } catch (e) {}
+  w.TextEncoder = require('util').TextEncoder;
+  const limpa = () => { ['hash', 'salt', 'at', 'fails', 'until', 'cred'].forEach(k => w.localStorage.removeItem('lock-' + k)); };
+  const keys = async (s) => { for (const c of s) await TT.lkKey(c); };
+  limpa();
+  ev(`window.__reloads=0;__NUCLEO_TEST__.LKH.reload=()=>{window.__reloads++;};`);
+  const b0 = TT.lkBlock('nuc');
+  t('senha: sem senha, o bloco oferece só "Criar uma senha"', /data-act="lk-new"/.test(b0) && !/lk-now|lk-remove/.test(b0), true);
+  await TT.lkSetPin('123456');
+  const h1 = TT.lkGet('hash'), s1 = TT.lkGet('salt');
+  t('senha: guarda só o hash (64 letras/números) e um sal, nunca o número', /^[0-9a-f]{64}$/.test(h1) && /^[0-9a-f]{32}$/.test(s1) && h1.indexOf('123456') < 0 && !Object.keys(w.localStorage).some(k => w.localStorage.getItem(k) === '123456'), true);
+  t('senha: confere a certa e recusa a errada', (await TT.lkCheck('123456')) === true && (await TT.lkCheck('654321')) === false, true);
+  await TT.lkSetPin('123456');
+  t('senha: o mesmo número gera um hash diferente a cada vez (sal novo)', TT.lkGet('hash') !== h1 && TT.lkGet('salt') !== s1, true);
+  const b1 = TT.lkBlock('nuc');
+  t('senha: com senha, o bloco oferece Bloquear agora, Trocar, Face ID e Tirar', ['lk-now', 'lk-change', 'lk-face', 'lk-remove'].every(a => b1.indexOf('data-act="' + a + '"') >= 0) && !/lk-new/.test(b1), true);
+  t('senha: logo depois de usar, não pede de novo; depois de 3 minutos parado, pede', TT.lkNeeded() === false && (w.localStorage.setItem('lock-at', String(Date.now() - 3 * 60000)), TT.lkNeeded()) === true, true);
+  // tela de senha
+  TT.lkOpen('unlock');
+  const lk = doc.getElementById('lock');
+  t('tela de senha: cobre o app, tem 6 bolinhas e o teclado de 0 a 9', lk.style.display === 'flex' && doc.documentElement.classList.contains('lk-on') && lk.querySelectorAll('.lk-dots span').length === 6 && lk.querySelectorAll('.lk-pad [data-k]').length === 12 && /Digite a senha/.test(lk.textContent), true);
+  await keys('123'); 
+  t('tela de senha: cada número digitado acende uma bolinha', lk.querySelectorAll('.lk-dots span.on').length === 3, true);
+  await TT.lkKey('del');
+  t('tela de senha: apagar tira a última', lk.querySelectorAll('.lk-dots span.on').length === 2, true);
+  await TT.lkKey('del'); await TT.lkKey('del');
+  await keys('000000');
+  t('tela de senha: senha errada avisa quantas tentativas faltam e limpa as bolinhas', /Senha errada\. Faltam 4/.test(lk.textContent) && lk.querySelectorAll('.lk-dots span.on').length === 0 && lk.style.display === 'flex', true);
+  await keys('000000'); await keys('000000'); await keys('000000'); await keys('000000');
+  t('tela de senha: na 5ª errada trava por um tempo e avisa quantos segundos', /Muitas tentativas\. Espere \d+ segundos/.test(lk.textContent) && (+TT.lkGet('until')) > Date.now(), true);
+  await keys('123456');
+  t('tela de senha: durante a espera nem a senha certa entra', lk.style.display === 'flex', true);
+  w.localStorage.removeItem('lock-until'); w.localStorage.removeItem('lock-fails');
+  await keys('123456');
+  t('tela de senha: a senha certa abre o app e tira a cobertura', lk.style.display === 'none' && !doc.documentElement.classList.contains('lk-on') && TT.lkNeeded() === false, true);
+  // criar senha do zero
+  limpa();
+  await TT.lkAct('lk-new');
+  t('criar senha: abre a tela "Crie uma senha"', lk.style.display === 'flex' && /Crie uma senha/.test(lk.textContent) && lk.querySelector('#lkCancel').style.display === '', true);
+  await keys('111111'); 
+  t('criar senha: pede para repetir', /Repita a senha/.test(lk.textContent), true);
+  await keys('222222');
+  t('criar senha: se não bater, volta ao começo e não grava nada', /Não bateu/.test(lk.textContent) && /Crie uma senha/.test(lk.textContent) && !TT.lkGet('hash'), true);
+  await keys('111111'); await keys('111111');
+  t('criar senha: batendo, grava e fecha', !!TT.lkGet('hash') && lk.style.display === 'none' && (await TT.lkCheck('111111')) === true, true);
+  // trocar senha
+  await TT.lkAct('lk-change');
+  t('trocar senha: primeiro pede a senha atual', /Digite a senha atual/.test(lk.textContent), true);
+  await keys('111111');
+  t('trocar senha: com a atual certa, pede a nova', /Crie uma senha/.test(lk.textContent), true);
+  await keys('333333'); await keys('333333');
+  t('trocar senha: a nova passa a valer e a antiga deixa de valer', (await TT.lkCheck('333333')) === true && (await TT.lkCheck('111111')) === false, true);
+  // tirar senha
+  await TT.lkAct('lk-remove');
+  await keys('999999');
+  t('tirar senha: com a senha errada não tira', TT.lkOn() === true && lk.style.display === 'flex', true);
+  await TT.lkKey('cancel');
+  await TT.lkAct('lk-remove'); await keys('333333');
+  t('tirar senha: com a senha certa tira tudo (hash, sal e Face ID)', TT.lkOn() === false && !TT.lkGet('salt') && !TT.lkGet('cred'), true);
+  // Face ID
+  await TT.lkSetPin('123456');
+  ev(`navigator.credentials={create:async()=>({rawId:new Uint8Array([1,2,3,4]).buffer}),get:async()=>({ok:1})};`);
+  await TT.lkAct('lk-face');
+  t('Face ID: ligar guarda a credencial e o botão passa a dizer LIGADO', !!TT.lkGet('cred') && /Face ID: LIGADO/.test(TT.lkBlock('nuc')), true);
+  w.localStorage.setItem('lock-at', '0'); TT.lkOpen('unlock');
+  t('Face ID: na tela de senha aparece o botão Face ID', doc.getElementById('lkFace').style.visibility === 'visible', true);
+  await TT.lkKey('face'); await wait(20);
+  t('Face ID: se o aparelho confirma, o app abre sem digitar', lk.style.display === 'none', true);
+  ev(`navigator.credentials.get=async()=>{throw new Error('no')};`);
+  TT.lkOpen('unlock'); await TT.lkKey('face'); await wait(20);
+  t('Face ID: se falhar, avisa e a senha continua valendo', lk.style.display === 'flex' && /Não consegui pelo Face ID/.test(lk.textContent), true);
+  await TT.lkAct('lk-face');
+  t('Face ID: tocar de novo desliga', !TT.lkGet('cred'), true);
+  ev(`navigator.credentials.create=async()=>{throw new Error('no')};`);
+  await TT.lkAct('lk-face');
+  t('Face ID: se o iPhone não deixar ligar, a credencial não é guardada', !TT.lkGet('cred'), true);
+  // esqueci a senha
+  TT.lkOpen('unlock');
+  await TT.lkKey('forgot');
+  t('esqueci a senha: mostra o aviso de que vai sair da conta, com os botões Sair e entrar de novo / Voltar', doc.getElementById('lkFg').style.display === '' && /Sair e entrar de novo/.test(doc.getElementById('lkFg').textContent), true);
+  await TT.lkKey('forgot-no');
+  t('esqueci a senha: Voltar volta ao teclado sem apagar nada', doc.getElementById('lkFg').style.display === 'none' && TT.lkOn() === true, true);
+  w.localStorage.setItem('nucleo-sess', '{"a":1}'); w.localStorage.setItem('fin-sess', '{"b":2}'); w.localStorage.setItem('nucleo-cache', 'dados'); w.localStorage.setItem('fin-cache', 'dados');
+  await TT.lkKey('forgot'); await TT.lkKey('forgot-ok');
+  t('esqueci a senha: apaga a senha e as duas sessões (Núcleo e FIN) e as cópias guardadas, e recarrega', !TT.lkOn() && w.localStorage.getItem('nucleo-sess') === '' && w.localStorage.getItem('fin-sess') === '' && w.localStorage.getItem('nucleo-cache') === '' && w.localStorage.getItem('fin-cache') === '' && ev('window.__reloads') === 1, true);
+  // voltar do segundo plano
+  limpa(); await TT.lkSetPin('123456'); TT.lkOpen('unlock'); await keys('123456');
+  const realNow = w.Date.now;
+  Object.defineProperty(doc, 'hidden', { get: () => true, configurable: true });
+  doc.dispatchEvent(new w.Event('visibilitychange'));
+  w.Date.now = () => realNow() + 3 * 60000;
+  Object.defineProperty(doc, 'hidden', { get: () => false, configurable: true });
+  doc.dispatchEvent(new w.Event('visibilitychange'));
+  t('voltar do segundo plano: depois de mais de 2 minutos fora, pede a senha', lk.style.display === 'flex' && TT.LK.mode === 'unlock', true);
+  w.Date.now = realNow;
+  await keys('123456');
+  Object.defineProperty(doc, 'hidden', { get: () => true, configurable: true });
+  doc.dispatchEvent(new w.Event('visibilitychange'));
+  Object.defineProperty(doc, 'hidden', { get: () => false, configurable: true });
+  doc.dispatchEvent(new w.Event('visibilitychange'));
+  t('voltar do segundo plano: logo em seguida não pede de novo', lk.style.display === 'none', true);
+  limpa();
+})());
 Promise.all(global.__pend || []).then(() => { console.log(ok + ' ok, ' + bad + ' falhas'); process.exit(bad ? 1 : 0); });

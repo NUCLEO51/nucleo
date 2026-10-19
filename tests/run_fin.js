@@ -359,7 +359,26 @@ const count = (h, s) => h.split(s).length - 1;
   t('FIN: valor estranho guardado volta para Grande (20 px)', doc.documentElement.style.fontSize === '20px', true);
   try { w.localStorage.removeItem('fin-fs'); } catch (e) {}
   ev(`fsApply()`);
-  t('FIN: versão do cache subiu para v10', /fin-app-v10/.test(fs.readFileSync(path.join(__dirname, '..', 'fin', 'sw.js'), 'utf8')), true);
+  // ---- senha (PIN) no FIN
+  try { Object.defineProperty(w, 'crypto', { value: require('crypto').webcrypto, configurable: true }); } catch (e) {}
+  w.TextEncoder = require('util').TextEncoder;
+  const limpaPin = () => { ['hash', 'salt', 'at', 'fails', 'until', 'cred'].forEach(k => w.localStorage.removeItem('lock-' + k)); };
+  limpaPin();
+  ev(`S.tab='home';render();`);
+  t('FIN: a tela Início tem o bloco "Senha para abrir" com o botão Criar uma senha', /Senha para abrir/.test(doc.querySelector('#app').innerHTML) && !!doc.querySelector('#app [data-act="lk-new"]'), true);
+  click(doc.querySelector('#app [data-act="lk-new"]')); await wait(20);
+  const lkf = doc.getElementById('lock');
+  t('FIN: Criar uma senha abre a tela de senha grande por cima do app', lkf.style.display === 'flex' && /Crie uma senha/.test(lkf.textContent), true);
+  for (const c of '246810246810') await ev(`lkKey('${c}')`);
+  t('FIN: criou a senha (hash guardado) e fechou a tela', !!w.localStorage.getItem('lock-hash') && lkf.style.display === 'none', true);
+  t('FIN: com senha o bloco passa a oferecer Bloquear agora e Trocar a senha', /lk-now/.test(ev('lkBlock("fin")')) && /lk-change/.test(ev('lkBlock("fin")')), true);
+  w.localStorage.setItem('lock-at', String(Date.now() - 5 * 60000));
+  ev(`lkInit()`);
+  t('FIN: ao abrir depois de mais de 2 minutos parado, pede a senha', lkf.style.display === 'flex' && /Digite a senha/.test(lkf.textContent), true);
+  for (const c of '246810') await ev(`lkKey('${c}')`);
+  t('FIN: a senha certa abre o app', lkf.style.display === 'none', true);
+  limpaPin();
+  t('FIN: versão do cache subiu para v11', /fin-app-v11/.test(fs.readFileSync(path.join(__dirname, '..', 'fin', 'sw.js'), 'utf8')), true);
 
   console.log(ok + ' ok, ' + bad + ' falhas (FIN)');
   process.exit(bad ? 1 : 0);

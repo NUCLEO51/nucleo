@@ -52,6 +52,19 @@ h2{font-size:1.25rem;margin:1.2rem 1rem .4rem}
 .sum3{display:grid;grid-template-columns:repeat(3,1fr);gap:.4rem;text-align:center;padding:.7rem .5rem}
 .sum3 .mut{font-size:.8rem}
 .rc{color:#34c27a}
+#lock{position:fixed;inset:0;z-index:99999;background:#000;color:#fff;display:none;align-items:center;justify-content:center;overflow:auto;padding:1rem}
+html.lk-on body>*:not(#lock){visibility:hidden}
+#lock .lk-in{width:100%;max-width:22rem;display:flex;flex-direction:column;align-items:center;gap:.9rem;text-align:center}
+#lock .lk-t{font-size:1.6rem;font-weight:800}
+#lock .lk-s{font-size:1.05rem;color:#9aa0a6;min-height:1.4rem}
+#lock .lk-dots{display:flex;gap:.9rem;margin:.4rem 0 .6rem}
+#lock .lk-dots span{width:1.1rem;height:1.1rem;border-radius:50%;border:2px solid #9aa0a6}
+#lock .lk-dots span.on{background:var(--accent,#FFD60A);border-color:var(--accent,#FFD60A)}
+#lock .lk-pad{display:grid;grid-template-columns:repeat(3,1fr);gap:.8rem;width:100%}
+#lock .lk-pad button{min-height:4.2rem;border:0;border-radius:1.2rem;background:#1c1c1e;color:#fff;font:inherit;font-size:1.8rem;font-weight:700;cursor:pointer}
+#lock .lk-pad button.lk-ft{background:transparent;font-size:1.05rem;color:var(--accent,#FFD60A)}
+#lock .lk-link{background:transparent;border:0;color:var(--accent,#FFD60A);font:inherit;font-size:1.1rem;font-weight:700;padding:.8rem;cursor:pointer}
+#lock .lk-big{width:100%;min-height:3.6rem;border:0;border-radius:1.1rem;background:var(--accent,#FFD60A);color:#000;font:inherit;font-size:1.15rem;font-weight:800;cursor:pointer}
 .seg4{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-top:.4rem}
 .ibtn{width:3rem;height:3rem;border-radius:50%;border:0;background:var(--surface-2);color:var(--accent);font-size:1.5rem;font-weight:800;line-height:1;cursor:pointer}
 .sortbar{display:flex;align-items:center;gap:.5rem;width:100%;margin:.5rem 0;padding:.65rem .9rem;border:0;border-radius:.9rem;background:var(--surface-2);color:var(--fg);font:inherit;font-size:1rem;font-weight:600;cursor:pointer;text-align:left}
@@ -170,6 +183,131 @@ function moveOrds(items,id,to){
   at=Math.max(0,Math.min(ids.length-1,at));if(at===from)return [];
   const order=ids.slice();order.splice(from,1);order.splice(at,0,id);
   return ordsForOrder(items,order);
+}
+
+/* ---------- senha (PIN) para abrir o app: 6 números, guardada só como hash; vale para o Núcleo e para o FIN ---------- */
+const LK_IDLE=2*60*1000,LK_LEN=6;
+const LK={buf:'',mode:'unlock',first:'',onOk:null,open:false,faceOn:false};
+const LKH={app:'Núcleo',toast:()=>{},rerender:()=>{},reload:()=>{location.reload();}};
+const lkGet=k=>{try{return localStorage.getItem('lock-'+k);}catch(e){return null;}};
+const lkSet=(k,v)=>{try{if(v==null)localStorage.removeItem('lock-'+k);else localStorage.setItem('lock-'+k,String(v));}catch(e){}};
+const lkOn=()=>!!lkGet('hash');
+const lkTouch=()=>{if(!LK.open)lkSet('at',Date.now());};
+const lkNeeded=()=>lkOn()&&(Date.now()-(+lkGet('at')||0))>LK_IDLE;
+const lkHex=buf=>Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+async function lkHash(pin,saltHex){
+  const salt=Uint8Array.from((saltHex.match(/.{2}/g)||[]).map(h=>parseInt(h,16)));
+  const key=await crypto.subtle.importKey('raw',new TextEncoder().encode(pin),'PBKDF2',false,['deriveBits']);
+  return lkHex(await crypto.subtle.deriveBits({name:'PBKDF2',salt,iterations:150000,hash:'SHA-256'},key,256));
+}
+async function lkSetPin(pin){
+  const s=lkHex(crypto.getRandomValues(new Uint8Array(16)));
+  lkSet('salt',s);lkSet('hash',await lkHash(pin,s));lkSet('fails',null);lkSet('until',null);lkSet('at',Date.now());
+}
+async function lkCheck(pin){return (await lkHash(pin,lkGet('salt')||''))===lkGet('hash');}
+function lkEl(){
+  let el=document.getElementById('lock');if(el)return el;
+  el=document.createElement('div');el.id='lock';
+  el.innerHTML='<div class="lk-in"><div class="lk-t" id="lkT"></div><div class="lk-s" id="lkS"></div><div class="lk-dots" id="lkD"></div>'
+    +'<div class="lk-pad">'+'123456789'.split('').map(d=>'<button type="button" data-k="'+d+'">'+d+'</button>').join('')
+    +'<button type="button" class="lk-ft" data-k="face" id="lkFace">Face ID</button><button type="button" data-k="0">0</button><button type="button" class="lk-ft" data-k="del" aria-label="Apagar">⌫</button></div>'
+    +'<button type="button" class="lk-link" data-k="forgot" id="lkForgot">Esqueci a senha</button><button type="button" class="lk-link" data-k="cancel" id="lkCancel">Cancelar</button></div>'
+    +'<div class="lk-in" id="lkFg" style="display:none"><div class="lk-t">Esqueci a senha</div><div class="lk-s">Vou sair da sua conta neste aparelho e apagar a cópia guardada aqui. Você entra de novo com o seu e-mail e a senha da conta. Seus dados continuam salvos na nuvem.</div><button type="button" class="lk-big" data-k="forgot-ok">Sair e entrar de novo</button><button type="button" class="lk-link" data-k="forgot-no">Voltar</button></div>';
+  document.body.appendChild(el);
+  el.addEventListener('click',e=>{const b=e.target.closest('[data-k]');if(b)lkKey(b.getAttribute('data-k'));});
+  return el;
+}
+function lkPaint(msg){
+  const el=lkEl(),T={unlock:['Digite a senha',LKH.app],verify:['Digite a senha atual','Para continuar'],new1:['Crie uma senha',LK_LEN+' números'],new2:['Repita a senha','Para conferir']}[LK.mode];
+  el.querySelector('#lkT').textContent=T[0];el.querySelector('#lkS').textContent=msg||T[1];
+  el.querySelector('#lkD').innerHTML=Array.from({length:LK_LEN},(_,i)=>'<span class="'+(i<LK.buf.length?'on':'')+'"></span>').join('');
+  el.querySelector('#lkFace').style.visibility=(LK.mode==='unlock'&&lkGet('cred'))?'visible':'hidden';
+  el.querySelector('#lkForgot').style.display=LK.mode==='unlock'?'':'none';
+  el.querySelector('#lkCancel').style.display=LK.mode==='unlock'?'none':'';
+}
+function lkOpen(mode,onOk){
+  LK.mode=mode;LK.buf='';LK.onOk=onOk||null;LK.open=true;
+  const el=lkEl();el.style.display='flex';el.querySelector('.lk-in').style.display='';el.querySelector('#lkFg').style.display='none';
+  document.documentElement.classList.add('lk-on');lkPaint();
+}
+function lkClose(){LK.open=false;LK.buf='';const el=document.getElementById('lock');if(el)el.style.display='none';document.documentElement.classList.remove('lk-on');lkSet('at',Date.now());}
+function lkWait(){const u=+lkGet('until')||0;return u>Date.now()?Math.ceil((u-Date.now())/1000):0;}
+async function lkKey(k){
+  if(k==='forgot'){const el=lkEl();el.querySelectorAll('.lk-in')[0].style.display='none';el.querySelector('#lkFg').style.display='';return;}
+  if(k==='forgot-no'){lkPaint();const el=lkEl();el.querySelectorAll('.lk-in')[0].style.display='';el.querySelector('#lkFg').style.display='none';return;}
+  if(k==='forgot-ok'){lkForgot();return;}
+  if(k==='cancel'){lkClose();return;}
+  if(k==='face'){lkFace();return;}
+  if(lkWait()){lkPaint('Muitas tentativas. Espere '+lkWait()+' segundos.');return;}
+  if(k==='del'){LK.buf=LK.buf.slice(0,-1);lkPaint();return;}
+  if(!/^\d$/.test(k)||LK.buf.length>=LK_LEN)return;
+  LK.buf+=k;lkPaint();
+  if(LK.buf.length<LK_LEN)return;
+  const pin=LK.buf;
+  if(LK.mode==='new1'){LK.first=pin;LK.buf='';LK.mode='new2';lkPaint();return;}
+  if(LK.mode==='new2'){
+    if(pin!==LK.first){LK.buf='';LK.mode='new1';lkPaint('Não bateu. Crie de novo.');return;}
+    await lkSetPin(pin);const cb=LK.onOk;lkClose();if(cb)cb();return;
+  }
+  const ok=await lkCheck(pin);
+  if(ok){lkSet('fails',null);lkSet('until',null);const cb=LK.onOk;lkClose();if(cb)cb();return;}
+  const f=(+lkGet('fails')||0)+1;lkSet('fails',f);LK.buf='';
+  if(f>=5){lkSet('until',Date.now()+30000*Math.pow(2,Math.min(f-5,5)));lkPaint('Muitas tentativas. Espere '+lkWait()+' segundos.');}
+  else lkPaint('Senha errada. Faltam '+(5-f)+' tentativas antes de esperar.');
+  try{if(navigator.vibrate)navigator.vibrate(120);}catch(e){}
+}
+function lkForgot(){
+  ['lock-hash','lock-salt','lock-at','lock-fails','lock-until','lock-cred'].forEach(k=>{try{localStorage.removeItem(k);}catch(e){}});
+  ['nucleo-sess','fin-sess','nucleo-cache','fin-cache'].forEach(k=>{try{localStorage.setItem(k,'');}catch(e){}});
+  LKH.reload();
+}
+/* Face ID (opcional): usa o aparelho para confirmar quem é; se o iPhone não deixar, a senha continua valendo */
+const lkB64=b=>btoa(String.fromCharCode.apply(null,new Uint8Array(b))),lkUnb64=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
+async function lkFaceEnable(){
+  try{
+    const c=await navigator.credentials.create({publicKey:{challenge:crypto.getRandomValues(new Uint8Array(32)),rp:{name:'Núcleo',id:location.hostname},user:{id:crypto.getRandomValues(new Uint8Array(16)),name:'nucleo',displayName:'Núcleo'},pubKeyCredParams:[{type:'public-key',alg:-7},{type:'public-key',alg:-257}],authenticatorSelection:{authenticatorAttachment:'platform',userVerification:'required',residentKey:'discouraged'},timeout:60000}});
+    if(!c)throw new Error('x');lkSet('cred',lkB64(c.rawId));return true;
+  }catch(e){return false;}
+}
+async function lkFace(){
+  const id=lkGet('cred');if(!id)return;
+  try{
+    const a=await navigator.credentials.get({publicKey:{challenge:crypto.getRandomValues(new Uint8Array(32)),allowCredentials:[{type:'public-key',id:lkUnb64(id)}],userVerification:'required',rpId:location.hostname,timeout:60000}});
+    if(a){const cb=LK.onOk;lkClose();if(cb)cb();}
+  }catch(e){lkPaint('Não consegui pelo Face ID. Digite a senha.');}
+}
+function lkBlock(kind){
+  const on=lkOn(),face=!!lkGet('cred');
+  const b=(act,txt)=>'<button class="btn'+(kind==='nuc'?' wide':'')+'" data-act="'+act+'">'+txt+'</button>';
+  const body=on?(b('lk-now','Bloquear agora')+b('lk-change','Trocar a senha')+b('lk-face','Face ID: '+(face?'LIGADO':'DESLIGADO'))+b('lk-remove','Tirar a senha'))+'<div class="note-s">Pede a senha ao abrir e depois de 2 minutos fora do app. Vale para o Núcleo e para o FIN.</div>'
+      :b('lk-new','Criar uma senha')+'<div class="note-s">6 números, pedidos ao abrir o app. Vale para o Núcleo e para o FIN.</div>';
+  return kind==='nuc'?'<div class="block"><span class="block-t">Senha para abrir</span>'+body+'</div>':'<div class="card"><div class="row"><b>Senha para abrir</b></div>'+body+'</div>';
+}
+async function lkAct(a){
+  if(a==='lk-new'){
+    if(!(window.crypto&&crypto.subtle)){LKH.toast('Este aparelho não permite criar senha aqui.');return;}
+    lkOpen('new1',()=>{LKH.toast('Senha criada.');LKH.rerender();});return;
+  }
+  if(a==='lk-change'){lkOpen('verify',()=>lkOpen('new1',()=>{LKH.toast('Senha trocada.');LKH.rerender();}));return;}
+  if(a==='lk-remove'){lkOpen('verify',()=>{['hash','salt','at','fails','until','cred'].forEach(k=>lkSet(k,null));LKH.toast('Senha removida.');LKH.rerender();});return;}
+  if(a==='lk-now'){lkSet('at',0);lkOpen('unlock');return;}
+  if(a==='lk-face'){
+    if(lkGet('cred')){lkSet('cred',null);LKH.toast('Face ID desligado.');}
+    else if(await lkFaceEnable())LKH.toast('Face ID ligado.');
+    else LKH.toast('O iPhone não deixou usar o Face ID aqui. A senha continua valendo.');
+    LKH.rerender();
+  }
+}
+function lkInit(){
+  if(lkNeeded())lkOpen('unlock');else if(lkOn())lkSet('at',Date.now());
+  let hid=0;
+  document.addEventListener('visibilitychange',()=>{
+    if(document.hidden){hid=Date.now();lkTouch();}
+    else if(lkOn()&&!LK.open&&hid&&Date.now()-hid>LK_IDLE)lkOpen('unlock');
+    else lkTouch();
+  });
+  setInterval(()=>{if(!document.hidden&&lkOn())lkTouch();},15000);
+  addEventListener('pagehide',()=>lkTouch());
 }
 
 /* ---------- ordenar e arrastar (tela): segurar um item e levar para onde quiser ---------- */
@@ -327,6 +465,7 @@ function finChoose(title,msg,options){
     m.querySelector('#c0').onclick=()=>{m.remove();res(null);};
   });
 }
+Object.assign(LKH,{app:'FIN',toast:finToast,rerender:()=>render()});
 Object.assign(ROH,{write:roWrite,scroller:()=>window,rerender:()=>render(),toast:finToast,choose:finChoose,
   syncLoad:async()=>S.recs.find(r=>r.kind==='proposal'&&r.data&&r.data.cfg==='sortprefs')||null,
   syncSave:async(rec,data)=>rec?await Api.update(rec,data):await Api.create('proposal',data)});
@@ -776,6 +915,7 @@ function vHome(){
   h+=hasDemo()?'<button class="btn sec" data-act="demo-off">Apagar os exemplos de teste</button>':(S.recs.length?'':'<button class="btn sec" data-act="demo-on">Carregar exemplos de teste</button>');
   h+='<button class="btn" data-act="tab" data-v="stmt">📄 Extratos do banco</button>';
   h+='<button class="btn" data-act="chat">🤝 Chat financeiro</button>';
+  h+=lkBlock('fin');
   h+=fsBlock();
   h+=backupBlock();
   h+='<button class="btn sec" data-act="refresh">Atualizar</button><button class="btn sec" data-act="logout">Sair</button>';
@@ -1543,6 +1683,7 @@ document.addEventListener('click',async ev=>{
     else if(k==='inv'){S.cardId=id;S.tab='cards';S.invYm=ym;render();window.scrollTo(0,0);}
     else if(k==='debt')debtPay(get(id),ym);
   }
+  else if(act.indexOf('lk-')===0)lkAct(act);
   else if(act==='set-fs'){lsSet('fin-fs',b.dataset.v);fsApply();render();}
   else if(act==='bk-now')bkNow();
   else if(act==='bk-down')bkDown();
@@ -1587,6 +1728,7 @@ function setupMissing(){
 async function start(){
   try{S.sess=JSON.parse(lsGet('fin-sess')||'null');}catch(e){S.sess=null;}
   fsApply();
+  lkInit();
   if(!S.sess){loginScreen();return;}
   try{const c=JSON.parse(lsGet('fin-cache')||'[]');if(Array.isArray(c))S.recs=c;}catch(e){}
   S.ready=true;render();
