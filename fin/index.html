@@ -544,7 +544,7 @@ function gastosRows(){
   stRows().forEach(e=>{if(e.k==='EXPENSE'&&e.c<0)out.push({i:e.i,d:e.d,t:e.t||'',v:-e.c,g:e.g||'',src:e.acct});});
   byKind('charge').forEach(r=>{
     const d=r.data||{},card=byKind('card').find(c=>c.id===d.cardId);
-    if(!mine(card?card.data:d)||/^Fatura aberta/.test(d.desc||'')||(d.n||1)!==1||!(d.totalC>0))return;
+    if(/^Fatura aberta/.test(d.desc||'')||(d.n||1)!==1||!(d.totalC>0))return;
     out.push({i:r.id,d:d.date,t:d.desc||'',v:d.totalC,g:'',src:card?card.data.name:'cartão'});
   });
   return out;
@@ -574,7 +574,7 @@ function gRow(r){
 function vGastos(){
   S.sp=S.sp||{ym:ymOf(todayIso()),cat:null,all:false};
   const ym=S.sp.ym,g=gastosMes(ym),gp=gastosMes(addMonths(ym,-1));
-  let h=header('Gastos')+whoBar()+'<div class="wrap"><button class="btn sec" data-back="1" data-act="tab" data-v="home">← Voltar</button>';
+  let h=header('Gastos')+'<div class="wrap"><button class="btn sec" data-back="1" data-act="tab" data-v="home">← Voltar</button>';
   h+='<div class="spnav"><button class="btn sec" data-act="sp-prev" aria-label="Mês anterior">‹</button><b>'+esc(ymLabel(ym))+'</b><button class="btn sec" data-act="sp-next" aria-label="Próximo mês">›</button></div>';
   if(!g.rows.length)return h+'<div class="card mut">Sem gastos neste mês. Os gastos vêm dos extratos importados (Extratos do banco) e das compras no cartão.</div></div>';
   const dif=g.total-gp.total;
@@ -855,17 +855,8 @@ const ymLabel=ym=>MES[+ym.slice(5,7)-1]+' de '+ym.slice(0,4);
 const ymShort=ym=>ym.slice(5,7)+'/'+ym.slice(0,4);
 
 /* ---------- estado ---------- */
-const S={mm:null,mf:'all',who:'ALL',recs:[],tab:'home',sess:null,ready:false,msg:'',cardId:null,invYm:null,busy:false};
+const S={mm:null,mf:'all',recs:[],tab:'home',sess:null,ready:false,msg:'',cardId:null,invYm:null,busy:false};
 const byKind=k=>S.recs.filter(r=>r.kind===k);
-const PEOPLE=[['MARCELO','Marcelo'],['MARLENE','Marlene (mãe)']];
-const pname=k=>({MARCELO:'Marcelo',MARLENE:'Marlene (mãe)'}[k]||'Sem dono');
-const mine=d=>S.who==='ALL'||(!!d&&d.holder===S.who);
-const HOLD_OPTS=[['','Não definido']].concat(PEOPLE);
-const defHolder=()=>S.who==='ALL'?'':S.who;
-function whoBar(){
-  const O=[['ALL','Todos']].concat(PEOPLE);
-  return '<div class="wrap" style="display:flex;gap:.4rem;margin-bottom:.2rem">'+O.map(o=>'<button data-act="who" data-v="'+o[0]+'" class="tag" style="flex:1;border:2px solid '+(S.who===o[0]?'var(--accent)':'transparent')+';min-height:3rem;font-size:1rem;'+(S.who===o[0]?'background:var(--accent-soft);color:var(--accent)':'')+'">'+esc(o[1])+'</button>').join('')+'</div>';
-}
 
 /* ---------- banco ---------- */
 const Api={
@@ -1077,13 +1068,13 @@ function simulate(debts,capC,order){
 const cfgRec=()=>byKind('proposal').find(r=>r.data&&r.data.cfg==='capacity');
 const monthsTxt=n=>{const a=Math.floor(n/12),m=n%12;return (a?a+(a>1?' anos':' ano'):'')+(a&&m?' e ':'')+(m?m+(m>1?' meses':' mês'):(a?'':'0 mês'));};
 function vPlan(){
-  const ds=byKind('debt').filter(d=>d.data.status!=='PAGA'&&d.data.dir!=='RECEBER'&&mine(d.data));
+  const ds=byKind('debt').filter(d=>d.data.status!=='PAGA'&&d.data.dir!=='RECEBER');
   const ok=ds.filter(d=>d.data.balanceC!=null&&d.data.balanceC>0),semSaldo=ds.filter(d=>d.data.balanceC==null);
   const cfg=cfgRec(),cap=cfg?cfg.data.capacityC:null;
-  let h=header('Plano de quitação')+'<p class="sub">Simulação. Não é promessa e não negocia nada.</p>'+whoBar()+'<div class="wrap">';
+  let h=header('Plano de quitação')+'<p class="sub">Simulação. Não é promessa e não negocia nada.</p>'+'<div class="wrap">';
   h+='<div class="card"><div class="row"><span class="mut">Quanto dá para pagar por mês</span><b>'+money(cap)+'</b></div><div class="mut">Valor que você consegue separar para as dívidas todo mês.</div></div>';
   h+='<button class="btn" data-act="cap-set">'+(cap==null?'Informar quanto dá para pagar por mês':'Mudar o valor por mês')+'</button>';
-  if(!ok.length){h+='<div class="card mut">Nenhuma dívida com saldo cadastrado '+(S.who!=='ALL'?'para '+esc(pname(S.who)):'')+'. Cadastre em Dívidas.</div>';return h+'</div>';}
+  if(!ok.length){h+='<div class="card mut">Nenhuma dívida com saldo cadastrado. Cadastre em Dívidas.</div>';return h+'</div>';}
   const mins=ok.reduce((a,d)=>a+(d.data.installC||0),0),tot=ok.reduce((a,d)=>a+d.data.balanceC,0);
   h+='<div class="card"><div class="row"><span class="mut">Dívidas com saldo</span><b>'+ok.length+'</b></div><div class="row"><span class="mut">Total devido (saldos)</span><b>'+money(tot)+'</b></div><div class="row"><span class="mut">Soma das parcelas por mês</span><b>'+money(mins)+'</b></div></div>';
   if(semSaldo.length)h+='<div class="note">'+semSaldo.length+' dívida(s) sem saldo informado ficaram fora da conta: '+esc(semSaldo.map(d=>d.data.creditor).join(', '))+'.</div>';
@@ -1183,16 +1174,16 @@ async function reviewProp(rec){
 
 function upcoming(){
   const td=todayIso(),lim=isoDate(new Date(Date.now()+30*864e5)),out=[];
-  monthRows(ymOf(td)).filter(x=>!x.r.data.paidAt&&mine(x.bill.data)).forEach(x=>{const dt=billDue(x);if(dt<=lim)out.push({dt,kind:'Conta',name:x.bill.data.name,c:x.r.data.amountC,late:dt<td});});
-  byKind('card').filter(c=>mine(c.data)).forEach(cr=>{const k=cardCalc(cr);Object.values(k.inv).filter(v=>!v.paid&&v.ym<=k.openYm&&v.totalC>0).forEach(v=>{const dt=dueDateFor(cr.data,v.ym);if(dt<=lim)out.push({dt,kind:'Fatura',name:cr.data.name+' · '+ymShort(v.ym),c:v.totalC,late:dt<td});});});
-  byKind('debt').filter(d=>d.data.dueDay&&mine(d.data)).forEach(d=>{const dt=debtNext(d.data,true),rv=d.data.dir==='RECEBER';if(dt&&dt<=lim)out.push({dt,kind:rv?'A receber':'Dívida',recv:rv,name:d.data.creditor,c:d.data.installC,late:dt<td||d.data.status==='ATRASADA'});});
+  monthRows(ymOf(td)).filter(x=>!x.r.data.paidAt).forEach(x=>{const dt=billDue(x);if(dt<=lim)out.push({dt,kind:'Conta',name:x.bill.data.name,c:x.r.data.amountC,late:dt<td});});
+  byKind('card').forEach(cr=>{const k=cardCalc(cr);Object.values(k.inv).filter(v=>!v.paid&&v.ym<=k.openYm&&v.totalC>0).forEach(v=>{const dt=dueDateFor(cr.data,v.ym);if(dt<=lim)out.push({dt,kind:'Fatura',name:cr.data.name+' · '+ymShort(v.ym),c:v.totalC,late:dt<td});});});
+  byKind('debt').filter(d=>d.data.dueDay).forEach(d=>{const dt=debtNext(d.data,true),rv=d.data.dir==='RECEBER';if(dt&&dt<=lim)out.push({dt,kind:rv?'A receber':'Dívida',recv:rv,name:d.data.creditor,c:d.data.installC,late:dt<td||d.data.status==='ATRASADA'});});
   return out.sort((a,b)=>a.dt<b.dt?-1:1);
 }
 const hasDemo=()=>S.recs.some(r=>r.data&&r.data.demo);
 async function loadDemo(){
   const t=new Date(),dAgo=n=>isoDate(new Date(t.getTime()-n*864e5));
-  const A=await Api.create('card',{name:'Cartão Teste A',last4:'1111',limitC:300000,closeDay:10,dueDay:17,holder:'MARCELO',demo:true});
-  const B=await Api.create('card',{name:'Cartão Teste B',last4:'2222',limitC:150000,closeDay:25,dueDay:5,holder:'MARLENE',demo:true});
+  const A=await Api.create('card',{name:'Cartão Teste A',last4:'1111',limitC:300000,closeDay:10,dueDay:17,demo:true});
+  const B=await Api.create('card',{name:'Cartão Teste B',last4:'2222',limitC:150000,closeDay:25,dueDay:5,demo:true});
   const ch=(c,date,desc,totalC,n,firstC,by)=>Api.create('charge',{cardId:c.id,date,desc,totalC,n,firstC:firstC==null?null:firstC,by:by||'',demo:true});
   await ch(A,dAgo(25),'Tênis (teste)',34999,6,5499,'');
   await ch(A,dAgo(5),'Mercado (teste)',23050,1,null,'');
@@ -1201,21 +1192,21 @@ async function loadDemo(){
   await ch(B,dAgo(12),'Celular (teste)',120000,10,null,'');
   await ch(B,dAgo(2),'Farmácia (teste)',8990,1,null,'');
   const ym=ymOf(todayIso());
-  await Api.create('bill',{name:'Luz (teste)',holder:'MARLENE',account:'Santander da Marlene',dueDay:10,variable:true,amountC:null,recurring:true,startYm:ym,demo:true});
-  await Api.create('bill',{name:'Água (teste)',holder:'MARLENE',account:'Santander da Marlene',dueDay:25,variable:true,amountC:null,recurring:true,startYm:ym,demo:true});
-  await Api.create('bill',{name:'Aluguel (teste)',holder:'MARCELO',dueDay:5,variable:false,amountC:120000,recurring:true,startYm:ym,demo:true});
-  await Api.create('bill',{name:'Internet (teste)',holder:'MARLENE',dueDay:28,variable:false,amountC:9990,recurring:true,startYm:ym,demo:true});
+  await Api.create('bill',{name:'Luz (teste)',account:'Banco exemplo',dueDay:10,variable:true,amountC:null,recurring:true,startYm:ym,demo:true});
+  await Api.create('bill',{name:'Água (teste)',account:'Banco exemplo',dueDay:25,variable:true,amountC:null,recurring:true,startYm:ym,demo:true});
+  await Api.create('bill',{name:'Aluguel (teste)',dueDay:5,variable:false,amountC:120000,recurring:true,startYm:ym,demo:true});
+  await Api.create('bill',{name:'Internet (teste)',dueDay:28,variable:false,amountC:9990,recurring:true,startYm:ym,demo:true});
   await ensureMonth();
   const alu=monthRows(ym).find(x=>x.bill.data.name==='Aluguel (teste)');
   if(alu)await Api.update(alu.r,Object.assign({},alu.r.data,{paidAt:todayIso()}));
-  const D=(creditor,balanceC,installC,rateBp,dueDay,status,kindD,holder,payer,account,note)=>Api.create('debt',{creditor,balanceC,installC,rateBp,dueDay,status,kindD,holder,payer,account:account||'',note:note||'',demo:true});
-  await D('Consignado A (teste)',1200000,48000,180,5,'ATIVA','Consignado','MARLENE','MARLENE','Santander da Marlene');
-  await D('Consignado B (teste)',850000,35000,165,5,'ATIVA','Consignado','MARLENE','MARLENE','Santander da Marlene');
-  await D('Consignado C (teste)',520000,21000,195,5,'ATIVA','Consignado','MARLENE','MARLENE','Santander da Marlene');
-  await D('Itaú (teste)',1600000,80000,350,15,'ATRASADA','Empréstimo','MARCELO','MARLENE','Santander da Marlene','Dívida fictícia de teste');
-  await D('Cartão Santander da mãe (teste)',430000,30000,1200,17,'ATRASADA','Cartão','MARLENE','MARLENE','Santander da Marlene');
+  const D=(creditor,balanceC,installC,rateBp,dueDay,status,kindD,account,note)=>Api.create('debt',{creditor,balanceC,installC,rateBp,dueDay,status,kindD,account:account||'',note:note||'',demo:true});
+  await D('Consignado A (teste)',1200000,48000,180,5,'ATIVA','Consignado','Banco exemplo');
+  await D('Consignado B (teste)',850000,35000,165,5,'ATIVA','Consignado','Banco exemplo');
+  await D('Consignado C (teste)',520000,21000,195,5,'ATIVA','Consignado','Banco exemplo');
+  await D('Itaú (teste)',1600000,80000,350,15,'ATRASADA','Empréstimo','Banco exemplo','Dívida fictícia de teste');
+  await D('Cartão do banco (teste)',430000,30000,1200,17,'ATRASADA','Cartão','Banco exemplo');
   await D('Cartão Bradesco antigo (teste)',680000,25000,950,10,'ATRASADA','Cartão','MARCELO','MARCELO','');
-  await Api.create('debt',{creditor:'Dívida sem juros informados (teste)',balanceC:150000,installC:15000,rateBp:null,dueDay:22,status:'ATIVA',kindD:'Outro',holder:'MARCELO',payer:'MARCELO',account:'',note:'Para testar o aviso de juros desconhecidos',demo:true});
+  await Api.create('debt',{creditor:'Dívida sem juros informados (teste)',balanceC:150000,installC:15000,rateBp:null,dueDay:22,status:'ATIVA',kindD:'Outro',account:'',note:'Para testar o aviso de juros desconhecidos',demo:true});
   await Api.create('proposal',{cfg:'capacity',capacityC:350000,demo:true});
   for(const t of ['Mercado 230,50 no cartão Teste A ontem','conta de luz vence dia 10','dívida Itaú 16000','tênis 6x 349,99 cartão Teste B'])await Api.create('proposal',{text:t,source:'demo',status:'pendente',demo:true});
 }
@@ -1224,12 +1215,12 @@ async function clearDemo(){
   for(const r of S.recs.slice()){if(ids.has(r.id)||(r.kind==='billmonth'&&ids.has(r.data.billId))||(r.kind==='invpay'&&ids.has(r.data.cardId)))await Api.remove(r);}
 }
 function vHome(){
-  const ym=ymOf(todayIso()),rows=monthRows(ym).filter(x=>mine(x.bill.data));
+  const ym=ymOf(todayIso()),rows=monthRows(ym);
   const open=rows.filter(x=>!x.r.data.paidAt);
   const known=open.filter(x=>x.r.data.amountC!=null).reduce((a,x)=>a+x.r.data.amountC,0);
   const sem=open.filter(x=>x.r.data.amountC==null).length;
   const late=open.filter(x=>billDue(x)<todayIso()).length;
-  let h=header('FIN')+'<p class="sub">'+esc(ymLabel(ym))+(S.who!=='ALL'?' · '+esc(pname(S.who)):'')+'</p>'+whoBar()+'<div class="wrap">';
+  let h=header('FIN')+'<p class="sub">'+esc(ymLabel(ym))+'</p>'+'<div class="wrap">';
   const pend=pendList();
   if(pend.length){
     h+='<div class="card" style="border:2px solid var(--accent)"><div class="t" style="font-weight:800;font-size:1.15rem">📥 '+pend.length+' pendente(s) do Núcleo</div><div class="mut">Toque para conferir e cadastrar.</div></div>';
@@ -1239,33 +1230,17 @@ function vHome(){
     +(sem?'<div style="margin-top:.4rem"><span class="tag warn">'+sem+' sem valor</span> <span class="mut">preencha em Mês</span></div>':'')
     +(late?'<div style="margin-top:.4rem"><span class="tag bad">'+late+' em atraso</span></div>':'')
     +(!rows.length?'<div class="mut" style="margin-top:.4rem">Nenhuma conta cadastrada ainda.</div>':'')+'</div>';
-  if(S.who==='ALL'){
-    const keys=PEOPLE.map(x=>x[0]).concat(['']);
-    const info=keys.map(k=>{
-      const dd=byKind('debt').filter(d=>(d.data.holder||'')===k&&d.data.status!=='PAGA'&&d.data.dir!=='RECEBER');
-      const cc=byKind('card').filter(c=>(c.data.holder||'')===k);
-      const bb=monthRows(ym).filter(x=>(x.bill.data.holder||'')===k&&!x.r.data.paidAt);
-      return {k,debt:dd.reduce((a,d)=>a+(d.data.balanceC||0),0),used:cc.reduce((a,c)=>a+cardCalc(c).used,0),open:bb.reduce((a,x)=>a+(x.r.data.amountC||0),0),n:dd.length+cc.length+bb.length};
-    }).filter(i=>i.n>0);
-    if(info.length){
-      h+='<h2>Por pessoa</h2>';
-      info.forEach(i=>{h+='<div class="card"><div class="t" style="font-weight:800;font-size:1.1rem">'+esc(pname(i.k))+'</div>'
-        +'<div class="row"><span class="mut">Dívidas (saldo conhecido)</span><b>'+money(i.debt)+'</b></div>'
-        +'<div class="row"><span class="mut">Usado nos cartões</span><b>'+money(i.used)+'</b></div>'
-        +'<div class="row"><span class="mut">Contas do mês a pagar</span><b>'+money(i.open)+'</b></div></div>';});
-    }
-  }
   const up=upcoming();
   if(up.length){
     h+='<h2>Próximos vencimentos (30 dias)</h2>';
     up.forEach(u=>{h+='<div class="card"><div class="row"><span class="t" style="font-weight:800">'+esc(u.name)+'</span><b'+(u.recv?' class="rc"':'')+'>'+(u.recv?'+ ':'')+money(u.c)+'</b></div><div class="row"><span class="mut">'+u.kind+' · '+brDate(u.dt)+'</span>'+(u.late?'<span class="tag bad">Em atraso</span>':'')+'</div></div>';});
   }
-  const cardsH=byKind('card').filter(c=>mine(c.data));
+  const cardsH=byKind('card');
   if(cardsH.length){
     let totH=0;cardsH.forEach(cr=>{totH+=cardCalc(cr).used;});
     h+='<h2>Cartões</h2><button class="item" data-act="tab" data-v="cards"><div class="row"><span class="mut">Total usado ('+cardsH.length+(cardsH.length===1?' cartão':' cartões')+')</span><b>'+money(totH)+'</b></div><div class="mut">Toque para ver cada cartão, a fatura e o limite.</div></button>';
   }
-  const debtsAll=byKind('debt').filter(d=>d.data.status!=='PAGA'&&mine(d.data));
+  const debtsAll=byKind('debt').filter(d=>d.data.status!=='PAGA');
   const debts=debtsAll.filter(d=>d.data.dir!=='RECEBER'),recvs=debtsAll.filter(d=>d.data.dir==='RECEBER');
   if(debts.length||recvs.length){
     let inner='';
@@ -1445,26 +1420,26 @@ async function bumpFinReminder(debtId,ym,x){
 /* ---------- a planilha do mês: tudo que vence, com data, valor e situação ---------- */
 function monthItems(ym){
   const td=todayIso(),cur=ymOf(td),out=[],seen=new Set();
-  monthRows(ym).filter(x=>mine(x.bill.data)).forEach(x=>{
+  monthRows(ym).forEach(x=>{
     const st=billState(x),b=x.bill.data;seen.add(x.bill.id);
-    out.push({k:'bill',id:x.r.id,billId:x.bill.id,ym,date:billDue(x),name:b.name,tipo:'Conta',who:b.holder,acct:b.account,amountC:x.r.data.amountC,state:st.t,cls:st.c});
+    out.push({k:'bill',id:x.r.id,billId:x.bill.id,ym,date:billDue(x),name:b.name,tipo:'Conta',acct:b.account,amountC:x.r.data.amountC,state:st.t,cls:st.c});
   });
   if(ym>cur){
-    byKind('bill').filter(b=>mine(b.data)&&!seen.has(b.id)&&(b.data.recurring?ym>=b.data.startYm:ym===b.data.startYm)).forEach(b=>{
+    byKind('bill').filter(b=>!seen.has(b.id)&&(b.data.recurring?ym>=b.data.startYm:ym===b.data.startYm)).forEach(b=>{
       const v=b.data.variable||b.data.amountC==null;seen.add(b.id);
-      out.push({k:'billp',id:b.id,billId:b.id,ym,date:dateOf(ym,b.data.dueDay),name:b.data.name,tipo:'Conta',who:b.data.holder,acct:b.data.account,amountC:v?null:b.data.amountC,state:v?'Sem valor':'Previsto',cls:v?'warn':''});
+      out.push({k:'billp',id:b.id,billId:b.id,ym,date:dateOf(ym,b.data.dueDay),name:b.data.name,tipo:'Conta',acct:b.data.account,amountC:v?null:b.data.amountC,state:v?'Sem valor':'Previsto',cls:v?'warn':''});
     });
   }
-  byKind('card').filter(c=>mine(c.data)).forEach(cr=>{
+  byKind('card').forEach(cr=>{
     const k=cardCalc(cr);
     Object.values(k.inv).forEach(v=>{
       if(!v.totalC&&!v.paid)return;
       const due=dueDateFor(cr.data,v.ym);if(due.slice(0,7)!==ym)return;
       const st=invStatus(cr.data,v,k.openYm);
-      out.push({k:'inv',id:cr.id,ym:v.ym,date:due,name:'Fatura '+cr.data.name,tipo:'Cartão',who:cr.data.holder,amountC:v.totalC,state:st.t==='Fechada · a pagar'?'A pagar':st.t,cls:st.c});
+      out.push({k:'inv',id:cr.id,ym:v.ym,date:due,name:'Fatura '+cr.data.name,tipo:'Cartão',amountC:v.totalC,state:st.t==='Fechada · a pagar'?'A pagar':st.t,cls:st.c});
     });
   });
-  byKind('debt').filter(d=>mine(d.data)).forEach(d=>{
+  byKind('debt').forEach(d=>{
     const x=d.data,rv=x.dir==='RECEBER';if(!x.dueDay)return;
     const paid=(x.paidYm||[]).indexOf(ym)>=0;
     if(!paid&&!debtOwes(x,ym))return;
@@ -1473,12 +1448,12 @@ function monthItems(ym){
     else if(x.installC==null){state='Sem valor';cls='warn';}
     else if(date<td){if(x.status==='ATRASADA'){state='Em atraso';cls='bad';}else{state='Confirmar';cls='warn';}}
     else state=rv?'A receber':'A pagar';
-    out.push({k:'debt',id:d.id,ym,date,name:x.creditor,tipo:(rv?'A receber':'Dívida')+(x.kindD?' · '+x.kindD:''),who:x.holder,amountC:x.installC,state,cls,dir:rv?'RECEBER':'PAGAR'});
+    out.push({k:'debt',id:d.id,ym,date,name:x.creditor,tipo:(rv?'A receber':'Dívida')+(x.kindD?' · '+x.kindD:''),amountC:x.installC,state,cls,dir:rv?'RECEBER':'PAGAR'});
   });
   return out.sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:(a.name<b.name?-1:1));
 }
 function mRow(it){
-  const sub=[it.tipo].concat(it.who?[pname(it.who)]:[]).join(' · ');
+  const sub=it.tipo;
   return '<button class="tr'+((it.state==='Paga'||it.state==='Recebida')?' pg':'')+'" data-act="m-open" data-k="'+it.k+'" data-id="'+esc(it.id)+'" data-ym="'+esc(it.ym||'')+'">'
     +'<span class="d"><b>'+it.date.slice(8,10)+'</b><i>'+dowOf(it.date)+'</i></span>'
     +'<span class="w"><b>'+esc(it.name)+'</b><i>'+esc(sub)+'</i></span>'
@@ -1493,7 +1468,7 @@ function vMonth(){
   const shown0=S.mf==='pay'?pagar.filter(i=>!feita(i)):(S.mf==='rec'?receber.filter(i=>!feita(i)):(S.mf==='done'?all.filter(feita):all));
   const mmode=roMode('month',shown0,false),shown=mmode==='def'?shown0:sortGroup(shown0,mmode,GM);
   RO.reg['month']={col:'',items:shown,pref:'month',manual:false,mode:mmode};
-  let h=header('Mês',sortBtn())+whoBar()+'<div class="wrap">';
+  let h=header('Mês',sortBtn())+'<div class="wrap">';
   h+='<div class="mnav"><button class="arr" data-act="m-prev" aria-label="Mês anterior">‹</button><button class="mid" data-act="m-today">'+esc(ymLabel(ym))+(ym===cur?' · este mês':'')+'</button><button class="arr" data-act="m-next" aria-label="Próximo mês">›</button></div>';
   h+='<div class="card sum3"><div><div class="mut">A pagar</div><b>'+money(tP)+'</b></div><div><div class="mut">Já pago</div><b>'+money(pP)+'</b></div><div><div class="mut">Falta pagar</div><b>'+money(tP-pP)+'</b></div></div>';
   if(receber.length)h+='<div class="card sum3"><div><div class="mut">A receber</div><b class="rc">'+money(tR)+'</b></div><div><div class="mut">Já recebido</div><b class="rc">'+money(pR)+'</b></div><div><div class="mut">Falta receber</div><b class="rc">'+money(tR-pR)+'</b></div></div><div class="hint" style="margin:-.2rem .3rem .4rem">O que falta: você recebe '+money(tR-pR)+' e paga '+money(tP-pP)+' (diferença '+money((tR-pR)-(tP-pP))+').</div>';
@@ -1507,7 +1482,7 @@ function vMonth(){
   if(all.length)h+='<p class="hint">Toque numa linha para pagar, informar o valor ou editar. “Confirmar” = a data já passou e você ainda não marcou como paga.</p>';
   /* contas cadastradas que NÃO vencem neste mês (a mesma conta nunca aparece duas vezes) */
   const used=new Set(all.filter(i=>i.k==='bill'||i.k==='billp').map(i=>i.billId));
-  const outras=byKind('bill').filter(b=>mine(b.data)&&!used.has(b.id));
+  const outras=byKind('bill').filter(b=>!used.has(b.id));
   if(outras.length){
     h+='<h2>Outras contas cadastradas</h2><div class="hint" style="margin:0 1rem .3rem">Não vencem em '+esc(ymShort(ym))+'.</div>';
     const ob=ordRecs('bills:outras',outras,GB);h+=sortBarFor('bills:outras')+'<div'+ordAttr('bills:outras',true)+'>';
@@ -1516,8 +1491,8 @@ function vMonth(){
   return h+'</div>';
 }
 function vCards(){
-  const cards=byKind('card').filter(c=>mine(c.data));
-  let h=header('Cartões',sortBtn())+whoBar()+'<div class="wrap"><button class="btn" data-act="card-new">+ Novo cartão</button>';
+  const cards=byKind('card');
+  let h=header('Cartões',sortBtn())+'<div class="wrap"><button class="btn" data-act="card-new">+ Novo cartão</button>';
   if(!cards.length)h+='<div class="card mut">Cadastre cada cartão uma vez: apelido, últimos 4 dígitos, limite, dia do fechamento e dia do vencimento. Nunca coloque o número completo, validade ou código de segurança.</div>';
   let tot=0;
   const cl=ordRecs('cards',cards,GC);
@@ -1526,7 +1501,7 @@ function vCards(){
     const k=cardCalc(cr),c=cr.data;tot+=k.used;
     const pct=c.limitC?Math.min(100,Math.max(0,Math.round(k.used*100/c.limitC))):0;
     const cur=k.inv[k.openYm],due=dueDateFor(c,k.openYm);
-    h+='<button class="item" data-act="card" data-id="'+cr.id+'" data-rid="'+cr.id+'"><div class="row"><span class="t">'+esc(c.name)+'</span><span class="mut">final '+esc(c.last4||'—')+'</span></div><div class="mut">Titular: '+esc(pname(c.holder))+'</div>'
+    h+='<button class="item" data-act="card" data-id="'+cr.id+'" data-rid="'+cr.id+'"><div class="row"><span class="t">'+esc(c.name)+'</span><span class="mut">final '+esc(c.last4||'—')+'</span></div>'
       +'<div class="bar"><i class="'+(pct>=80?'hi':'')+'" style="width:'+pct+'%"></i></div>'
       +'<div class="row"><span class="mut">Usado</span><b>'+money(k.used)+'</b></div>'
       +'<div class="row"><span class="mut">Pode usar</span><b>'+money(k.avail)+'</b></div>'
@@ -1577,12 +1552,12 @@ const DSTR={ATIVA:'A receber',ATRASADA:'Atrasada',PAGA:'Recebida',DESCONHECIDA:'
 const dstTxt=x=>(x.dir==='RECEBER'?DSTR:DST)[x.status]||x.status;
 function debtRow(d){
   const x=d.data,rv=x.dir==='RECEBER';
-  return '<button class="item" data-act="debt-edit" data-id="'+d.id+'" data-rid="'+d.id+'"><div class="row"><span class="t">'+esc(x.creditor)+'</span><span class="tag '+(x.status==='PAGA'?'ok':(x.status==='ATRASADA'?'bad':''))+'">'+esc(dstTxt(x))+'</span></div><div class="row"><span class="mut">'+(rv?'Falta receber':'Saldo')+'</span><b'+(rv?' class="rc"':'')+'>'+money(x.balanceC)+'</b></div><div class="row"><span class="mut">Parcela</span><b'+(rv?' class="rc"':'')+'>'+money(x.installC)+'</b></div><div class="mut">'+(rv?'A receber · quem recebe: '+esc(pname(x.holder)):'Devedor no contrato: '+esc(pname(x.holder))+(x.payer?' · paga hoje: '+esc(pname(x.payer)):''))+(x.kindD?' · '+esc(x.kindD):'')+(x.rateBp!=null?' · juros '+(x.rateBp/100).toFixed(2).replace('.',',')+'% ao mês':'')+(x.account?' · conta '+esc(x.account):'')+'</div>'+(x.dueDay?'<div class="mut">Vence dia '+x.dueDay+(debtNext(x,true)?' · próxima parcela em '+brDate(debtNext(x,true)):'')+'</div>':'')+(S.remMap&&S.remMap[d.id]?'<div class="mut">🔔 Lembrete no Núcleo: 1 dia antes, às '+REM_TIME+'</div>':'')+(x.note?'<div class="mut">'+esc(x.note)+'</div>':'')+'</button>';
+  return '<button class="item" data-act="debt-edit" data-id="'+d.id+'" data-rid="'+d.id+'"><div class="row"><span class="t">'+esc(x.creditor)+'</span><span class="tag '+(x.status==='PAGA'?'ok':(x.status==='ATRASADA'?'bad':''))+'">'+esc(dstTxt(x))+'</span></div><div class="row"><span class="mut">'+(rv?'Falta receber':'Saldo')+'</span><b'+(rv?' class="rc"':'')+'>'+money(x.balanceC)+'</b></div><div class="row"><span class="mut">Parcela</span><b'+(rv?' class="rc"':'')+'>'+money(x.installC)+'</b></div><div class="mut">'+(rv?'A receber':'Dívida')+(x.kindD?' · '+esc(x.kindD):'')+(x.rateBp!=null?' · juros '+(x.rateBp/100).toFixed(2).replace('.',',')+'% ao mês':'')+(x.account?' · conta '+esc(x.account):'')+'</div>'+(x.dueDay?'<div class="mut">Vence dia '+x.dueDay+(debtNext(x,true)?' · próxima parcela em '+brDate(debtNext(x,true)):'')+'</div>':'')+(S.remMap&&S.remMap[d.id]?'<div class="mut">🔔 Lembrete no Núcleo: 1 dia antes, às '+REM_TIME+'</div>':'')+(x.note?'<div class="mut">'+esc(x.note)+'</div>':'')+'</button>';
 }
 function vDebts(){
-  const ds=byKind('debt').filter(d=>mine(d.data));
+  const ds=byKind('debt');
   const abertas=ds.filter(d=>d.data.status!=='PAGA'),pagar=abertas.filter(d=>d.data.dir!=='RECEBER'),receber=abertas.filter(d=>d.data.dir==='RECEBER'),feitas=ds.filter(d=>d.data.status==='PAGA');
-  let h=header('Dívidas',sortBtn())+whoBar()+'<div class="wrap"><button class="btn" data-act="debt-new">+ Nova dívida ou parcela</button>';
+  let h=header('Dívidas',sortBtn())+'<div class="wrap"><button class="btn" data-act="debt-new">+ Nova dívida ou parcela</button>';
   if(!ds.length)h+='<div class="card mut">Nada cadastrado. Use “Nova dívida ou parcela” para o que você deve e também para o que te devem.</div>';
   if(pagar.length){
     const sum=pagar.reduce((a,d)=>a+(d.data.balanceC||0),0),inst=pagar.reduce((a,d)=>a+(d.data.installC||0),0),miss=pagar.some(d=>d.data.balanceC==null);
@@ -1679,12 +1654,11 @@ function mobillsParse(rows){
   });
   return {accts:accts,rows:body.length,dupGroups:Object.keys(occ).filter(k=>occ[k]>1).length};
 }
-function stPlan(parsed,holder){
+function stPlan(parsed){
   const out=[];
   for(const name of Object.keys(parsed.accts)){
     const ents=parsed.accts[name];
     const rec=S.recs.find(r=>r.kind==='stmt'&&r.data.account===name);
-    if(rec&&rec.data.holder&&rec.data.holder!==holder)throw new Error('A conta “'+name+'” já está salva como de '+pname(rec.data.holder)+'.');
     const old={};(rec?rec.data.entries:[]).forEach(e=>{old[e.i]=e;});
     let add=0,same=0;
     for(const e of ents){
@@ -1696,13 +1670,13 @@ function stPlan(parsed,holder){
   }
   return out;
 }
-async function stApply(plan,holder){
+async function stApply(plan){
   for(const x of plan){
     if(!x.add)continue;
     const have={};(x.rec?x.rec.data.entries:[]).forEach(e=>{have[e.i]=1;});
     const merged=(x.rec?x.rec.data.entries.slice():[]).concat(x.ents.filter(e=>!have[e.i]));
     merged.sort((a,b)=>a.d<b.d?-1:a.d>b.d?1:0);
-    const data={account:x.name,holder:holder,source:'mobills',entries:merged};
+    const data={account:x.name,source:'mobills',entries:merged};
     if(x.rec)await Api.update(x.rec,data);else await Api.create('stmt',data);
   }
 }
@@ -1718,19 +1692,20 @@ async function stImport(file){
     'Contas no arquivo: '+names.join(', ')+'.'
   ].concat(Object.keys(ST_KIND).filter(k=>cnt[k]).map(k=>ST_KIND[k]+': '+cnt[k]));
   if(parsed.dupGroups)first.push('Há '+parsed.dupGroups+' grupo(s) de linhas iguais. Elas ficam como lançamentos separados.');
-  await form('Importar extrato do Mobills',[{k:'holder',label:'De quem são estas contas?',type:'select',opts:PEOPLE,hint:first.join('\n')}],{holder:defHolder()||'MARCELO'},{
-    validate:o=>{try{stPlan(parsed,o.holder);}catch(e){return e.message;}return '';},
-    summary:o=>{const pl=stPlan(parsed,o.holder);return ['Contas de: '+pname(o.holder)].concat(pl.map(x=>x.name+': '+x.add+' novos, '+x.same+' já existiam')).concat(['Nada é pago nem alterado no banco.']);},
-    save:async o=>{await stApply(stPlan(parsed,o.holder),o.holder);}
-  });
+  let pl;
+  try{pl=stPlan(parsed);}catch(e){S.msg=e.message;render();return;}
+  if(await confirmBox('Importar extrato do Mobills?',first.concat(pl.map(x=>x.name+': '+x.add+' novos, '+x.same+' já existiam')).concat(['Nada é pago nem alterado no banco.']),'Sim, importar')){
+    try{await stApply(pl);}catch(e){S.msg=e.message;}
+    render();
+  }
 }
 function stRows(){
   const out=[];
-  byKind('stmt').filter(r=>mine(r.data)).forEach(r=>r.data.entries.forEach(e=>out.push(Object.assign({acct:r.data.account},e))));
+  byKind('stmt').forEach(r=>r.data.entries.forEach(e=>out.push(Object.assign({acct:r.data.account},e))));
   return out;
 }
 function vStmt(){
-  let h=header('Extratos')+whoBar()+'<div class="wrap"><button class="btn sec" data-back="1" data-act="tab" data-v="home">← Voltar</button><button class="btn" data-act="stmt-pick">📥 Importar arquivo do Mobills (.xlsx)</button><input type="file" id="stfile" accept=".xlsx" hidden>'
+  let h=header('Extratos')+'<div class="wrap"><button class="btn sec" data-back="1" data-act="tab" data-v="home">← Voltar</button><button class="btn" data-act="stmt-pick">📥 Importar arquivo do Mobills (.xlsx)</button><input type="file" id="stfile" accept=".xlsx" hidden>'
     +'<p class="hint">No Mobills: Relatório de transações → exportar em Excel. Importar de novo o mesmo período não duplica.</p>';
   const rows=stRows();
   if(!rows.length)return h+'<div class="card mut">Nenhum extrato importado ainda.</div></div>';
@@ -1756,7 +1731,7 @@ function vStmt(){
 const CHAT_KINDS=['card','charge','invpay','bill','billmonth','debt','proposal','stmt'];
 function chatSnapshot(){
   return JSON.stringify({fin_snapshot:1,gerado_em:new Date().toISOString(),
-    regras:['debt.dir = PAGAR (padrão: eu devo) ou RECEBER (me devem); debt.paidYm = meses AAAA-MM já pagos ou recebidos; debt.firstDue = data da 1ª parcela.','Valores em centavos inteiros (R$ 10,50 = 1050). Dado ausente = null, nunca 0.','holder = MARCELO ou MARLENE (devedor/titular); payer = quem paga hoje.','Para mudar algo, devolva JSON {"fin_ops":1,"ops":[...]} com op create (kind,data), update (id,data = campos a mudar) ou delete (id). Máximo 60 ops.','Marcelo confere e confirma antes de salvar. O FIN nunca paga nem move dinheiro.','kinds: card, charge, invpay, bill, billmonth, debt, proposal (proposal com data.cfg=capacity guarda quanto dá para pagar por mês: capacityC).'],
+    regras:['debt.dir = PAGAR (padrão: eu devo) ou RECEBER (me devem); debt.paidYm = meses AAAA-MM já pagos ou recebidos; debt.firstDue = data da 1ª parcela.','Valores em centavos inteiros (R$ 10,50 = 1050). Dado ausente = null, nunca 0.','Para mudar algo, devolva JSON {"fin_ops":1,"ops":[...]} com op create (kind,data), update (id,data = campos a mudar) ou delete (id). Máximo 60 ops.','Marcelo confere e confirma antes de salvar. O FIN nunca paga nem move dinheiro.','kinds: card, charge, invpay, bill, billmonth, debt, proposal (proposal com data.cfg=capacity guarda quanto dá para pagar por mês: capacityC).'],
     registros:S.recs.map(r=>({id:r.id,kind:r.kind,version:r.version,data:r.data}))},null,1);
 }
 function chatParse(txt){
@@ -1917,13 +1892,12 @@ async function billForm(rec,preset){
     {k:'variable',label:'O valor muda todo mês',type:'check'},
     {k:'amountC',label:'Valor fixo (se não muda)',type:'money',hint:'Deixe vazio se não souber. Vazio nunca vira zero.'},
     {k:'recurring',label:'Repete todo mês',type:'check'},
-    {k:'holder',label:'De quem é a conta',type:'select',opts:HOLD_OPTS},
-    {k:'account',label:'Conta bancária que paga (opcional)',type:'text',hint:'Ex.: Santander da Marlene.'}
-  ],Object.assign({holder:defHolder()},d),{
+    {k:'account',label:'Conta bancária que paga (opcional)',type:'text',hint:'Ex.: Bradesco.'}
+  ],Object.assign({},d),{
     validate:o=>o.variable?null:null,
-    summary:o=>['Conta: '+o.name,'Vence dia '+o.dueDay,o.variable?'Valor muda todo mês (o app cobra)':'Valor: '+money(o.amountC),o.recurring?'Repete todo mês':'Só neste mês','De: '+pname(o.holder)+(o.account?' · conta '+o.account:'')],
+    summary:o=>['Conta: '+o.name,'Vence dia '+o.dueDay,o.variable?'Valor muda todo mês (o app cobra)':'Valor: '+money(o.amountC),o.recurring?'Repete todo mês':'Só neste mês','Conta bancária: '+(o.account||'não informada')],
     save:async o=>{
-      const data={name:o.name,dueDay:o.dueDay,variable:o.variable,amountC:o.variable?null:o.amountC,recurring:o.recurring,holder:o.holder,account:o.account||'',startYm:rec?rec.data.startYm:((preset&&preset.startYm)||ymOf(todayIso()))};
+      const data={name:o.name,dueDay:o.dueDay,variable:o.variable,amountC:o.variable?null:o.amountC,recurring:o.recurring,account:o.account||'',startYm:rec?rec.data.startYm:((preset&&preset.startYm)||ymOf(todayIso()))};
       if(rec)await Api.update(rec,data);else{await Api.create('bill',data);await ensureMonth();}
     },
     onDelete:rec?async()=>{
@@ -1959,11 +1933,10 @@ async function cardForm(rec){
     {k:'last4',label:'Últimos 4 dígitos',type:'text',hint:'Somente os 4 últimos. Nunca o número inteiro, validade ou código.'},
     {k:'limitC',label:'Limite total',type:'money',hint:'Deixe vazio se não souber.'},
     {k:'closeDay',label:'Fecha todo dia',type:'int',min:1,max:31,req:true},
-    {k:'dueDay',label:'Vence todo dia',type:'int',min:1,max:31,req:true},
-    {k:'holder',label:'Titular do cartão',type:'select',opts:HOLD_OPTS}
-  ],Object.assign({holder:defHolder()},d),{
+    {k:'dueDay',label:'Vence todo dia',type:'int',min:1,max:31,req:true}
+  ],Object.assign({},d),{
     validate:o=>(o.last4&&!/^\d{4}$/.test(o.last4))?'Os últimos dígitos devem ser exatamente 4 números.':null,
-    summary:o=>['Cartão: '+o.name,'Final: '+(o.last4||'—'),'Limite: '+money(o.limitC),'Fecha dia '+o.closeDay+' · vence dia '+o.dueDay,'Titular: '+pname(o.holder)],
+    summary:o=>['Cartão: '+o.name,'Final: '+(o.last4||'—'),'Limite: '+money(o.limitC),'Fecha dia '+o.closeDay+' · vence dia '+o.dueDay],
     save:async o=>{if(rec)await Api.update(rec,o);else await Api.create('card',o);},
     onDelete:rec?async()=>{
       if(await confirmBox('Apagar este cartão?',['Cartão: '+d.name,'Os lançamentos dele também saem da tela.','Vai para a lixeira.'],'Sim, apagar',true)){
@@ -2004,12 +1977,10 @@ async function debtForm(rec,preset){
     {k:'firstDue',label:'1ª parcela vence em (opcional)',type:'date',hint:'Só se a primeira parcela ainda não venceu. A planilha do mês começa nesta data.'},
     {k:'status',label:'Situação',type:'select',opts:[['ATIVA','Ativa'],['ATRASADA','Atrasada'],['PAGA','Paga'],['DESCONHECIDA','Não sei']]},
     {k:'kindD',label:'Tipo',type:'select',opts:[['','Não definido'],['Consignado','Consignado'],['Empréstimo','Empréstimo'],['Cartão','Cartão'],['Loja/carnê','Loja/carnê'],['Outro','Outro']]},
-    {k:'holder',label:'Devedor no contrato (quem assinou)',type:'select',opts:HOLD_OPTS},
-    {k:'payer',label:'Quem paga hoje',type:'select',opts:HOLD_OPTS},
     {k:'account',label:'Conta de onde sai o pagamento (opcional)',type:'text'},
     {k:'note',label:'Observação',type:'text'}
-  ],Object.assign({holder:defHolder(),dir:'PAGAR'},d),{
-    summary:o=>[(o.dir==='RECEBER'?'A receber de: ':'Dívida: ')+o.creditor,'Saldo: '+money(o.balanceC),'Parcela: '+money(o.installC),'Juros ao mês: '+(o.rateBp==null?'Não informado':(o.rateBp/100).toFixed(2).replace('.',',')+'%'),'Situação: '+o.status,'Tipo: '+(o.kindD||'Não definido'),'Devedor no contrato: '+pname(o.holder),'Quem paga hoje: '+pname(o.payer)],
+  ],Object.assign({dir:'PAGAR'},d),{
+    summary:o=>[(o.dir==='RECEBER'?'A receber de: ':'Dívida: ')+o.creditor,'Saldo: '+money(o.balanceC),'Parcela: '+money(o.installC),'Juros ao mês: '+(o.rateBp==null?'Não informado':(o.rateBp/100).toFixed(2).replace('.',',')+'%'),'Situação: '+o.status,'Tipo: '+(o.kindD||'Não definido')],
     save:async o=>{if(rec)await Api.update(rec,Object.assign({},rec.data,o));else await Api.create('debt',o);},
     onDelete:rec?async()=>{if(await confirmBox('Apagar esta dívida?',[d.creditor],'Sim, apagar',true)){try{await Api.remove(rec);}catch(e){S.msg=e.message;}render();}}:null
   });
@@ -2034,7 +2005,6 @@ document.addEventListener('click',async ev=>{
   else if(act==='chat')chatMenu();
   else if(act==='backup')baixarCopia();
   else if(act==='stmt-pick'){const f=$('stfile');if(f)f.click();}
-  else if(act==='who'){S.who=b.dataset.v;render();}
   else if(act==='prop')reviewProp(get(id));
   else if(act==='cap-set'){const c=cfgRec();form('Quanto dá para pagar por mês',[{k:'capacityC',label:'Valor por mês para as dívidas',type:'money',req:true,hint:'Só o que sobra de verdade. Exemplo: 1.800,00'}],{capacityC:c?c.data.capacityC:null},{summary:o=>['Por mês: '+money(o.capacityC)],save:async o=>{if(c)await Api.update(c,Object.assign({},c.data,{capacityC:o.capacityC}));else await Api.create('proposal',{cfg:'capacity',capacityC:o.capacityC});}});}
   else if(act==='m-prev'){S.mm=addMonths(S.mm||ymOf(todayIso()),-1);render();}

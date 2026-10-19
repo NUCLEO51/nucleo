@@ -577,7 +577,48 @@ const count = (h, s) => h.split(s).length - 1;
   click(doc.querySelector('.modal #c0')); await wait(20);
   t('desfazer: categorizar entra na fila do desfazer como "Categorizar gasto"', ev(`undoLabel([{op:'update',kind:'proposal',before:{cfg:'cats'},after:{cfg:'cats'}}])`), 'Categorizar gasto');
   ev(`S.tab='home';S.sp=null;render();`);
-  t('FIN: versão do cache subiu para v14', /fin-app-v14/.test(fs.readFileSync(path.join(__dirname, '..', 'fin', 'sw.js'), 'utf8')), true);
+  // ---- sem Marlene / sem titular (v15)
+  t('sem titular: não existe mais o conceito de pessoa no código (PEOPLE, pname, mine, whoBar, defHolder)', ev(`typeof PEOPLE+'|'+typeof pname+'|'+typeof mine+'|'+typeof whoBar+'|'+typeof defHolder+'|'+typeof HOLD_OPTS`), 'undefined|undefined|undefined|undefined|undefined|undefined');
+  ev(`S.who=undefined;S.sheet=null;S.cardId=null;S.recs=[
+    {id:'lb1',kind:'bill',version:1,data:{name:'Conta de luz antiga',dueDay:10,variable:true,amountC:null,recurring:true,holder:'MARLENE',account:'Santander da Marlene',startYm:ymOf(todayIso())}},
+    {id:'lc1',kind:'card',version:1,data:{name:'Cartão antigo',last4:'2222',limitC:150000,closeDay:25,dueDay:5,holder:'MARLENE'}},
+    {id:'ld1',kind:'debt',version:1,data:{creditor:'Consignado antigo',balanceC:500000,installC:20000,dueDay:5,status:'ATIVA',kindD:'Consignado',holder:'MARLENE',payer:'MARLENE',account:'',note:''}},
+    {id:'ld2',kind:'debt',version:1,data:{creditor:'Fulano devolve',balanceC:30000,installC:10000,dueDay:20,status:'ATIVA',holder:'MARLENE',payer:'',dir:'RECEBER'}}];`);
+  const telasSM = {};
+  for (const tab of ['home', 'bills', 'cards', 'debts', 'plan', 'stmt', 'spend']) {
+    ev(`S.tab='${tab}';S.cardId=null;render();`);
+    telasSM[tab] = doc.querySelector('#app').textContent;
+  }
+  const NOME_RX = /Marlene|MARLENE|mãe|Titular|De quem|Todos|Devedor no contrato|Quem paga hoje|Por pessoa|Sem dono/;
+  t('sem titular: nenhuma tela mostra Marlene, mãe, Titular, Todos, Por pessoa, Devedor no contrato (mesmo com registros antigos que ainda têm o campo)', Object.keys(telasSM).filter(k => NOME_RX.test(telasSM[k])), []);
+  t('sem titular: sumiu o seletor Todos / Marcelo / Marlene em todas as telas', doc.querySelectorAll('#app [data-act="who"]').length, 0);
+  ev(`S.tab='bills';render();`);
+  t('sem titular: registros antigos (com o campo guardado) continuam aparecendo normalmente, sem filtro por pessoa', /Conta de luz antiga/.test(doc.querySelector('#app').textContent), true);
+  ev(`S.tab='cards';render();`);
+  t('sem titular: o cartão antigo aparece na lista de cartões, sem a linha Titular', /Cartão antigo/.test(doc.querySelector('#app').textContent) && !/Titular/.test(doc.querySelector('#app').textContent), true);
+  ev(`S.tab='debts';render();`);
+  t('sem titular: dívida antiga aparece como "Dívida · Consignado" e a de a receber como "A receber", sem nome de pessoa', /Dívida · Consignado/.test(doc.querySelector('#app').textContent) && /A receber/.test(doc.querySelector('#app').textContent) && !/quem recebe|paga hoje/.test(doc.querySelector('#app').textContent), true);
+  // formulários sem os campos de pessoa
+  const formTxt = async (selector) => { click(doc.querySelector(selector)); await wait(30); const x = doc.querySelector('.modal') ? doc.querySelector('.modal').textContent : ''; ev(`document.querySelectorAll('.modal').forEach(m=>m.remove())`); return x; };
+  ev(`S.tab='cards';render();`);
+  const fCard = await formTxt('#app [data-act="card-new"]');
+  t('formulário do cartão: tem apelido, limite e dias, e NÃO tem Titular', /Apelido/.test(fCard) && /Fecha todo dia/.test(fCard) && !/Titular/.test(fCard), true);
+  ev(`S.tab='debts';render();`);
+  const fDebt = await formTxt('#app [data-act="debt-new"]');
+  t('formulário da dívida: tem credor, saldo e parcela, e NÃO tem Devedor no contrato nem Quem paga hoje', /Saldo/.test(fDebt) && /Valor da parcela/.test(fDebt) && !/Devedor no contrato|Quem paga hoje/.test(fDebt), true);
+  // (o formulário de conta é trocado por um stub num teste anterior; aqui confiro o código dele no arquivo)
+  const srcFin = fs.readFileSync(path.join(__dirname, '..', 'fin', 'index.html'), 'utf8');
+  const i0 = srcFin.indexOf('async function billForm'), billSrc = srcFin.slice(i0, srcFin.indexOf('async function', i0 + 20));
+  t('formulário da conta: tem nome, vencimento e conta bancária, e NÃO tem De quem é a conta nem titular', /Vence todo dia/.test(billSrc) && /Conta bancária que paga/.test(billSrc) && !/holder|De quem é a conta|Marlene/.test(billSrc), true);
+  t('o arquivo do Financeiro não cita mais Marlene, MARLENE, titular, pagador nem seletor de pessoa', !/Marlene|MARLENE|holder:|payer|data-act="who"/.test(srcFin.replace(/placeholder/g, '')), true);
+  // exemplos de teste (demo) sem Marlene
+  ev(`S.recs=[];Api.create=async(kind,data)=>{const r={id:'dm'+S.recs.length,kind,version:1,data};S.recs.push(r);return r;};`);
+  let demoErro = '';
+  try { await ev(`loadDemo()`); } catch (e) { demoErro = String(e && e.message || e); }
+  const demoTxt = ev(`JSON.stringify(S.recs.map(r=>r.data))`);
+  t('exemplos de teste: carregam sem erro e não citam Marlene, mãe nem guardam titular/pagador', [demoErro, /Marlene|MARLENE|mãe|holder|payer/.test(demoTxt), ev(`S.recs.length`) > 8], ['', false, true]);
+  ev(`S.recs=[];S.tab='home';render();`);
+  t('FIN: versão do cache subiu para v15', /fin-app-v15/.test(fs.readFileSync(path.join(__dirname, '..', 'fin', 'sw.js'), 'utf8')), true);
 
   console.log(ok + ' ok, ' + bad + ' falhas (FIN)');
   process.exit(bad ? 1 : 0);
