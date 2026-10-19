@@ -317,7 +317,49 @@ const count = (h, s) => h.split(s).length - 1;
   t('FIN mês: A → Z põe "Alfa conta" primeiro', mrows() === 'AZ', true);
   t('FIN: o botão Ordenar é redondo e fica no canto do título (↕), sempre na cor padrão', !!doc.querySelector('#app header.hd .ibtn[data-sortbtn]') && doc.querySelector('#app header.hd .ibtn[data-sortbtn]').textContent === '↕' && !doc.querySelector('#app header.hd .ibtn[data-sortbtn]').classList.contains('on') && !doc.querySelector('#app .sortbar'), true);
   try { w.localStorage.removeItem('ord-sort'); } catch (e) {}
-  t('FIN: versão do cache subiu para v9', /fin-app-v9/.test(fs.readFileSync(path.join(__dirname, '..', 'fin', 'sw.js'), 'utf8')), true);
+  // ---- backup automático e ordem sincronizada no FIN
+  ev(`window.__rest=[];Api.rest=async(p,o)=>{window.__rest.push([p,(o&&o.method)||'GET']);
+    if(/backups\\?select=id/.test(p))return {ok:true,json:async()=>[{id:'b1',taken_at:new Date().toISOString(),n_items:78,motivo:'diario'}]};
+    if(/rpc\\/backup_agora/.test(p))return {ok:true,json:async()=>'x'};
+    return {ok:true,json:async()=>[]};};`);
+  const bb = ev('backupBlock()');
+  t('FIN: o bloco de cópia tem o status do backup automático e os botões Fazer backup agora e Baixar o último', /id="bkAuto"/.test(bb) && /data-act="bk-now"/.test(bb) && /data-act="bk-down"/.test(bb), true);
+  const holder = doc.createElement('p'); holder.id = 'bkAuto'; doc.body.appendChild(holder);
+  await ev('bkRefresh()');
+  t('FIN: o status mostra a hora do último backup automático e quantos itens', /Último backup automático: hoje às \d\d:\d\d \(78 itens\)\./.test(holder.textContent), true);
+  await ev('bkNow()'); await wait(30);
+  t('FIN: Fazer backup agora chama o servidor', ev(`window.__rest.some(x=>/rpc\\/backup_agora/.test(x[0])&&x[1]==='POST')`), true);
+  holder.remove();
+  try { w.localStorage.removeItem('ord-sort'); w.localStorage.removeItem('ord-sort-t'); } catch (e) {}
+  ev(`window.__criou=[];window.__atual=[];Api.create=async(kind,data)=>{window.__criou.push([kind,data]);const r={id:'cfg9',kind,version:1,data};S.recs.push(r);return r;};
+     Api.update=async(rec,data)=>{window.__atual.push(data);rec.data=data;rec.version++;return rec;};
+     S.recs=[];`);
+  ev(`roSetPref('debts:pagar','za')`);
+  await wait(1700);
+  const cr = ev('window.__criou[0]');
+  t('FIN: escolher uma ordem cria o registro de configuração na nuvem (com a data da escolha)', cr && cr[0] === 'proposal' && cr[1].cfg === 'sortprefs' && cr[1].prefs['debts:pagar'].m === 'za', true);
+  ev(`roSetPref('cards','az')`);
+  await wait(1700);
+  t('FIN: a segunda escolha atualiza o mesmo registro (não cria outro)', ev('window.__criou.length') === 1 && ev('window.__atual.length') >= 1 && ev(`window.__atual[window.__atual.length-1].prefs.cards.m`) === 'az', true);
+  try { w.localStorage.removeItem('ord-sort'); w.localStorage.removeItem('ord-sort-t'); } catch (e) {}
+  ev(`S.recs=[{id:'cfg9',kind:'proposal',version:5,data:{cfg:'sortprefs',prefs:{'cards':{m:'za',t:Date.now()+9000}}}}];`);
+  await ev('ordPull()');
+  t('FIN: em outro aparelho a escolha vinda da nuvem passa a valer', ev(`roPrefs()['cards']`), 'za');
+  try { w.localStorage.removeItem('ord-sort'); w.localStorage.removeItem('ord-sort-t'); } catch (e) {}
+  // ---- tamanho do texto no FIN
+  try { w.localStorage.removeItem('fin-fs'); } catch (e) {}
+  ev(`fsApply()`);
+  const fb = ev('fsBlock()');
+  t('FIN: bloco Tamanho do texto com Normal, Grande, Maior e Máximo, e Grande marcado por padrão', ['Normal', 'Grande', 'Maior', 'Máximo'].every(x => fb.indexOf('>' + x + '<') >= 0) && /data-v="20" aria-pressed="true"/.test(fb) && doc.documentElement.style.fontSize === '20px', true);
+  ev(`S.tab='home';render();`);
+  click(doc.querySelector('#app [data-act="set-fs"][data-v="26"]')); await wait(20);
+  t('FIN: tocar em Máximo aumenta a letra do app inteiro (26 px) e guarda a escolha', doc.documentElement.style.fontSize === '26px' && w.localStorage.getItem('fin-fs') === '26' && /data-v="26" aria-pressed="true"/.test(doc.querySelector('#app').innerHTML), true);
+  try { w.localStorage.setItem('fin-fs', 'abc'); } catch (e) {}
+  ev(`fsApply()`);
+  t('FIN: valor estranho guardado volta para Grande (20 px)', doc.documentElement.style.fontSize === '20px', true);
+  try { w.localStorage.removeItem('fin-fs'); } catch (e) {}
+  ev(`fsApply()`);
+  t('FIN: versão do cache subiu para v10', /fin-app-v10/.test(fs.readFileSync(path.join(__dirname, '..', 'fin', 'sw.js'), 'utf8')), true);
 
   console.log(ok + ' ok, ' + bad + ' falhas (FIN)');
   process.exit(bad ? 1 : 0);

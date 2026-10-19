@@ -52,6 +52,7 @@ h2{font-size:1.25rem;margin:1.2rem 1rem .4rem}
 .sum3{display:grid;grid-template-columns:repeat(3,1fr);gap:.4rem;text-align:center;padding:.7rem .5rem}
 .sum3 .mut{font-size:.8rem}
 .rc{color:#34c27a}
+.seg4{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-top:.4rem}
 .ibtn{width:3rem;height:3rem;border-radius:50%;border:0;background:var(--surface-2);color:var(--accent);font-size:1.5rem;font-weight:800;line-height:1;cursor:pointer}
 .sortbar{display:flex;align-items:center;gap:.5rem;width:100%;margin:.5rem 0;padding:.65rem .9rem;border:0;border-radius:.9rem;background:var(--surface-2);color:var(--fg);font:inherit;font-size:1rem;font-weight:600;cursor:pointer;text-align:left}
 .sortbar b{color:var(--accent)}
@@ -173,10 +174,34 @@ function moveOrds(items,id,to){
 
 /* ---------- ordenar e arrastar (tela): segurar um item e levar para onde quiser ---------- */
 const RO={reg:{},sel:null,timer:null,pend:null,drag:null,noClick:0,x0:0,y0:0};
-const ROH={write:async()=>{},scroller:()=>window,rerender:()=>{},toast:()=>{},choose:async()=>null};
+const ROH={write:async()=>{},scroller:()=>window,rerender:()=>{},toast:()=>{},choose:async()=>null,syncLoad:async()=>null,syncSave:async()=>null};
 const roPrefOf=gk=>String(gk).split('|')[0];
 function roPrefs(){try{return JSON.parse(localStorage.getItem('ord-sort')||'{}');}catch(e){return {};}}
-function roSetPref(p,m){const o=roPrefs();o[p]=m;try{localStorage.setItem('ord-sort',JSON.stringify(o));}catch(e){}}
+function roTimes(){try{return JSON.parse(localStorage.getItem('ord-sort-t')||'{}');}catch(e){return {};}}
+function roSetPref(p,m){const o=roPrefs(),t=roTimes();o[p]=m;t[p]=Date.now();try{localStorage.setItem('ord-sort',JSON.stringify(o));localStorage.setItem('ord-sort-t',JSON.stringify(t));}catch(e){}ordPush();}
+/* a escolha de ordem também vai para a nuvem (um registro de configuração), para valer em todos os aparelhos; vale a escolha mais nova */
+const ORS={rec:null,timer:null,busy:false};
+function ordPush(){clearTimeout(ORS.timer);ORS.timer=setTimeout(ordPushNow,1500);}
+async function ordPushNow(){
+  if(ORS.busy){ordPush();return;}
+  ORS.busy=true;
+  try{
+    const o=roPrefs(),t=roTimes(),prefs={};
+    Object.keys(t).forEach(k=>{if(o[k])prefs[k]={m:o[k],t:t[k]};});
+    ORS.rec=await ROH.syncSave(ORS.rec,{cfg:'sortprefs',prefs});
+  }catch(e){}
+  ORS.busy=false;
+}
+async function ordPull(){
+  try{
+    const rec=await ROH.syncLoad();if(rec)ORS.rec=rec;
+    const rem=(rec&&rec.data&&rec.data.prefs)||{},o=roPrefs(),t=roTimes();let ch=false,need=false;
+    Object.keys(rem).forEach(k=>{const rt=(rem[k]&&rem[k].t)||0;if(rt>(t[k]||0)){o[k]=rem[k].m;t[k]=rt;ch=true;}});
+    Object.keys(t).forEach(k=>{if(!rem[k]||(rem[k].t||0)<t[k])need=true;});
+    if(ch){try{localStorage.setItem('ord-sort',JSON.stringify(o));localStorage.setItem('ord-sort-t',JSON.stringify(t));}catch(e){}ROH.rerender();}
+    if(need)ordPush();
+  }catch(e){}
+}
 function roMode(pref,items,manual){let m=roPrefs()[pref];if(m==='man'&&!manual)m='def';return m||((manual&&items.some(hasOrd))?'man':'def');}
 /* ordena um grupo conforme a escolha (ou a ordem manual, se já existir) e registra o grupo para o arrastar */
 function ordSort(gk,col,items,g,manual){const pref=roPrefOf(gk),mode=roMode(pref,items,manual),out=mode==='def'?items:sortGroup(items,mode,g);RO.reg[gk]={col,items:out,pref,manual:!!manual,mode};return out;}
@@ -302,7 +327,9 @@ function finChoose(title,msg,options){
     m.querySelector('#c0').onclick=()=>{m.remove();res(null);};
   });
 }
-Object.assign(ROH,{write:roWrite,scroller:()=>window,rerender:()=>render(),toast:finToast,choose:finChoose});
+Object.assign(ROH,{write:roWrite,scroller:()=>window,rerender:()=>render(),toast:finToast,choose:finChoose,
+  syncLoad:async()=>S.recs.find(r=>r.kind==='proposal'&&r.data&&r.data.cfg==='sortprefs')||null,
+  syncSave:async(rec,data)=>rec?await Api.update(rec,data):await Api.create('proposal',data)});
 
 const $=id=>document.getElementById(id);
 
@@ -749,6 +776,7 @@ function vHome(){
   h+=hasDemo()?'<button class="btn sec" data-act="demo-off">Apagar os exemplos de teste</button>':(S.recs.length?'':'<button class="btn sec" data-act="demo-on">Carregar exemplos de teste</button>');
   h+='<button class="btn" data-act="tab" data-v="stmt">📄 Extratos do banco</button>';
   h+='<button class="btn" data-act="chat">🤝 Chat financeiro</button>';
+  h+=fsBlock();
   h+=backupBlock();
   h+='<button class="btn sec" data-act="refresh">Atualizar</button><button class="btn sec" data-act="logout">Sair</button>';
   h+='<p class="hint" style="text-align:center"><a class="lnk" href="../">Abrir o Núcleo</a></p></div>';
@@ -1266,10 +1294,55 @@ function backupDays(){
   const ms=Date.now()-new Date(t).getTime(); if(isNaN(ms))return null;
   return Math.max(0,Math.floor(ms/86400000));
 }
+/* ---- backup automático (o servidor faz todo dia às 3h; aqui só mostra, faz na hora e baixa) ---- */
+const BK={msg:'Conferindo o backup automático…'};
+const bkWhen=iso=>{const d=new Date(iso),p2=x=>String(x).padStart(2,'0');return (isoDate(d)===isoDate(new Date())?'hoje':p2(d.getDate())+'/'+p2(d.getMonth()+1))+' às '+p2(d.getHours())+':'+p2(d.getMinutes());};
+async function bkRefresh(){
+  try{
+    const r=await Api.rest('backups?select=id,taken_at,n_items,motivo&order=taken_at.desc&limit=1');
+    if(!r.ok)throw new Error('erro '+r.status);
+    const l=(await r.json())[0];
+    BK.msg=l?'Último backup automático: '+bkWhen(l.taken_at)+' ('+l.n_items+' itens).':'Ainda não há backup automático. O primeiro é feito de madrugada.';
+  }catch(e){BK.msg='Não consegui conferir o backup agora. Veja a internet.';}
+  const el=document.getElementById('bkAuto');if(el)el.textContent=BK.msg;
+}
+async function bkNow(){
+  try{
+    const r=await Api.rest('rpc/backup_agora',{method:'POST',body:'{}'});
+    if(!r.ok)throw new Error('erro '+r.status);
+    finToast('Backup feito.');bkRefresh();
+  }catch(e){finToast('Não consegui fazer o backup agora.');}
+}
+async function bkDown(){
+  if(!await confirmBox('Baixar o último backup?',['Vai salvar um arquivo com os seus dados do Núcleo e do FIN.','Ele tem informação financeira: guarde em lugar seguro.'],'Sim, baixar'))return;
+  let b;
+  try{
+    const r=await Api.rest('backups?select=data,taken_at&order=taken_at.desc&limit=1');
+    if(!r.ok)throw new Error('erro '+r.status);
+    b=(await r.json())[0];
+  }catch(e){await info('Não consegui baixar','Sem internet ou o banco não respondeu. Nada foi alterado.');return;}
+  if(!b){await info('Ainda não há backup','O primeiro backup automático é feito de madrugada. Você pode tocar em Fazer backup agora.');return;}
+  const text=JSON.stringify(b.data,null,1),nome='FIN-Nucleo-backup-automatico-'+isoDate(new Date(b.taken_at))+'.json';
+  try{
+    const file=new File([text],nome,{type:'application/json'});
+    if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title:nome});}
+    else{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:'application/json'}));a.download=nome;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),4000);}
+  }catch(e){if(e&&e.name==='AbortError')return;await info('Não consegui salvar o arquivo','Tente de novo.');}
+}
+/* tamanho do texto (o mesmo do Núcleo: Normal 18, Grande 20, Maior 23, Máximo 26) */
+const FS_OPTS=[[18,'Normal'],[20,'Grande'],[23,'Maior'],[26,'Máximo']];
+const fsNow=()=>{const v=parseInt(lsGet('fin-fs')||'20',10);return FS_OPTS.some(o=>o[0]===v)?v:20;};
+function fsApply(){document.documentElement.style.fontSize=fsNow()+'px';}
+function fsBlock(){
+  const cur=fsNow();
+  return '<div class="card"><div class="row"><b>Tamanho do texto</b></div><div class="seg4">'+FS_OPTS.map(o=>'<button class="btn'+(cur===o[0]?'':' sec')+'" data-act="set-fs" data-v="'+o[0]+'" aria-pressed="'+(cur===o[0])+'">'+o[1]+'</button>').join('')+'</div><p class="hint">Fica guardado neste aparelho.</p></div>';
+}
 function backupBlock(){
   const d=backupDays();
   const aviso=d===null?'Você ainda não baixou nenhuma cópia dos seus dados.':(d>=7?'Faz '+d+' dias desde a última cópia. Baixe uma nova.':'Última cópia: há '+d+' dia(s).');
-  return '<button class="btn" data-act="backup">💾 Baixar cópia dos dados</button><p class="hint" style="text-align:center">'+esc(aviso)+'</p>';
+  setTimeout(bkRefresh,60);
+  return '<button class="btn" data-act="backup">💾 Baixar cópia dos dados</button><p class="hint" style="text-align:center">'+esc(aviso)+'</p>'
+    +'<p class="hint" style="text-align:center" id="bkAuto">'+esc(BK.msg)+'</p><button class="btn" data-act="bk-now">Fazer backup agora</button><button class="btn" data-act="bk-down">Baixar o último backup automático</button>';
 }
 async function baixarCopia(){
   if(!await confirmBox('Baixar uma cópia?',['Vai salvar um arquivo com todos os seus dados do FIN, inclusive os apagados.','Ele tem informação financeira: guarde em lugar seguro.'],'Sim, baixar'))return;
@@ -1470,6 +1543,9 @@ document.addEventListener('click',async ev=>{
     else if(k==='inv'){S.cardId=id;S.tab='cards';S.invYm=ym;render();window.scrollTo(0,0);}
     else if(k==='debt')debtPay(get(id),ym);
   }
+  else if(act==='set-fs'){lsSet('fin-fs',b.dataset.v);fsApply();render();}
+  else if(act==='bk-now')bkNow();
+  else if(act==='bk-down')bkDown();
   else if(act==='sort-open')sortOpenPage();
   else if(act==='bill-new')billForm(null);
   else if(act==='bill-edit')billForm(get(id));
@@ -1510,11 +1586,13 @@ function setupMissing(){
 }
 async function start(){
   try{S.sess=JSON.parse(lsGet('fin-sess')||'null');}catch(e){S.sess=null;}
+  fsApply();
   if(!S.sess){loginScreen();return;}
   try{const c=JSON.parse(lsGet('fin-cache')||'[]');if(Array.isArray(c))S.recs=c;}catch(e){}
   S.ready=true;render();
   try{
     await Api.load();
+    ordPull();
     await ensureMonth();
   }catch(e){
     if(e.status===401){loginScreen('Entre de novo.');return;}
@@ -1524,7 +1602,7 @@ async function start(){
   render();
 }
 if('serviceWorker' in navigator)addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
-document.addEventListener('visibilitychange',()=>{if(!document.hidden&&S.ready&&!document.querySelector('.modal')){Api.load().then(()=>{render();}).catch(()=>{});}});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&S.ready&&!document.querySelector('.modal')){Api.load().then(()=>{ordPull();render();}).catch(()=>{});}});
 roInit();
 start();
 </script>

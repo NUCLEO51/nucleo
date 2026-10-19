@@ -884,7 +884,7 @@ const S={tab:'lembretes',raw:{},reminders:[],notes:[],events:[],inbox:[],folders
   folder:null,rview:null,q:'',rq:'',sheet:null,rings:[],assetsOk:false,dlOk:false,bw:true,weekend:false,fired:{},fs:20,theme:'auto',conf:'all',purged:false,gq:'',nsOpen:false,nx:{},nn:{},lc:{}};
 const lsGet=k=>{try{return localStorage.getItem(k);}catch(e){return null;}};
 const lsSet=(k,v)=>{try{localStorage.setItem(k,v);}catch(e){}};
-const APP_V='v60';
+const APP_V='v61';
 const ERRLOG_KEY='nucleo-errlog';
 function logErr(where,e){try{const a=JSON.parse(localStorage.getItem(ERRLOG_KEY)||'[]');a.push({t:Date.now(),w:String(where).slice(0,40),m:String((e&&e.message)||e||'').slice(0,160)});while(a.length>30)a.shift();localStorage.setItem(ERRLOG_KEY,JSON.stringify(a));}catch(x){}}
 addEventListener('error',ev=>logErr('tela',ev.message||ev.error));
@@ -904,10 +904,34 @@ const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 /* ---------- ordenar e arrastar (tela): segurar um item e levar para onde quiser ---------- */
 const RO={reg:{},sel:null,timer:null,pend:null,drag:null,noClick:0,x0:0,y0:0};
-const ROH={write:async()=>{},scroller:()=>window,rerender:()=>{},toast:()=>{},choose:async()=>null};
+const ROH={write:async()=>{},scroller:()=>window,rerender:()=>{},toast:()=>{},choose:async()=>null,syncLoad:async()=>null,syncSave:async()=>null};
 const roPrefOf=gk=>String(gk).split('|')[0];
 function roPrefs(){try{return JSON.parse(localStorage.getItem('ord-sort')||'{}');}catch(e){return {};}}
-function roSetPref(p,m){const o=roPrefs();o[p]=m;try{localStorage.setItem('ord-sort',JSON.stringify(o));}catch(e){}}
+function roTimes(){try{return JSON.parse(localStorage.getItem('ord-sort-t')||'{}');}catch(e){return {};}}
+function roSetPref(p,m){const o=roPrefs(),t=roTimes();o[p]=m;t[p]=Date.now();try{localStorage.setItem('ord-sort',JSON.stringify(o));localStorage.setItem('ord-sort-t',JSON.stringify(t));}catch(e){}ordPush();}
+/* a escolha de ordem também vai para a nuvem (um registro de configuração), para valer em todos os aparelhos; vale a escolha mais nova */
+const ORS={rec:null,timer:null,busy:false};
+function ordPush(){clearTimeout(ORS.timer);ORS.timer=setTimeout(ordPushNow,1500);}
+async function ordPushNow(){
+  if(ORS.busy){ordPush();return;}
+  ORS.busy=true;
+  try{
+    const o=roPrefs(),t=roTimes(),prefs={};
+    Object.keys(t).forEach(k=>{if(o[k])prefs[k]={m:o[k],t:t[k]};});
+    ORS.rec=await ROH.syncSave(ORS.rec,{cfg:'sortprefs',prefs});
+  }catch(e){}
+  ORS.busy=false;
+}
+async function ordPull(){
+  try{
+    const rec=await ROH.syncLoad();if(rec)ORS.rec=rec;
+    const rem=(rec&&rec.data&&rec.data.prefs)||{},o=roPrefs(),t=roTimes();let ch=false,need=false;
+    Object.keys(rem).forEach(k=>{const rt=(rem[k]&&rem[k].t)||0;if(rt>(t[k]||0)){o[k]=rem[k].m;t[k]=rt;ch=true;}});
+    Object.keys(t).forEach(k=>{if(!rem[k]||(rem[k].t||0)<t[k])need=true;});
+    if(ch){try{localStorage.setItem('ord-sort',JSON.stringify(o));localStorage.setItem('ord-sort-t',JSON.stringify(t));}catch(e){}ROH.rerender();}
+    if(need)ordPush();
+  }catch(e){}
+}
 function roMode(pref,items,manual){let m=roPrefs()[pref];if(m==='man'&&!manual)m='def';return m||((manual&&items.some(hasOrd))?'man':'def');}
 /* ordena um grupo conforme a escolha (ou a ordem manual, se já existir) e registra o grupo para o arrastar */
 function ordSort(gk,col,items,g,manual){const pref=roPrefOf(gk),mode=roMode(pref,items,manual),out=mode==='def'?items:sortGroup(items,mode,g);RO.reg[gk]={col,items:out,pref,manual:!!manual,mode};return out;}
@@ -1016,6 +1040,27 @@ const GF={name:f=>f.name||'',date:f=>f.createdAt||0};
 const GL={name:l=>l.name||'',date:l=>l.createdAt||0};
 const GR={name:r=>r.title||'',date:r=>r.date?(+new Date(r.date+'T'+(r.time||'00:00')+':00')||0):0};
 const orderedKids=(pid,fm)=>ordSort('folders:'+pid,'folders',kids(pid,fm),GF,true);
+const ordRest=(path,opt)=>Supa.rest(path,opt);
+async function ordLoadN(){
+  const r=await ordRest('fin_records?select=id,version,data&kind=eq.proposal&data-%3E%3Ecfg=eq.sortprefs&deleted_at=is.null&order=created_at.asc&limit=1');
+  if(!r.ok)throw new Error('x');
+  return (await r.json())[0]||null;
+}
+async function ordSaveN(rec,data){
+  if(rec){
+    let cur=rec;
+    for(let i=0;i<2;i++){
+      const r=await ordRest('fin_records?id=eq.'+cur.id+'&version=eq.'+cur.version,{method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify({data})});
+      const j=r.ok?await r.json():[];
+      if(j.length)return j[0];
+      cur=await ordLoadN();if(!cur)break;
+    }
+    if(!cur)rec=null;else return cur;
+  }
+  const r=await ordRest('fin_records',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify({kind:'proposal',data})});
+  if(!r.ok)throw new Error('x');
+  return (await r.json())[0];
+}
 async function roWrite(col,ups){for(const u of ups){const it=(S[col]||[]).find(x=>x.id===u.id);if(it)await Store.put(col,Object.assign({},it,{ord:u.ord}));}}
 
 const $=id=>document.getElementById(id);
@@ -2994,9 +3039,12 @@ function sheetSaude(){
   const lb=parseInt(lsGet('nucleo-lastbackup')||'0',10);
   const dias=lb?Math.floor((Date.now()-lb)/864e5):-1;
   const bk=dias<0?'Você ainda não baixou nenhum backup neste aparelho.':(dias===0?'Último backup baixado: hoje.':'Último backup baixado: há '+dias+(dias===1?' dia.':' dias.'));
-  const bad=dias<0||dias>7;
+  const auto=parseInt(lsGet('nucleo-lastauto')||'0',10),autoOk=auto&&(Date.now()-auto)<2*864e5;
+  const bad=(dias<0||dias>7)&&!autoOk;
   let h='<div class="block"><span class="block-t">Saúde do app</span>';
   h+='<div class="note-s"'+(bad?' style="color:var(--danger);font-weight:700"':'')+'>'+esc(bk)+(bad?' Toque em “Exportar backup” mais abaixo e guarde o arquivo.':'')+'</div>';
+  h+='<div class="note-s" id="bkAuto">'+esc(BK.msg)+'</div><button class="btn wide" data-act="bk-now">Fazer backup agora</button><button class="btn wide" data-act="bk-down">Baixar o último backup automático</button>';
+  setTimeout(bkRefresh,60);
   h+='<div class="note-s">Versão do app: <b>'+esc(APP_V)+'</b><br>Problemas anotados: <b>'+el.length+'</b>';
   el.slice(-5).reverse().forEach(x=>{const d=new Date(x.t);h+='<br>• '+pad(d.getDate())+'/'+pad(d.getMonth()+1)+' '+pad(d.getHours())+':'+pad(d.getMinutes())+' — '+esc(x.w)+': '+esc(x.m);});
   h+='</div>';
@@ -3360,6 +3408,94 @@ async function openFile(f){
     const n=el.querySelector('.fv-none');if(n)n.innerHTML=perdido?'<b>Este arquivo não está mais guardado.</b><span class="note-s">Foi apagado do servidor. Toque em Editar, tire este arquivo e anexe de novo.</span>':'<b>Não consegui abrir o arquivo.</b><span class="note-s">Confira a internet e tente de novo.</span>';
   }
 }
+/* ---- backup automático (o servidor faz todo dia às 3h; aqui só mostra, faz na hora e baixa) ---- */
+const BK={msg:'Conferindo o backup automático…'};
+const bkWhen=iso=>{const d=new Date(iso);return (isoDate(d)===isoDate(new Date())?'hoje':pad(d.getDate())+'/'+pad(d.getMonth()+1))+' às '+pad(d.getHours())+':'+pad(d.getMinutes());};
+async function bkRefresh(){
+  try{
+    const r=await Supa.rest('backups?select=id,taken_at,n_items,motivo&order=taken_at.desc&limit=1');
+    if(!r.ok)throw new Error('erro '+r.status);
+    const l=(await r.json())[0];
+    BK.msg=l?'Último backup automático: '+bkWhen(l.taken_at)+' ('+l.n_items+' itens).':'Ainda não há backup automático. O primeiro é feito de madrugada.';
+    if(l)lsSet('nucleo-lastauto',String(new Date(l.taken_at).getTime()));
+  }catch(e){BK.msg='Não consegui conferir o backup agora. Veja a internet.';}
+  const el=document.getElementById('bkAuto');if(el)el.textContent=BK.msg;
+}
+async function bkNow(){
+  try{
+    const r=await Supa.rest('rpc/backup_agora',{method:'POST',body:'{}'});
+    if(!r.ok)throw new Error('erro '+r.status);
+    toast('Backup feito.');bkRefresh();
+  }catch(e){toast('Não consegui fazer o backup agora.');}
+}
+async function bkDown(){
+  let b;
+  try{
+    const r=await Supa.rest('backups?select=data,taken_at&order=taken_at.desc&limit=1');
+    if(!r.ok)throw new Error('erro '+r.status);
+    b=(await r.json())[0];
+  }catch(e){toast('Não consegui buscar o backup agora.');return;}
+  if(!b){toast('Ainda não há backup automático.');return;}
+  const text=JSON.stringify(b.data,null,2),name='nucleo-backup-automatico-'+isoDate(new Date(b.taken_at))+'.json';
+  const dl=await getDl();
+  try{
+    if(dl){await dl.save({filename:name,data:text});}
+    else{const u=URL.createObjectURL(new Blob([text],{type:'application/json'})),l=document.createElement('a');l.href=u;l.download=name;document.body.appendChild(l);l.click();l.remove();setTimeout(()=>URL.revokeObjectURL(u),4000);}
+    toast('Backup baixado.');
+  }catch(e){if(!e||e.code!=='declined')toast('Não foi possível salvar o backup.');}
+}
+/* ---- vencimentos das fichas: linhas "Vencimento…: dd/mm/aaaa" ou "Validade…: dd/mm/aaaa" viram lembrete 1 dia antes, às 09:00, com alarme ---- */
+const FIC_RE=/^\s*(?:[-*•]\s*)?((?:Vencimento|Validade|Vence)[^:\n]{0,40}):\s*(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})\b/i;
+const FIC_LIST='Vencimentos das fichas';
+function ficDates(note){
+  const out=[],seen={};
+  String(note.body||'').split('\n').forEach(line=>{
+    const m=FIC_RE.exec(line);if(!m)return;
+    const d=+m[2],mo=+m[3];let y=+m[4];if(y<100)y+=2000;
+    const dt=new Date(y,mo-1,d);if(dt.getFullYear()!==y||dt.getMonth()!==mo-1||dt.getDate()!==d)return;
+    const label=m[1].replace(/\s+/g,' ').trim(),key=label.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+    if(seen[key])return;seen[key]=1;
+    out.push({key,label,due:isoDate(dt)});
+  });
+  return out;
+}
+function ficWanted(today){
+  const want={};
+  S.notes.forEach(n=>{ficDates(n).forEach(f=>{
+    let rem=isoDate(new Date(new Date(f.due+'T12:00:00').getTime()-864e5));
+    if(rem<today&&f.due>=today)rem=f.due;
+    const p=f.due.split('-'),ref=n.id+'|'+f.key+'|'+f.due;
+    want[ref]={ref,due:f.due,date:rem,expired:f.due<today,title:(n.title||'Ficha')+' — '+f.label+' ('+p[2]+'/'+p[1]+'/'+p[0]+')'};
+  });});
+  return want;
+}
+let _ficBusy=false,_ficSig='';
+async function ficSync(force){
+  if(_ficBusy||!S.ready||Store.mode==='boot')return;
+  const today=isoDate(new Date()),want=ficWanted(today);
+  const sig=JSON.stringify(Object.keys(want).sort().map(k=>[k,want[k].title]))+'|'+S.reminders.filter(r=>r.ficRef).map(r=>r.id+r.title).join(',')+'|'+S.trash.filter(t=>t.c==='reminders'&&t.x.ficRef).length;
+  if(!force&&sig===_ficSig)return;
+  _ficBusy=true;
+  try{
+    const live={};S.reminders.filter(r=>r.ficRef).forEach(r=>{live[r.ficRef]=r;});
+    const gone=new Set(S.trash.filter(t=>t.c==='reminders'&&t.x.ficRef).map(t=>t.x.ficRef));
+    for(const ref of Object.keys(live)){if(!want[ref])await softDelete('reminders',live[ref]);}
+    const make=Object.keys(want).filter(k=>!live[k]&&!gone.has(k)&&!want[k].expired);
+    let listId='';
+    if(make.length){
+      const l=S.lists.find(x=>x.name===FIC_LIST&&!x.fin);
+      listId=l?l.id:await Store.put('lists',{name:FIC_LIST,color:LCOL[2],sections:[],createdAt:Date.now()});
+    }
+    for(const ref of make){
+      const w=want[ref];
+      await Store.put('reminders',Object.assign(newRem(w.date,listId),{title:w.title,time:'09:00',priority:2,alarms:[{min:0}],ficRef:ref,ficDue:w.due,notes:'Criado sozinho pela ficha. Se você mudar a data na ficha, este lembrete acompanha.'}));
+    }
+    for(const ref of Object.keys(live)){
+      const w=want[ref];if(w&&live[ref].title!==w.title)await Store.put('reminders',Object.assign({},live[ref],{title:w.title}));
+    }
+  }catch(e){logErr('fichas',e);}
+  _ficSig=sig;_ficBusy=false;
+}
 async function exportAll(){
   const dl=await getDl();
   const data=JSON.stringify({exportadoEm:new Date().toISOString(),lembretes:S.raw.reminders||[],listas:S.lists,notas:S.raw.notes||[],pastas:S.folders,compromissos:S.raw.events||[],caixaDeEntrada:S.inbox},null,2);
@@ -3505,6 +3641,8 @@ const A={
     await Store.put('notes',Object.assign(newNote(''),{title:(r.title||'').slice(0,60),body:r.notes||'',updatedAt:Date.now()}));await softDelete('reminders',r);},
   'new-folder':d=>openSheet('folder',{name:'',parent:d.parent||'',createdAt:Date.now()}),
   'edit-folder':d=>{const f=S.folders.find(x=>x.id===d.id);if(f)openSheet('folder',clone(f));},
+  'bk-now':()=>bkNow(),
+  'bk-down':()=>bkDown(),
   'sort-open':()=>sortOpenPage(),
   'fin-area-create':async()=>{
     await Store.put('lists',{name:'FIN — vencimentos',color:LCOL[3],sections:[],fin:true,createdAt:Date.now()});
@@ -3645,9 +3783,13 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden){checkAlar
 window.__nucleo={Store:Store,Supa:Supa,S:S};
 if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost')){addEventListener('load',()=>{navigator.serviceWorker.register('sw.js').catch(()=>{});});}
 /* gancho só para os testes (no uso normal a marca não existe) */
-try{if(window.__NUCLEO_TEST__)window.__NUCLEO_TEST__={ordSort,orderedKids,RO,roFind,roBegin,roMove,roEnd,roBtn,roSibs,roIds,sortOpenPage,roMode,fmtText,openScanner,handleScanFiles,Store,S,gsFind,gsBody,viewBusca,viewHoje,viewCaixa,viewNotas,planView,planBtn,smart,viewLembretes,Supa,SupaAssets,finSend,finCounts,dayCount};}catch(e){}
-Object.assign(ROH,{write:roWrite,scroller:()=>$('main'),rerender:render,toast:toast,choose:(title,msg,options)=>pickMove({title,msg,options})});
+try{if(window.__NUCLEO_TEST__)window.__NUCLEO_TEST__={Supa,ROH,roSetPref,roPrefs,roTimes,sheetSaude,ficSync,ficDates,ficWanted,bkRefresh,bkNow,bkDown,ordPull,ordPushNow,ORS,ordSort,orderedKids,RO,roFind,roBegin,roMove,roEnd,roBtn,roSibs,roIds,sortOpenPage,roMode,fmtText,openScanner,handleScanFiles,Store,S,gsFind,gsBody,viewBusca,viewHoje,viewCaixa,viewNotas,planView,planBtn,smart,viewLembretes,Supa,SupaAssets,finSend,finCounts,dayCount};}catch(e){}
+Object.assign(ROH,{write:roWrite,scroller:()=>$('main'),rerender:render,toast:toast,choose:(title,msg,options)=>pickMove({title,msg,options}),syncLoad:ordLoadN,syncSave:ordSaveN});
 roInit();
+setTimeout(ordPull,3000);
+setInterval(()=>ficSync(false),5000);
+let _ordLastPull=Date.now();
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&Date.now()-_ordLastPull>60000){_ordLastPull=Date.now();ordPull();}});
 buildTabs();render();Store.init();
 getAssets().then(a=>{S.assetsOk=!!a;});
 getDl().then(d=>{S.dlOk=!!d;});

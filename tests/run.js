@@ -904,4 +904,84 @@ global.__pend.push((async () => {
   t('o ícone do botão existe e não sobrou nenhuma barra larga "Ordem" em lugar nenhum', /<path d="M7 4v16M3.5 7.5 7 4l3.5 3.5M17 20V4M13.5 16.5 17 20l3.5-3.5"\/>/.test(doc.documentElement.outerHTML) && !doc.querySelector('.sortbar'), true);
   ev(`const S=__NUCLEO_TEST__.S;S.sheet=null;S.tab='hoje';S.rview=null;S.folder=null;S.lists=[];S.folders=[];S.notes=[];S.raw={reminders:[],lists:[],notes:[],folders:[],events:[],inbox:[]};S.conf='all';`);
 })());
+
+// --- Backup no app, ordem sincronizada e vencimentos das fichas (v61) ---
+const __prevP9 = Promise.all((global.__pend || []).slice());
+global.__pend.push((async () => {
+  await __prevP9;
+  const doc = w.document, wait = ms => new Promise(r => setTimeout(r, ms)), TT = w.__NUCLEO_TEST__;
+  // ---------- backup automático ----------
+  ev(`window.__rest=[];Supa.rest=async(p,o)=>{window.__rest.push([p,(o&&o.method)||'GET']);
+    if(/backups\\?select=id/.test(p))return {ok:true,json:async()=>[{id:'b1',taken_at:new Date().toISOString(),n_items:78,motivo:'diario'}]};
+    if(/rpc\\/backup_agora/.test(p))return {ok:true,json:async()=>'x'};
+    if(/backups\\?select=data/.test(p))return {ok:true,json:async()=>[{data:{lembretes:[],notas:[],fin:[]},taken_at:new Date().toISOString()}]};
+    return {ok:true,json:async()=>[]};};`.replace('Supa.rest', '__NUCLEO_TEST__.Supa.rest'));
+  const sx = TT.sheetSaude();
+  t('Ajustes › Saúde do app: mostra o status do backup automático e os botões Fazer backup agora e Baixar o último', /id="bkAuto"/.test(sx) && /data-act="bk-now"/.test(sx) && /data-act="bk-down"/.test(sx), true);
+  const holder = doc.createElement('div'); holder.id = 'bkAuto'; doc.body.appendChild(holder);
+  await TT.bkRefresh();
+  t('o status mostra a hora do último backup automático e quantos itens', /Último backup automático: hoje às \d\d:\d\d \(78 itens\)\./.test(holder.textContent), true);
+  await TT.bkNow(); await wait(30);
+  t('Fazer backup agora chama o servidor (backup_agora) e depois confere o status de novo', ev(`window.__rest.some(x=>/rpc\\/backup_agora/.test(x[0])&&x[1]==='POST')`) === true, true);
+  let baixou = null;
+  w.URL.createObjectURL = () => 'blob:teste'; w.URL.revokeObjectURL = () => {};
+  const clickOrig = w.HTMLAnchorElement.prototype.click; w.HTMLAnchorElement.prototype.click = function () { baixou = this.download; };
+  await TT.bkDown(); await wait(30);
+  w.HTMLAnchorElement.prototype.click = clickOrig;
+  t('Baixar o último backup automático gera um arquivo .json com a data do backup', /^nucleo-backup-automatico-\d{4}-\d\d-\d\d\.json$/.test(baixou || ''), true);
+  holder.remove();
+  // ---------- ordem sincronizada ----------
+  try { w.localStorage.removeItem('ord-sort'); w.localStorage.removeItem('ord-sort-t'); } catch (e) {}
+  ev(`window.__saves=[];window.__remoto=null;__NUCLEO_TEST__.ROH.syncSave=async(rec,data)=>{window.__saves.push(data);return {id:'cfg1',version:(rec?rec.version:0)+1,data};};
+     __NUCLEO_TEST__.ROH.syncLoad=async()=>window.__remoto;`);
+  ev(`__NUCLEO_TEST__.roSetPref('notes:abc','az')`);
+  await wait(1700);
+  const sv = ev('window.__saves[window.__saves.length-1]');
+  t('escolher uma ordem manda a escolha para a nuvem (registro de configuração com a data da escolha)', sv && sv.cfg === 'sortprefs' && sv.prefs['notes:abc'].m === 'az' && typeof sv.prefs['notes:abc'].t === 'number', true);
+  try { w.localStorage.removeItem('ord-sort'); w.localStorage.removeItem('ord-sort-t'); } catch (e) {}
+  ev(`window.__remoto={id:'cfg1',version:3,data:{cfg:'sortprefs',prefs:{'notes:xyz':{m:'za',t:Date.now()+5000}}}};`);
+  await TT.ordPull();
+  t('em outro aparelho: a escolha guardada na nuvem passa a valer aqui', ev(`__NUCLEO_TEST__.roPrefs()['notes:xyz']`), 'za');
+  ev(`window.__saves=[];__NUCLEO_TEST__.roSetPref('notes:xyz','man');`);
+  await wait(1700);
+  ev(`window.__remoto={id:'cfg1',version:4,data:{cfg:'sortprefs',prefs:{'notes:xyz':{m:'az',t:1000}}}};`);
+  await TT.ordPull(); await wait(1700);
+  t('a escolha mais nova ganha: a daqui (mais nova) não é trocada pela velha da nuvem, e é reenviada', ev(`__NUCLEO_TEST__.roPrefs()['notes:xyz']`) === 'man' && ev('window.__saves.length') >= 1, true);
+  try { w.localStorage.removeItem('ord-sort'); w.localStorage.removeItem('ord-sort-t'); } catch (e) {}
+  // ---------- vencimentos das fichas ----------
+  const ds = ev(`__NUCLEO_TEST__.ficDates({body:'# Dados\\n- Vencimento do IPVA: 20/11/2030\\n- Validade da CNH: 5/3/31\\n- Seguro: 10/10/2030\\n- Vencimento do licenciamento: 31/02/2030\\n- Vence: 01.12.2030\\n- Vencimento do IPVA: 21/11/2030'})`);
+  t('fichas: lê "Vencimento…" e "Validade…" com data (ano de 2 dígitos vale, data impossível e outros campos não, repetido só conta uma vez)', Array.from(ds).map(x => x.label + '=' + x.due).join('|') === 'Vencimento do IPVA=2030-11-20|Validade da CNH=2031-03-05|Vence=2030-12-01', true);
+  ev(`const S=__NUCLEO_TEST__.S;S.ready=true;S.lists=[];S.raw.lists=[];S.reminders=[];S.raw.reminders=[];S.trash=[];
+     S.raw.notes=[{id:'f1',title:'Jeep',body:'# Vencimentos\\n- Vencimento do IPVA: 20/11/2030\\n- Seguro: ',folder:'',kind:'nota',checklist:[],files:[],images:[],createdAt:1}];S.notes=S.raw.notes.slice();`);
+  const wn = ev(`__NUCLEO_TEST__.ficWanted('2026-10-18')`);
+  const k0 = Object.keys(wn)[0];
+  t('fichas: o lembrete é 1 dia antes do vencimento e o título diz de qual ficha e campo', wn[k0] && wn[k0].date === '2030-11-19' && wn[k0].title === 'Jeep — Vencimento do IPVA (20/11/2030)', true);
+  const hoje = ev(`isoDate(new Date())`);
+  ev(`__NUCLEO_TEST__.S.notes[0].body='- Vencimento do IPVA: '+(function(){const d=new Date();return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear();})();`);
+  const w2 = ev(`__NUCLEO_TEST__.ficWanted(isoDate(new Date()))`);
+  t('fichas: vence hoje: o lembrete é para hoje (não fica no passado)', w2[Object.keys(w2)[0]].date === hoje, true);
+  ev(`const S=__NUCLEO_TEST__.S;S.raw.notes[0].body='# Vencimentos\\n- Vencimento do IPVA: 20/11/2030\\n- Seguro: ';S.notes=S.raw.notes.slice();`);
+  await TT.ficSync(true); await wait(30);
+  const rs = ev(`__NUCLEO_TEST__.S.reminders.filter(r=>r.ficRef)`);
+  const lst = ev(`__NUCLEO_TEST__.S.lists.filter(l=>l.name==='Vencimentos das fichas')`);
+  t('fichas: cria a lista "Vencimentos das fichas" e 1 lembrete às 09:00, com alarme na hora e prioridade média', lst.length === 1 && rs.length === 1 && rs[0].date === '2030-11-19' && rs[0].time === '09:00' && rs[0].alarms[0].min === 0 && rs[0].priority === 2 && rs[0].list === lst[0].id && rs[0].done === false, true);
+  await TT.ficSync(true); await wait(30);
+  t('fichas: rodar de novo não duplica nada', ev(`__NUCLEO_TEST__.S.reminders.filter(r=>r.ficRef).length`) === 1 && ev(`__NUCLEO_TEST__.S.lists.filter(l=>l.name==='Vencimentos das fichas').length`) === 1, true);
+  ev(`const S=__NUCLEO_TEST__.S;S.raw.notes[0].body='- Vencimento do IPVA: 25/11/2030';S.notes=S.raw.notes.slice();`);
+  await TT.ficSync(true); await wait(30);
+  const r2 = ev(`__NUCLEO_TEST__.S.reminders.filter(r=>r.ficRef)`);
+  t('fichas: mudou a data na ficha: o lembrete antigo vai para a lixeira e nasce o novo (24/11)', r2.length === 1 && r2[0].date === '2030-11-24' && ev(`__NUCLEO_TEST__.S.trash.filter(t=>t.c==='reminders'&&t.x.ficRef).length`) === 1, true);
+  ev(`const S=__NUCLEO_TEST__.S;S.raw.reminders.forEach(r=>{if(r.ficRef)r.deletedAt=Date.now();});`);
+  ev(`__NUCLEO_TEST__.S.raw.reminders=__NUCLEO_TEST__.S.raw.reminders.slice();`);
+  t('(preparação) o lembrete da ficha foi apagado à mão', true, true);
+  ev(`const S=__NUCLEO_TEST__.S;S.reminders=S.raw.reminders.filter(x=>!x.deletedAt);S.trash=S.raw.reminders.filter(x=>x.deletedAt).map(x=>({c:'reminders',x}));`);
+  await TT.ficSync(true); await wait(30);
+  t('fichas: se você apagou o lembrete de propósito, ele não é recriado', ev(`__NUCLEO_TEST__.S.reminders.filter(r=>r.ficRef&&r.ficDue==='2030-11-25').length`), 0);
+  ev(`const S=__NUCLEO_TEST__.S;S.raw.notes[0].body='# Vencimentos\\n- Seguro: ';S.notes=S.raw.notes.slice();`);
+  await TT.ficSync(true); await wait(30);
+  ev(`const S=__NUCLEO_TEST__.S;S.raw.notes[0].body='- Vencimento do IPVA: 10/01/2020';S.notes=S.raw.notes.slice();`);
+  await TT.ficSync(true); await wait(30);
+  t('fichas: data já vencida há tempo não cria lembrete novo', ev(`__NUCLEO_TEST__.S.reminders.filter(r=>r.ficRef&&r.ficDue==='2020-01-10').length`), 0);
+  ev(`const S=__NUCLEO_TEST__.S;S.lists=[];S.raw.lists=[];S.reminders=[];S.raw.reminders=[];S.trash=[];S.raw.notes=[];S.notes=[];`);
+})());
 Promise.all(global.__pend || []).then(() => { console.log(ok + ' ok, ' + bad + ' falhas'); process.exit(bad ? 1 : 0); });
