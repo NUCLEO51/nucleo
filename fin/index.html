@@ -310,6 +310,52 @@ function lkInit(){
   addEventListener('pagehide',()=>lkTouch());
 }
 
+/* ---------- desfazer discreto: nenhum aviso na tela; um botão redondo só aparece quando há o que desfazer ---------- */
+const U={stack:[],grp:null,tm:null,mute:0,userAt:0};
+const UKIND={debt:'dívida',card:'cartão',bill:'conta',billmonth:'conta do mês',charge:'compra no cartão',invpay:'pagamento de fatura',proposal:'pendente'};
+const uStrip=d=>{const c=Object.assign({},d||{});delete c.ord;return JSON.stringify(c);};
+const uName=d=>(d&&(d.creditor||d.name||d.desc||d.text))||'';
+function undoLabel(chs){
+  const x=chs[0],nm=UKIND[x.kind]||'item',t=uName(x.before)||uName(x.after),q=t?' «'+String(t).slice(0,40)+'»':'';
+  if(x.op==='remove')return chs.length>1?'Apagar '+chs.length+' itens':'Apagar '+nm+q;
+  if(chs.every(y=>uStrip(y.before)===uStrip(y.after)))return 'Mudar a ordem';
+  const b=x.before||{},a=x.after||{};
+  if(x.kind==='billmonth'&&!!b.paidAt!==!!a.paidAt)return (a.paidAt?'Marcar como paga':'Desmarcar paga')+' a conta';
+  if(x.kind==='debt'&&(b.paidYm||[]).length!==(a.paidYm||[]).length)return ((a.paidYm||[]).length>(b.paidYm||[]).length?'Marcar parcela como paga':'Desmarcar parcela')+q;
+  return 'Editar '+nm+q;
+}
+function undoFlush(){
+  const g=U.grp;U.grp=null;if(!g)return;
+  const chs=g.chs.filter(c=>c.op==='remove'||JSON.stringify(c.before)!==JSON.stringify(c.after));
+  if(!chs.length)return;
+  U.stack.push({label:undoLabel(chs),chs});if(U.stack.length>12)U.stack.shift();
+  undoPaint();
+}
+function undoNote(op,rec,after){
+  if(U.mute||Date.now()-U.userAt>4000||!rec)return;
+  (U.grp=U.grp||{chs:[]}).chs.push({op,id:rec.id,kind:rec.kind,before:JSON.parse(JSON.stringify(rec.data)),after:after?JSON.parse(JSON.stringify(after)):null});
+  clearTimeout(U.tm);U.tm=setTimeout(undoFlush,350);
+}
+function undoPaint(){
+  const top=U.stack[U.stack.length-1];
+  document.querySelectorAll('[data-undobtn]').forEach(b=>{b.style.display=top?'':'none';b.setAttribute('aria-label','Desfazer: '+(top?top.label:''));});
+}
+async function undoDo(){
+  const e=U.stack[U.stack.length-1];if(!e)return;
+  if(!await confirmBox('Desfazer?',[e.label+'.'],'Desfazer'))return;
+  U.stack.pop();U.mute++;
+  try{
+    for(const ch of e.chs.slice().reverse()){
+      if(ch.op==='remove')await Api.undelete(ch.id,ch.before);
+      else{const cur=S.recs.find(x=>x.id===ch.id);if(cur)await Api.update(cur,ch.before);}
+    }
+    finToast('Desfeito.');
+  }catch(err){finToast('Não consegui desfazer.');}
+  finally{U.mute--;}
+  undoPaint();render();
+}
+const undoBtn=()=>'<button class="ibtn" data-act="undo" data-undobtn="1" aria-label="Desfazer" style="display:none">↶</button>';
+['pointerdown','touchend','click','keydown'].forEach(e=>addEventListener(e,()=>{U.userAt=Date.now();},true));
 /* ---------- ordenar e arrastar (tela): segurar um item e levar para onde quiser ---------- */
 const RO={reg:{},sel:null,timer:null,pend:null,drag:null,noClick:0,x0:0,y0:0};
 const ROH={write:async()=>{},scroller:()=>window,rerender:()=>{},toast:()=>{},choose:async()=>null,syncLoad:async()=>null,syncSave:async()=>null};
@@ -416,6 +462,7 @@ async function roEnd(){
 }
 /* depois de redesenhar a tela: o item escolhido continua em destaque (ou a barra some se ele não está mais ali) */
 function roAfterRender(){
+  if(typeof undoPaint==='function')undoPaint();
   /* o botão redondo de ordem tem a cor padrão; some quando a tela não tem o que ordenar */
   const regs=Object.keys(RO.reg).map(k=>RO.reg[k]);
   document.querySelectorAll('[data-sortbtn]').forEach(b=>{b.style.display=regs.length?'':'none';});
@@ -442,7 +489,7 @@ function roInit(){
   document.addEventListener('contextmenu',e=>{if(RO.pend||RO.drag)e.preventDefault();});
 }
 
-const sortBtn=()=>'<button class="ibtn" data-act="sort-open" data-sortbtn="1" aria-label="Ordenar">↕</button>';
+const sortBtn=()=>undoBtn()+'<button class="ibtn" data-act="sort-open" data-sortbtn="1" aria-label="Ordenar">↕</button>';
 const GD={name:d=>d.data.creditor||'',date:d=>{const dt=debtNext(d.data,true);return dt?+new Date(dt+'T12:00:00'):0;}};
 const GC={name:c=>c.data.name||'',date:c=>+c.data.dueDay||0};
 const GB={name:b=>b.data.name||'',date:b=>+b.data.dueDay||0};
@@ -468,7 +515,7 @@ function finChoose(title,msg,options){
 Object.assign(LKH,{app:'FIN',toast:finToast,rerender:()=>render()});
 Object.assign(ROH,{write:roWrite,scroller:()=>window,rerender:()=>render(),toast:finToast,choose:finChoose,
   syncLoad:async()=>S.recs.find(r=>r.kind==='proposal'&&r.data&&r.data.cfg==='sortprefs')||null,
-  syncSave:async(rec,data)=>rec?await Api.update(rec,data):await Api.create('proposal',data)});
+  syncSave:async(rec,data)=>{U.mute++;try{return rec?await Api.update(rec,data):await Api.create('proposal',data);}finally{U.mute--;}}});
 
 const $=id=>document.getElementById(id);
 
@@ -552,13 +599,20 @@ const Api={
     const j=await r.json(); S.recs.push(j[0]); lsSet('fin-cache',JSON.stringify(S.recs)); if(kind==='debt')finSyncSoon(true); return j[0];
   },
   async update(rec,data){
+    undoNote('update',rec,data);
     const r=await this.rest('fin_records?id=eq.'+rec.id+'&version=eq.'+rec.version,{method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify({data})});
     if(!r.ok)throw new Error('Não consegui salvar ('+r.status+').');
     const j=await r.json();
     if(!j.length){await this.load();throw new Error('Este item mudou em outro aparelho. Atualizei a tela. Tente de novo.');}
     const i=S.recs.findIndex(x=>x.id===rec.id); if(i>=0)S.recs[i]=j[0]; lsSet('fin-cache',JSON.stringify(S.recs)); if(rec.kind==='debt')finSyncSoon(true); return j[0];
   },
+  async undelete(id,data){
+    const r=await this.rest('fin_records?id=eq.'+id,{method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify({deleted_at:null,data})});
+    if(!r.ok)throw new Error('Não consegui desfazer ('+r.status+').');
+    await this.load();
+  },
   async remove(rec){
+    undoNote('remove',rec,null);
     const r=await this.rest('fin_records?id=eq.'+rec.id+'&version=eq.'+rec.version,{method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify({deleted_at:new Date().toISOString()})});
     if(!r.ok)throw new Error('Não consegui apagar ('+r.status+').');
     const j=await r.json();
@@ -1683,6 +1737,7 @@ document.addEventListener('click',async ev=>{
     else if(k==='inv'){S.cardId=id;S.tab='cards';S.invYm=ym;render();window.scrollTo(0,0);}
     else if(k==='debt')debtPay(get(id),ym);
   }
+  else if(act==='undo')undoDo();
   else if(act.indexOf('lk-')===0)lkAct(act);
   else if(act==='set-fs'){lsSet('fin-fs',b.dataset.v);fsApply();render();}
   else if(act==='bk-now')bkNow();

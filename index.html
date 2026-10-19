@@ -419,6 +419,9 @@ html.lk-on body>*:not(#lock){visibility:hidden}
 #lock .lk-pad button.lk-ft{background:transparent;font-size:1.05rem;color:var(--accent,#FFD60A)}
 #lock .lk-link{background:transparent;border:0;color:var(--accent,#FFD60A);font:inherit;font-size:1.1rem;font-weight:700;padding:.8rem;cursor:pointer}
 #lock .lk-big{width:100%;min-height:3.6rem;border:0;border-radius:1.1rem;background:var(--accent,#FFD60A);color:#000;font:inherit;font-size:1.15rem;font-weight:800;cursor:pointer}
+.hd h1{white-space:nowrap}
+.hd-r:has(> .iconbtn:nth-child(5)){gap:.3rem}
+.hd-r:has(> .iconbtn:nth-child(5)) > .iconbtn{width:2.3rem;height:2.3rem}
 .sortbar{display:flex;align-items:center;gap:.5rem;width:100%;margin:.5rem 0;padding:.65rem .9rem;border:0;border-radius:.9rem;background:var(--surface-2);color:var(--fg);font:inherit;font-size:1rem;font-weight:600;cursor:pointer;text-align:left}
 .sortbar b{color:var(--accent)}
 [data-rid]{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
@@ -903,7 +906,7 @@ const S={tab:'lembretes',raw:{},reminders:[],notes:[],events:[],inbox:[],folders
   folder:null,rview:null,q:'',rq:'',sheet:null,rings:[],assetsOk:false,dlOk:false,bw:true,weekend:false,fired:{},fs:20,theme:'auto',conf:'all',purged:false,gq:'',nsOpen:false,nx:{},nn:{},lc:{}};
 const lsGet=k=>{try{return localStorage.getItem(k);}catch(e){return null;}};
 const lsSet=(k,v)=>{try{localStorage.setItem(k,v);}catch(e){}};
-const APP_V='v63';
+const APP_V='v64';
 const ERRLOG_KEY='nucleo-errlog';
 function logErr(where,e){try{const a=JSON.parse(localStorage.getItem(ERRLOG_KEY)||'[]');a.push({t:Date.now(),w:String(where).slice(0,40),m:String((e&&e.message)||e||'').slice(0,160)});while(a.length>30)a.shift();localStorage.setItem(ERRLOG_KEY,JSON.stringify(a));}catch(x){}}
 addEventListener('error',ev=>logErr('tela',ev.message||ev.error));
@@ -1046,6 +1049,49 @@ function lkInit(){
   addEventListener('pagehide',()=>lkTouch());
 }
 
+/* ---------- desfazer discreto: nenhum aviso na tela; um botão redondo só aparece quando há o que desfazer ---------- */
+const U={stack:[],grp:null,tm:null,mute:0,userAt:0};
+const UKIND={reminders:'lembrete',notes:'nota',lists:'lista',folders:'pasta',events:'compromisso',inbox:'item da caixa de entrada'};
+const uStrip=o=>{const c=Object.assign({},o);delete c.updatedAt;delete c.ord;delete c.version;return JSON.stringify(c);};
+function undoLabel(chs){
+  const x=chs[0],b=x.before,a=x.after||{},t=a.title||a.name||b.title||b.name||'',nm=UKIND[x.c]||'item',q=t?' «'+t+'»':'';
+  if(chs.every(y=>y.after&&uStrip(y.before)===uStrip(y.after)))return 'Mudar a ordem';
+  const dels=chs.filter(y=>y.after&&y.after.deletedAt&&!y.before.deletedAt);
+  if(dels.length>1&&dels.length===chs.length)return 'Apagar '+dels.length+' itens';
+  if(a.deletedAt&&!b.deletedAt)return 'Apagar '+nm+q;
+  if(!a.deletedAt&&b.deletedAt)return 'Restaurar '+nm+q;
+  if(x.c==='reminders'&&!!b.done!==!!a.done)return (a.done?'Concluir':'Reabrir')+' lembrete'+q;
+  if(x.c==='reminders'&&b.list!==a.list)return 'Mover lembrete'+q;
+  if(x.c==='notes'&&b.folder!==a.folder)return 'Mover nota'+q;
+  return 'Editar '+nm+q;
+}
+function undoFlush(){
+  const g=U.grp;U.grp=null;if(!g)return;
+  const chs=g.chs.filter(c=>JSON.stringify(c.before)!==JSON.stringify(c.after));
+  if(!chs.length)return;
+  U.stack.push({label:undoLabel(chs),chs});if(U.stack.length>12)U.stack.shift();
+  undoPaint();
+}
+function undoNote(c,id,before,after){
+  if(U.mute||Date.now()-U.userAt>4000||!before)return;
+  (U.grp=U.grp||{chs:[]}).chs.push({c,id,before:clone(before),after:after?clone(after):null});
+  clearTimeout(U.tm);U.tm=setTimeout(undoFlush,350);
+}
+function undoPaint(){
+  const top=U.stack[U.stack.length-1];
+  document.querySelectorAll('[data-undobtn]').forEach(b=>{b.style.display=top?'':'none';b.setAttribute('aria-label','Desfazer: '+(top?top.label:''));});
+}
+async function undoDo(){
+  const e=U.stack[U.stack.length-1];if(!e)return;
+  if(!await ask({title:'Desfazer?',msg:e.label+'.',ok:'Desfazer',cancel:'Agora não'}))return;
+  U.stack.pop();U.mute++;
+  try{for(const ch of e.chs.slice().reverse())await Store.put(ch.c,ch.before);}
+  catch(err){logErr('desfazer',err);toast('Não consegui desfazer.');}
+  finally{U.mute--;}
+  toast('Desfeito.');undoPaint();
+}
+const undoBtn=()=>'<button class="iconbtn" data-act="undo" data-undobtn="1" aria-label="Desfazer" style="display:none">'+ic('undo',1.2,2.2)+'</button>';
+['pointerdown','touchend','click','keydown'].forEach(e=>addEventListener(e,()=>{U.userAt=Date.now();},true));
 /* ---------- ordenar e arrastar (tela): segurar um item e levar para onde quiser ---------- */
 const RO={reg:{},sel:null,timer:null,pend:null,drag:null,noClick:0,x0:0,y0:0};
 const ROH={write:async()=>{},scroller:()=>window,rerender:()=>{},toast:()=>{},choose:async()=>null,syncLoad:async()=>null,syncSave:async()=>null};
@@ -1152,6 +1198,7 @@ async function roEnd(){
 }
 /* depois de redesenhar a tela: o item escolhido continua em destaque (ou a barra some se ele não está mais ali) */
 function roAfterRender(){
+  if(typeof undoPaint==='function')undoPaint();
   /* o botão redondo de ordem tem a cor dos outros; some quando a tela não tem o que ordenar */
   const regs=Object.keys(RO.reg).map(k=>RO.reg[k]);
   document.querySelectorAll('[data-sortbtn]').forEach(b=>{b.style.display=regs.length?'':'none';});
@@ -1221,6 +1268,7 @@ const P={
   bell:'<path d="M6 16V11a6 6 0 1112 0v5l1.5 2h-15z"/><path d="M10 21h4"/>',
   scan:'<path d="M4 8V5h3M17 5h3v3M20 16v3h-3M7 19H4v-3"/><path d="M4 12h16"/>',
   eye:'<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+  undo:'<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>',
   sort:'<path d="M7 4v16M3.5 7.5 7 4l3.5 3.5M17 20V4M13.5 16.5 17 20l3.5-3.5"/>',
   eyeoff:'<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/><path d="M4 4l16 16"/>',
   noteplus:'<path d="M6 3h9l4 4v14H6z"/><path d="M12.5 11v6M9.5 14h6"/>',
@@ -1512,6 +1560,7 @@ const Store={
   saveLocal(){const o={};COLS.forEach(c=>o[c]=S.raw[c]||[]);lsSet(LS,JSON.stringify(o));},
   async put(c,obj){
     const id=obj.id||uid();
+    if(obj.id)undoNote(c,id,(S.raw[c]||[]).find(x=>x.id===obj.id),obj);
     const data=clone(obj);
     delete data.id;
     if(this.mode==='supa'){Supa.apply(c,id,data);return id;}
@@ -1988,7 +2037,7 @@ function triCur(){const left=triItems().filter(x=>!(S.triSkip||{})[x.k+x.id]);re
 function viewHoje(){
   const now=new Date(),today=isoDate(now),sm=smart();
   const ag=agendaItems(today).filter(x=>x.kind==='ev');
-  let h=hdrHoje(DOWF[now.getDay()],now.getDate()+' de '+MESES[now.getMonth()],searchBtn()+speakBtn('speak-day','Ouvir meu dia')+timerBtn());
+  let h=hdrHoje(DOWF[now.getDay()],now.getDate()+' de '+MESES[now.getMonth()],undoBtn()+searchBtn()+speakBtn('speak-day','Ouvir meu dia')+timerBtn());
   if(!S.ready)return h+'<div class="empty">Carregando…</div>';
   const nLate=sm.late.length;
   h+='<div class="tiles">'+
@@ -2084,7 +2133,7 @@ function planBody(ws,today){
 function remHome(){
   const sm=smart(),lm=lmap(),today=isoDate(new Date()),ws=S.weekStart;
   const cur=isoDate(ws)===isoDate(mondayOf(new Date()));
-  let h=hdr('Lembretes e planner','Lembretes',sortBtn());
+  let h=hdr('Lembretes e planner','Lembretes',undoBtn()+sortBtn());
   h+='<div class="search">'+ic('search',1.05,2.2)+'<label for="rq" class="sr">Buscar lembretes</label><input id="rq" type="search" placeholder="Buscar lembretes" value="'+esc(S.rq)+'" autocomplete="off"></div>';
   h+='<div id="remBody">'+remHomeBody(sm,lm,today,ws,cur)+'</div>';
   return h;
@@ -2181,7 +2230,7 @@ function remSub(){
     h+='<div class="notes-tools">'
       +'<button class="iconbtn" data-act="new-rem" data-list="'+esc(id)+'" aria-label="Novo lembrete">'+ic('plus',1.2,2.4)+'</button>'
       +'<button class="iconbtn'+(hd?' on':'')+'" data-act="toggle-done-list" data-id="'+esc(id)+'" aria-pressed="'+hd+'" aria-label="'+(hd?'Mostrar':'Ocultar')+' concluídos ('+done.length+')">'+ic(hd?'eyeoff':'eye',1.2,2.2)+'</button>'
-      +sortBtn()
+      +undoBtn()+sortBtn()
       +(real?'<button class="iconbtn" data-act="edit-list" data-id="'+esc(id)+'" aria-label="Renomear, cor, seções ou apagar lista">'+ic('edit',1.1,2.2)+'</button>':'')
       +'</div>';
     const secs=real?(l.sections||[]).filter(x=>(x.t||'').trim()):[];
@@ -2365,14 +2414,14 @@ function viewNotas(){
   const fm=fmap(),cf=curFolder();
   if(cf==='v:trash')return trashView(['notes'],'Pastas','folder-back');
   let h='',ph='Buscar em todas as notas';
-  if(cf===null)h+=hdr('','Notas',sortBtn())+'<div class="notes-tools">'+notesTools('',{})+'</div>';
+  if(cf===null)h+=hdr('','Notas',undoBtn()+sortBtn())+'<div class="notes-tools">'+notesTools('',{})+'</div>';
   else{
     const isTag=cf.indexOf('t:')===0,real=cf&&cf.indexOf('v:')!==0&&!isTag,f=real?fm[cf]:null,par=real?parentOf(f,fm):'';
     const backTo=par?(fm[par].name||'Sem nome'):'Pastas';
     const edit=real?'<button class="iconbtn" data-act="edit-folder" data-id="'+esc(cf)+'" aria-label="Renomear, mover ou apagar pasta">'+ic('edit',1.1,2.2)+'</button>':'';
     const into0=cf&&cf.indexOf('v:')!==0&&cf.indexOf('t:')!==0?cf:'';
     ph='Buscar em '+scopeName(cf,fm);
-    h+=subHdr(backTo,'folder-back',par?pathOf(par,fm).join(' › '):(isTag?'Etiqueta':''),real?(f.name||'Sem nome'):(isTag?'#'+cf.slice(2):NVN[cf]));
+    h+=subHdr(backTo,'folder-back',par?pathOf(par,fm).join(' › '):(isTag?'Etiqueta':''),real?(f.name||'Sem nome'):(isTag?'#'+cf.slice(2):NVN[cf]),undoBtn());
     const tl=notesTools(into0,{sub:!!real})+sortBtn()+edit;
     h+='<div class="notes-tools'+((tl.match(/class="iconbtn/g)||[]).length>=7?' dense':'')+'">'+tl+'</div>';
   }
@@ -3636,6 +3685,10 @@ function ficWanted(today){
 let _ficBusy=false,_ficSig='';
 async function ficSync(force){
   if(_ficBusy||!S.ready||Store.mode==='boot')return;
+  U.mute++;
+  try{await ficSync2(force);}finally{U.mute--;}
+}
+async function ficSync2(force){
   const today=isoDate(new Date()),want=ficWanted(today);
   const sig=JSON.stringify(Object.keys(want).sort().map(k=>[k,want[k].title]))+'|'+S.reminders.filter(r=>r.ficRef).map(r=>r.id+r.title).join(',')+'|'+S.trash.filter(t=>t.c==='reminders'&&t.x.ficRef).length;
   if(!force&&sig===_ficSig)return;
@@ -3805,6 +3858,7 @@ const A={
     await Store.put('notes',Object.assign(newNote(''),{title:(r.title||'').slice(0,60),body:r.notes||'',updatedAt:Date.now()}));await softDelete('reminders',r);},
   'new-folder':d=>openSheet('folder',{name:'',parent:d.parent||'',createdAt:Date.now()}),
   'edit-folder':d=>{const f=S.folders.find(x=>x.id===d.id);if(f)openSheet('folder',clone(f));},
+  'undo':()=>undoDo(),
   'lk-new':()=>lkAct('lk-new'),
   'lk-change':()=>lkAct('lk-change'),
   'lk-remove':()=>lkAct('lk-remove'),
@@ -3956,7 +4010,7 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden){checkAlar
 window.__nucleo={Store:Store,Supa:Supa,S:S};
 if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost')){addEventListener('load',()=>{navigator.serviceWorker.register('sw.js').catch(()=>{});});}
 /* gancho só para os testes (no uso normal a marca não existe) */
-try{if(window.__NUCLEO_TEST__)window.__NUCLEO_TEST__={LK,LKH,lkOpen,lkKey,lkSetPin,lkCheck,lkNeeded,lkOn,lkBlock,lkAct,lkForgot,lkGet,lkSet,Supa,ROH,roSetPref,roPrefs,roTimes,sheetSaude,ficSync,ficDates,ficWanted,bkRefresh,bkNow,bkDown,ordPull,ordPushNow,ORS,ordSort,orderedKids,RO,roFind,roBegin,roMove,roEnd,roBtn,roSibs,roIds,sortOpenPage,roMode,fmtText,openScanner,handleScanFiles,Store,S,gsFind,gsBody,viewBusca,viewHoje,viewCaixa,viewNotas,planView,planBtn,smart,viewLembretes,Supa,SupaAssets,finSend,finCounts,dayCount};}catch(e){}
+try{if(window.__NUCLEO_TEST__)window.__NUCLEO_TEST__={Store,softDelete,U,undoDo,undoFlush,undoPaint,undoLabel,LK,LKH,lkOpen,lkKey,lkSetPin,lkCheck,lkNeeded,lkOn,lkBlock,lkAct,lkForgot,lkGet,lkSet,Supa,ROH,roSetPref,roPrefs,roTimes,sheetSaude,ficSync,ficDates,ficWanted,bkRefresh,bkNow,bkDown,ordPull,ordPushNow,ORS,ordSort,orderedKids,RO,roFind,roBegin,roMove,roEnd,roBtn,roSibs,roIds,sortOpenPage,roMode,fmtText,openScanner,handleScanFiles,Store,S,gsFind,gsBody,viewBusca,viewHoje,viewCaixa,viewNotas,planView,planBtn,smart,viewLembretes,Supa,SupaAssets,finSend,finCounts,dayCount};}catch(e){}
 Object.assign(LKH,{app:'Núcleo',toast:toast,rerender:()=>{render();if(S.sheet)renderSheet();}});
 lkInit();
 Object.assign(ROH,{write:roWrite,scroller:()=>$('main'),rerender:render,toast:toast,choose:(title,msg,options)=>pickMove({title,msg,options}),syncLoad:ordLoadN,syncSave:ordSaveN});

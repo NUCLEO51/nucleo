@@ -257,6 +257,45 @@ const count = (h, s) => h.split(s).length - 1;
   t('erro ao falar com o Núcleo: não quebra e o Início avisa', /Não consegui conferir os lembretes no Núcleo/.test(ev('vHome()')), true);
   w.__restFail = false; ev(`S.remErr='';`);
   t('as gravações de dívida e o carregamento chamam a conferência (ganchos no Api)', /if\(kind==='debt'\)finSyncSoon\(true\)/.test(html) && /if\(rec\.kind==='debt'\)finSyncSoon\(true\)/.test(html) && /finSyncSoon\(false\)/.test(html) && /bumpFinReminder\(rec\.id,ym,x\)/.test(html), true);
+  // ---- desfazer discreto no FIN
+  ev(`window.__srv=[{id:'u1',kind:'debt',version:1,data:{creditor:'Banco Teste',balanceC:100000,installC:10000,dueDay:10,status:'ATIVA',holder:'MARCELO',payer:'MARCELO',paidYm:[]}}];
+    Api.rest=async(p,o)=>{
+      const m=/fin_records\\?id=eq\\.([^&]+)/.exec(p);
+      if(o&&o.method==='PATCH'&&m){const r=window.__srv.find(x=>x.id===m[1]);const b=JSON.parse(o.body);if('data' in b)r.data=b.data;if('deleted_at' in b)r.deleted_at=b.deleted_at;r.version++;return {ok:true,json:async()=>[JSON.parse(JSON.stringify(r))]};}
+      if(/^fin_records\\?select=\\*/.test(p))return {ok:true,json:async()=>window.__srv.filter(x=>!x.deleted_at).map(x=>JSON.parse(JSON.stringify(x)))};
+      return {ok:true,json:async()=>[]};};
+    S.recs=JSON.parse(JSON.stringify(window.__srv));S.tab='debts';S.who='ALL';S.sheet=null;render();`);
+  const tapU = () => doc.body.dispatchEvent(new w.MouseEvent('click', { bubbles: true }));
+  const srv = () => ev('window.__srv[0]');
+  ev('U.stack.length=0;U.userAt=0');
+  t('FIN desfazer: o botão ↶ existe no cabeçalho, escondido enquanto não há o que desfazer', !!doc.querySelector('#app header.hd [data-undobtn]') && doc.querySelector('#app [data-undobtn]').style.display === 'none', true);
+  ev('U.userAt=0');
+  await ev(`Api.update(S.recs[0],Object.assign({},S.recs[0].data,{notas:'auto'}))`); await wait(450);
+  t('FIN desfazer: mudança que não veio de um toque seu não entra na lista', ev('U.stack.length'), 0);
+  tapU();
+  await ev(`Api.update(S.recs[0],Object.assign({},S.recs[0].data,{paidYm:['2030-01']}))`); await wait(450);
+  ev('render()');
+  t('FIN desfazer: marcar uma parcela como paga entra com o nome da dívida', ev('U.stack.length') === 1 && ev('U.stack[0].label') === 'Marcar parcela como paga «Banco Teste»', true);
+  const ub = doc.querySelector('#app [data-undobtn]');
+  t('FIN desfazer: o botão aparece, redondo, e diz o que desfaz', ub.style.display === '' && ub.classList.contains('ibtn') && /Desfazer: Marcar parcela como paga/.test(ub.getAttribute('aria-label')), true);
+  click(ub); await wait(30);
+  t('FIN desfazer: tocar abre a pergunta com o que será desfeito, sem desfazer ainda', !!doc.querySelector('.modal #cf-ok') && /Marcar parcela como paga/.test(doc.querySelector('.modal').textContent) && srv().data.paidYm.length === 1, true);
+  click(doc.querySelector('.modal #cf-no')); await wait(30);
+  t('FIN desfazer: Voltar não desfaz nada', srv().data.paidYm.length === 1 && ev('U.stack.length') === 1, true);
+  click(doc.querySelector('#app [data-undobtn]')); await wait(30); click(doc.querySelector('.modal #cf-ok')); await wait(80);
+  t('FIN desfazer: confirmando, a parcela volta a não paga e a fila esvazia (botão some)', srv().data.paidYm.length === 0 && ev('U.stack.length') === 0 && doc.querySelector('#app [data-undobtn]').style.display === 'none', true);
+  tapU();
+  await ev(`Api.update(S.recs[0],Object.assign({},S.recs[0].data,{ord:1000}))`); await wait(450);
+  t('FIN desfazer: mudar só a ordem entra como "Mudar a ordem"', ev('U.stack[0].label'), 'Mudar a ordem');
+  ev('U.stack.length=0');
+  tapU();
+  await ev(`Api.remove(S.recs[0])`); await wait(450);
+  t('FIN desfazer: apagar entra como "Apagar dívida" com o nome', ev('U.stack.length') === 1 && ev('U.stack[0].label') === 'Apagar dívida «Banco Teste»' && !!srv().deleted_at && ev('S.recs.length') === 0, true);
+  ev('render()');
+  click(doc.querySelector('#app [data-undobtn]')); await wait(30); click(doc.querySelector('.modal #cf-ok')); await wait(80);
+  t('FIN desfazer: desfazer o apagar traz a dívida de volta (no servidor e na tela), com os dados de antes', !srv().deleted_at && ev('S.recs.length') === 1 && ev('S.recs[0].data.creditor') === 'Banco Teste' && ev('S.recs[0].data.balanceC') === 100000, true);
+  ev('U.stack.length=0;U.userAt=0');
+  ev(`Api.rest=Api.rest;S.tab='home';render();`);
   // ---- ordenar e arrastar no FIN
   ev(`Api.update=async(rec,data)=>{rec.data=data;return rec;}`);
   try { w.localStorage.removeItem('ord-sort'); } catch (e) {}
@@ -378,7 +417,7 @@ const count = (h, s) => h.split(s).length - 1;
   for (const c of '246810') await ev(`lkKey('${c}')`);
   t('FIN: a senha certa abre o app', lkf.style.display === 'none', true);
   limpaPin();
-  t('FIN: versão do cache subiu para v11', /fin-app-v11/.test(fs.readFileSync(path.join(__dirname, '..', 'fin', 'sw.js'), 'utf8')), true);
+  t('FIN: versão do cache subiu para v12', /fin-app-v12/.test(fs.readFileSync(path.join(__dirname, '..', 'fin', 'sw.js'), 'utf8')), true);
 
   console.log(ok + ' ok, ' + bad + ' falhas (FIN)');
   process.exit(bad ? 1 : 0);

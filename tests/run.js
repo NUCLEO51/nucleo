@@ -1131,4 +1131,101 @@ global.__pend.push((async () => {
   try { w.localStorage.removeItem('plan-mode'); } catch (e) {}
   ev(`const S=__NUCLEO_TEST__.S;S.sheet=null;S.tab='hoje';S.rview=null;S.pmode='week';S.reminders=[];S.raw={reminders:[],lists:[],notes:[],folders:[],events:[],inbox:[]};S.conf='all';`);
 })());
+
+// --- Desfazer discreto (v64) ---
+const __prevP12 = Promise.all((global.__pend || []).slice());
+global.__pend.push((async () => {
+  await __prevP12;
+  const doc = w.document, q = s => doc.querySelector(s), wait = ms => new Promise(r => setTimeout(r, ms)), TT = w.__NUCLEO_TEST__;
+  const nt = (id, title, ts, folder) => ({ id, title, body: '', folder: folder || 'f1', kind: 'nota', checklist: [], files: [], images: [], createdAt: ts, updatedAt: ts });
+  const rm = (id, title) => ({ id, title, notes: '', date: '2030-05-01', time: '09:00', done: false, list: '', section: '', alarms: [], subtasks: [], images: [], files: [], createdAt: 1 });
+  ev(`const S=__NUCLEO_TEST__.S;S.ready=true;S.tab='hoje';S.sheet=null;S.conf='del';S.rview=null;S.folder=null;S.nx={};S.nn={};S.q='';S.nsOpen=false;
+    S.folders=[{id:'f1',name:'Autos'},{id:'f2',name:'Casa'}];S.lists=[];S.events=[];S.inbox=[];
+    S.raw={reminders:${JSON.stringify([rm('r1', 'Pagar luz')])},lists:[],notes:${JSON.stringify([nt('n1', 'Jeep', 3), nt('n2', 'Camionete', 2), nt('n3', 'Carretinha', 1)])},folders:S.folders.slice(),events:[],inbox:[]};
+    S.reminders=S.raw.reminders.slice();S.notes=S.raw.notes.slice();`);
+  const U = TT.U, tap = () => doc.body.dispatchEvent(new w.MouseEvent('click', { bubbles: true }));
+  const nota = id => ev(`__NUCLEO_TEST__.S.raw.notes.find(n=>n.id==='${id}')`);
+  U.stack.length = 0;
+  t('desfazer: o cabeçalho com 5 botões (Hoje) fica com botões menores e o título numa linha só, para o título não quebrar', /\.hd h1\{white-space:nowrap\}/.test(html) && /\.hd-r:has\(> \.iconbtn:nth-child\(5\)\) > \.iconbtn\{width:2\.3rem;height:2\.3rem\}/.test(html), true);
+  t('desfazer: no começo não há nada a desfazer e o botão fica escondido', U.stack.length === 0, true);
+  q('#tab-hoje').click(); await wait(20);
+  t('desfazer: o botão redondo existe no topo de Hoje mas escondido enquanto não há o que desfazer', !!q('#main [data-undobtn]') && q('#main [data-undobtn]').style.display === 'none', true);
+  // mudança sem o dedo (automática): não conta
+  U.userAt = 0;
+  await TT.softDelete('notes', nota('n3')); await wait(450);
+  t('desfazer: mudança que não veio de um toque seu (automática) não entra na lista', U.stack.length === 0, true);
+  ev(`__NUCLEO_TEST__.Store.put('notes',Object.assign({},__NUCLEO_TEST__.S.raw.notes.find(n=>n.id==='n3'),{deletedAt:undefined}));`); delete 0;
+  ev(`(function(){const n=__NUCLEO_TEST__.S.raw.notes.find(x=>x.id==='n3');delete n.deletedAt;})();`);
+  // apagar
+  tap();
+  await TT.softDelete('notes', nota('n1')); await wait(450);
+  t('desfazer: apagar uma nota entra na lista com o nome dela', U.stack.length === 1 && U.stack[0].label === 'Apagar nota «Jeep»', true);
+  const bt = q('#main [data-undobtn]');
+  t('desfazer: depois disso o botão aparece (cor padrão, redondo) e diz o que desfaz para leitura de tela', !!bt && bt.style.display === '' && bt.classList.contains('iconbtn') && /Desfazer: Apagar nota «Jeep»/.test(bt.getAttribute('aria-label')), true);
+  // concluir
+  tap();
+  ev(`__NUCLEO_TEST__.Store.put('reminders',Object.assign({},__NUCLEO_TEST__.S.raw.reminders[0],{done:true}));`); await wait(450);
+  t('desfazer: concluir um lembrete entra como "Concluir lembrete"', U.stack.length === 2 && U.stack[1].label === 'Concluir lembrete «Pagar luz»', true);
+  // mover
+  tap();
+  ev(`__NUCLEO_TEST__.Store.put('notes',Object.assign({},__NUCLEO_TEST__.S.raw.notes.find(n=>n.id==='n2'),{folder:'f2'}));`); await wait(450);
+  t('desfazer: mover uma nota entra como "Mover nota"', U.stack[2].label === 'Mover nota «Camionete»', true);
+  // ordem (3 itens de uma vez = 1 entrada)
+  tap();
+  ev(`['n1','n2','n3'].forEach((id,i)=>__NUCLEO_TEST__.Store.put('notes',Object.assign({},__NUCLEO_TEST__.S.raw.notes.find(n=>n.id===id),{ord:(i+1)*1000})));`); await wait(450);
+  t('desfazer: mudar a ordem de vários itens de uma vez é uma entrada só ("Mudar a ordem")', U.stack.length === 4 && U.stack[3].label === 'Mudar a ordem', true);
+  // vários apagados juntos
+  tap();
+  ev(`['n2','n3'].forEach(id=>__NUCLEO_TEST__.Store.put('notes',Object.assign({},__NUCLEO_TEST__.S.raw.notes.find(n=>n.id===id),{deletedAt:Date.now()})));`); await wait(450);
+  t('desfazer: apagar 2 itens de uma vez é uma entrada só', U.stack[4].label === 'Apagar 2 itens', true);
+  // editar
+  tap();
+  ev(`__NUCLEO_TEST__.Store.put('lists',{id:'L9',name:'Mercado',sections:[],color:'#FFB300',createdAt:1});`); await wait(450);
+  tap();
+  ev(`__NUCLEO_TEST__.Store.put('lists',Object.assign({},__NUCLEO_TEST__.S.raw.lists.find(l=>l.id==='L9'),{name:'Feira'}));`); await wait(450);
+  t('desfazer: criar algo novo não entra; editar entra como "Editar lista"', U.stack.length === 6 && U.stack[5].label === 'Editar lista «Feira»', true);
+  // mudança sem efeito
+  tap();
+  ev(`__NUCLEO_TEST__.Store.put('lists',Object.assign({},__NUCLEO_TEST__.S.raw.lists.find(l=>l.id==='L9')));`); await wait(450);
+  t('desfazer: gravar sem mudar nada não entra', U.stack.length === 6, true);
+  // botão em cada tela
+  q('#tab-lembretes').click(); await wait(20);
+  t('desfazer: o botão aparece no topo de Lembretes, ao lado do Ordenar e de Ajustes', !!q('#main .hd-r [data-undobtn]') && q('#main .hd-r [data-undobtn]').style.display === '' && q('#main .hd-r [data-undobtn]').nextElementSibling.hasAttribute('data-sortbtn'), true);
+  ev(`__NUCLEO_TEST__.S.tab='lembretes';__NUCLEO_TEST__.S.folder='f1';`); q('#tab-notas').click(); await wait(20);
+  t('desfazer: dentro de uma pasta de notas o botão fica no cabeçalho (a fileira de botões já está cheia)', !!q('#main header.hd [data-undobtn]') && q('#main header.hd [data-undobtn]').style.display === '', true);
+  ev(`__NUCLEO_TEST__.S.tab='hoje';__NUCLEO_TEST__.S.folder=null;__NUCLEO_TEST__.S.rview='l:L9';`); q('#tab-lembretes').click(); await wait(20);
+  t('desfazer: dentro de uma lista de lembretes o botão fica na fileira de botões', !!q('#main .notes-tools [data-undobtn]'), true);
+  // desfazer de verdade
+  ev(`__NUCLEO_TEST__.S.tab='hoje';__NUCLEO_TEST__.S.rview=null;`); q('#tab-lembretes').click(); await wait(20);
+  q('#main [data-undobtn]').click(); await wait(30);
+  const caixa = q('#askRoot');
+  t('desfazer: tocar no botão abre uma pergunta com o que será desfeito (nada acontece sem confirmar)', !!caixa && /Desfazer\?/.test(caixa.textContent) && /Editar lista «Feira»/.test(caixa.textContent) && U.stack.length === 6, true);
+  q('#askRoot [data-ask="0"]').click(); await wait(520);
+  q('#askRoot [data-ask="0"]') && q('#askRoot [data-ask="0"]').click(); await wait(30);
+  t('desfazer: "Agora não" não desfaz nada', U.stack.length === 6 && ev(`__NUCLEO_TEST__.S.raw.lists.find(l=>l.id==='L9').name`) === 'Feira', true);
+  q('#main [data-undobtn]').click(); await wait(520);
+  q('#askRoot [data-ask="1"]').click(); await wait(80);
+  t('desfazer: confirmando, a lista volta para o nome de antes (Mercado) e a ação sai da fila', ev(`__NUCLEO_TEST__.S.raw.lists.find(l=>l.id==='L9').name`) === 'Mercado' && U.stack.length === 5, true);
+  t('desfazer: desfazer não cria nova entrada (não dá para desfazer o desfazer por engano)', U.stack.length === 5, true);
+  // apagar 2 itens -> voltar
+  q('#main [data-undobtn]').click(); await wait(520); q('#askRoot [data-ask="1"]').click(); await wait(80);
+  t('desfazer: "Apagar 2 itens" devolve as duas notas', !nota('n2').deletedAt && !nota('n3').deletedAt && U.stack.length === 4, true);
+  // ordem
+  q('#main [data-undobtn]').click(); await wait(520); q('#askRoot [data-ask="1"]').click(); await wait(80);
+  t('desfazer: "Mudar a ordem" tira os números de ordem de volta', nota('n1').ord === undefined && nota('n2').ord === undefined && U.stack.length === 3, true);
+  // mover
+  q('#main [data-undobtn]').click(); await wait(520); q('#askRoot [data-ask="1"]').click(); await wait(80);
+  t('desfazer: "Mover nota" devolve a nota para a pasta de antes (Autos)', nota('n2').folder === 'f1', true);
+  // concluir
+  q('#main [data-undobtn]').click(); await wait(520); q('#askRoot [data-ask="1"]').click(); await wait(80);
+  t('desfazer: "Concluir lembrete" reabre o lembrete', ev(`__NUCLEO_TEST__.S.raw.reminders[0].done`) === false, true);
+  // apagar nota
+  q('#main [data-undobtn]').click(); await wait(520); q('#askRoot [data-ask="1"]').click(); await wait(80);
+  t('desfazer: "Apagar nota" traz a nota de volta e, com a fila vazia, o botão some', !nota('n1').deletedAt && U.stack.length === 0 && q('#main [data-undobtn]').style.display === 'none', true);
+  // limite
+  for (let i = 0; i < 14; i++) { tap(); ev(`__NUCLEO_TEST__.Store.put('lists',Object.assign({},__NUCLEO_TEST__.S.raw.lists.find(l=>l.id==='L9'),{name:'V${i}'}));`); await wait(400); }
+  t('desfazer: guarda só as últimas 12 ações', U.stack.length === 12, true);
+  U.stack.length = 0;
+  ev(`const S=__NUCLEO_TEST__.S;S.sheet=null;S.tab='hoje';S.rview=null;S.folder=null;S.lists=[];S.folders=[];S.notes=[];S.reminders=[];S.raw={reminders:[],lists:[],notes:[],folders:[],events:[],inbox:[]};S.conf='all';`);
+})());
 Promise.all(global.__pend || []).then(() => { console.log(ok + ' ok, ' + bad + ' falhas'); process.exit(bad ? 1 : 0); });
