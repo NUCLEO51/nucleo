@@ -590,7 +590,7 @@ function gRow(r){
 function vGastos(){
   S.sp=S.sp||{ym:ymOf(todayIso()),cat:null,all:false};
   const ym=S.sp.ym,g=gastosMes(ym),gp=gastosMes(addMonths(ym,-1));
-  let h=header('Gastos')+'<div class="wrap"><button class="btn sec" data-back="1" data-act="tab" data-v="home">← Voltar</button>';
+  let h=header('Gastos','<button class="ibtn" data-back="1" data-act="tab" data-v="home" aria-label="Voltar" title="Voltar">←</button>')+'<div class="wrap">';
   h+='<div class="spnav"><button class="btn sec" data-act="sp-prev" aria-label="Mês anterior">‹</button><b>'+esc(ymLabel(ym))+'</b><button class="btn sec" data-act="sp-next" aria-label="Próximo mês">›</button></div>';
   if(!g.rows.length)return h+'<div class="card mut">Sem gastos neste mês. Os gastos vêm dos extratos importados (Extratos do banco) e das compras no cartão.</div></div>';
   const dif=g.total-gp.total;
@@ -1248,11 +1248,12 @@ function vHome(){
   const debtsAll=byKind('debt').filter(d=>d.data.status!=='PAGA');
   const debts=debtsAll.filter(d=>d.data.dir!=='RECEBER'),recvs=debtsAll.filter(d=>d.data.dir==='RECEBER');
   const dsum=debts.reduce((a,d)=>a+(d.data.balanceC||0),0),dmiss=debts.some(d=>d.data.balanceC==null);
+  const nxD=debts.map(d=>({c:d.data.installC||0,dt:debtNext(d.data,true)})).filter(x=>x.dt).sort((a,b)=>a.dt<b.dt?-1:1)[0];
   const g=gastosMes(ym);
   h+='<div class="up s2">'
     +srow('bills','A pagar no mês',money(known),(late?'<span class="tag bad">'+late+(late===1?' atrasada':' atrasadas')+'</span> ':'')+(sem?'<span class="tag warn">'+sem+' sem valor</span>':'')+(!rows.length?'Nenhuma conta cadastrada':'')+((rows.length&&!late&&!sem)?'Valores conhecidos':''))
     +srow('cards','Cartões',cardsH.length?money(totH):'—',cardsH.length?cardsH.length+(cardsH.length===1?' cartão · total usado':' cartões · total usado'):'Nenhum cartão')
-    +srow('debts','Dívidas',debts.length?money(dsum):'—',(debts.length?debts.length+' a pagar':'Nenhuma a pagar')+(dmiss?' · <span class="tag warn">saldo não informado</span>':'')+(recvs.length?' · <span class="rc">a receber '+money(recvs.reduce((a,d)=>a+(d.data.balanceC||0),0))+'</span>':''))
+    +srow('debts','Dívidas · saldo total',debts.length?money(dsum):'—',(debts.length?(nxD?'próxima parcela '+money(nxD.c)+' em '+brDate(nxD.dt).slice(0,5):debts.length+' em aberto'):'Nenhuma em aberto')+(dmiss?' · <span class="tag warn">saldo não informado</span>':'')+(recvs.length?' · <span class="rc">a receber '+money(recvs.reduce((a,d)=>a+(d.data.balanceC||0),0))+'</span>':''))
     +srow('spend','Gastos do mês',g.rows.length?money(g.total):'—',g.semN?'<span class="tag warn">'+g.semN+' sem categoria</span>':(g.rows.length?'Por categoria':'Sem gastos neste mês'))
     +'</div>';
   const up=upcoming();
@@ -1266,7 +1267,7 @@ function vHome(){
   return h+'</div>';
 }
 function vCfg(){
-  let h=header('Ajustes')+'<div class="wrap"><button class="btn sec" data-back="1" data-act="tab" data-v="home">← Voltar</button>';
+  let h=header('Ajustes','<button class="ibtn" data-back="1" data-act="tab" data-v="home" aria-label="Voltar" title="Voltar">←</button>')+'<div class="wrap">';
   h+='<h2>Segurança</h2>'+lkBlock('fin');
   h+='<h2>Aparência</h2>'+fsBlock();
   h+='<h2>Cópia de segurança</h2>'+backupBlock();
@@ -1483,7 +1484,7 @@ function vMonth(){
   const shown0=S.mf==='pay'?pagar.filter(i=>!feita(i)):(S.mf==='rec'?receber.filter(i=>!feita(i)):(S.mf==='done'?all.filter(feita):all));
   const mmode=roMode('month',shown0,false),shown=mmode==='def'?shown0:sortGroup(shown0,mmode,GM);
   RO.reg['month']={col:'',items:shown,pref:'month',manual:false,mode:mmode};
-  let h=header('Mês',sortBtn())+'<div class="wrap">';
+  let h=header('Mês',rbtn('bill-new','+','Nova conta')+rbtn('bill-read','📷','Ler boleto ou fatura')+sortBtn())+'<div class="wrap">';
   h+='<div class="mnav"><button class="arr" data-act="m-prev" aria-label="Mês anterior">‹</button><button class="mid" data-act="m-today">'+esc(ymLabel(ym))+(ym===cur?' · este mês':'')+'</button><button class="arr" data-act="m-next" aria-label="Próximo mês">›</button></div>';
   h+='<div class="card sum3"><div><div class="mut">A pagar</div><b>'+money(tP)+'</b></div><div><div class="mut">Já pago</div><b>'+money(pP)+'</b></div><div><div class="mut">Falta pagar</div><b>'+money(tP-pP)+'</b></div></div>';
   if(receber.length)h+='<div class="card sum3"><div><div class="mut">A receber</div><b class="rc">'+money(tR)+'</b></div><div><div class="mut">Já recebido</div><b class="rc">'+money(pR)+'</b></div><div><div class="mut">Falta receber</div><b class="rc">'+money(tR-pR)+'</b></div></div><div class="hint" style="margin:-.2rem .3rem .4rem">O que falta: você recebe '+money(tR-pR)+' e paga '+money(tP-pP)+' (diferença '+money((tR-pR)-(tP-pP))+').</div>';
@@ -1492,9 +1493,7 @@ function vMonth(){
   if(!all.length)h+='<div class="card mut">Nada vence neste mês. Contas, faturas de cartão e parcelas de dívidas aparecem aqui sozinhas.</div>';
   else if(!shown.length)h+='<div class="card mut">Nada nesta lista.</div>';
   else h+='<div class="tbl" role="table"><div class="tr th" role="row"><span>Dia</span><span>O que</span><span>Valor</span></div>'+shown.map(mRow).join('')+'</div>';
-  h+='<button class="btn" data-act="bill-new">+ Nova conta</button>';
-  h+='<button class="btn sec" data-act="bill-read">📷 Ler boleto ou fatura</button>';
-  if(all.length)h+='<p class="hint">Toque numa linha para pagar, informar o valor ou editar. “Confirmar” = a data já passou e você ainda não marcou como paga.</p>';
+  if(all.length)h+='<p class="hint">Toque numa linha para pagar, informar o valor ou editar.</p>';
   /* contas cadastradas que NÃO vencem neste mês (a mesma conta nunca aparece duas vezes) */
   const used=new Set(all.filter(i=>i.k==='bill'||i.k==='billp').map(i=>i.billId));
   const outras=byKind('bill').filter(b=>!used.has(b.id));
@@ -1507,7 +1506,7 @@ function vMonth(){
 }
 function vCards(){
   const cards=byKind('card');
-  let h=header('Cartões',sortBtn())+'<div class="wrap"><button class="btn" data-act="card-new">+ Novo cartão</button>';
+  let h=header('Cartões',rbtn('card-new','+','Novo cartão')+sortBtn())+'<div class="wrap">';
   if(!cards.length)h+='<div class="card mut">Cadastre cada cartão uma vez: apelido, últimos 4 dígitos, limite, dia do fechamento e dia do vencimento. Nunca coloque o número completo, validade ou código de segurança.</div>';
   let tot=0;
   const cl=ordRecs('cards',cards,GC);
@@ -1572,7 +1571,7 @@ function debtRow(d){
 function vDebts(){
   const ds=byKind('debt');
   const abertas=ds.filter(d=>d.data.status!=='PAGA'),pagar=abertas.filter(d=>d.data.dir!=='RECEBER'),receber=abertas.filter(d=>d.data.dir==='RECEBER'),feitas=ds.filter(d=>d.data.status==='PAGA');
-  let h=header('Dívidas',sortBtn())+'<div class="wrap"><button class="btn" data-act="debt-new">+ Nova dívida ou parcela</button>';
+  let h=header('Dívidas',rbtn('debt-new','+','Nova dívida ou parcela')+sortBtn())+'<div class="wrap">';
   if(!ds.length)h+='<div class="card mut">Nada cadastrado. Use “Nova dívida ou parcela” para o que você deve e também para o que te devem.</div>';
   if(pagar.length){
     const sum=pagar.reduce((a,d)=>a+(d.data.balanceC||0),0),inst=pagar.reduce((a,d)=>a+(d.data.installC||0),0),miss=pagar.some(d=>d.data.balanceC==null);
@@ -1720,7 +1719,7 @@ function stRows(){
   return out;
 }
 function vStmt(){
-  let h=header('Extratos')+'<div class="wrap"><button class="btn sec" data-back="1" data-act="tab" data-v="home">← Voltar</button><button class="btn" data-act="stmt-pick">📥 Importar arquivo do Mobills (.xlsx)</button><input type="file" id="stfile" accept=".xlsx" hidden>'
+  let h=header('Extratos','<button class="ibtn" data-back="1" data-act="tab" data-v="home" aria-label="Voltar" title="Voltar">←</button>'+rbtn('stmt-pick','📥','Importar arquivo do Mobills (.xlsx)'))+'<div class="wrap"><input type="file" id="stfile" accept=".xlsx" hidden>'
     +'<p class="hint">No Mobills: Relatório de transações → exportar em Excel. Importar de novo o mesmo período não duplica.</p>';
   const rows=stRows();
   if(!rows.length)return h+'<div class="card mut">Nenhum extrato importado ainda.</div></div>';
