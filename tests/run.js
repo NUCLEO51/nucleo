@@ -1229,4 +1229,7 @@ global.__pend.push((async () => {
   U.stack.length = 0;
   ev(`const S=__NUCLEO_TEST__.S;S.sheet=null;S.tab='hoje';S.rview=null;S.folder=null;S.lists=[];S.folders=[];S.notes=[];S.reminders=[];S.raw={reminders:[],lists:[],notes:[],folders:[],events:[],inbox:[]};S.conf='all';`);
 })());
+// --- etiquetas: #número não é etiqueta (v65) ---
+t('etiquetas: #589 e #882 (só número) não viram etiqueta', JSON.stringify(ev('__NUCLEO_TEST__.tagsOf({title:"x #589",body:"ref #882 e #12"})')), '[]');
+t('etiquetas: #consulta e #2026-meta continuam valendo', JSON.stringify(ev('__NUCLEO_TEST__.tagsOf({title:"",body:"#consulta #2026-meta #589"})')), '["consulta","2026-meta"]');
 Promise.all(global.__pend || []).then(() => { console.log(ok + ' ok, ' + bad + ' falhas'); process.exit(bad ? 1 : 0); });

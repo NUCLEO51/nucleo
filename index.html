@@ -1932,7 +1932,7 @@ async function deleteFolder(id){
   await Store.del('folders',id);
   return to;
 }
-const TAGRE=/(^|\s)#([\p{L}\p{N}_-]{2,30})/gu;
+const TAGRE=/(^|\s)#((?=[\p{N}_-]*\p{L})[\p{L}\p{N}_-]{2,30})/gu;
 function tagsOf(n){const out=new Set();const t=(n.title||'')+' '+(n.body||'');let m;TAGRE.lastIndex=0;while((m=TAGRE.exec(t)))out.add(m[2].toLowerCase());return [...out];}
 function allTags(){const c={};S.notes.forEach(n=>tagsOf(n).forEach(t=>{c[t]=(c[t]||0)+1;}));return Object.keys(c).sort().map(t=>[t,c[t]]);}
 
@@ -4010,7 +4010,7 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden){checkAlar
 window.__nucleo={Store:Store,Supa:Supa,S:S};
 if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost')){addEventListener('load',()=>{navigator.serviceWorker.register('sw.js').catch(()=>{});});}
 /* gancho só para os testes (no uso normal a marca não existe) */
-try{if(window.__NUCLEO_TEST__)window.__NUCLEO_TEST__={Store,softDelete,U,undoDo,undoFlush,undoPaint,undoLabel,LK,LKH,lkOpen,lkKey,lkSetPin,lkCheck,lkNeeded,lkOn,lkBlock,lkAct,lkForgot,lkGet,lkSet,Supa,ROH,roSetPref,roPrefs,roTimes,sheetSaude,ficSync,ficDates,ficWanted,bkRefresh,bkNow,bkDown,ordPull,ordPushNow,ORS,ordSort,orderedKids,RO,roFind,roBegin,roMove,roEnd,roBtn,roSibs,roIds,sortOpenPage,roMode,fmtText,openScanner,handleScanFiles,Store,S,gsFind,gsBody,viewBusca,viewHoje,viewCaixa,viewNotas,planView,planBtn,smart,viewLembretes,Supa,SupaAssets,finSend,finCounts,dayCount};}catch(e){}
+try{if(window.__NUCLEO_TEST__)window.__NUCLEO_TEST__={tagsOf,Store,softDelete,U,undoDo,undoFlush,undoPaint,undoLabel,LK,LKH,lkOpen,lkKey,lkSetPin,lkCheck,lkNeeded,lkOn,lkBlock,lkAct,lkForgot,lkGet,lkSet,Supa,ROH,roSetPref,roPrefs,roTimes,sheetSaude,ficSync,ficDates,ficWanted,bkRefresh,bkNow,bkDown,ordPull,ordPushNow,ORS,ordSort,orderedKids,RO,roFind,roBegin,roMove,roEnd,roBtn,roSibs,roIds,sortOpenPage,roMode,fmtText,openScanner,handleScanFiles,Store,S,gsFind,gsBody,viewBusca,viewHoje,viewCaixa,viewNotas,planView,planBtn,smart,viewLembretes,Supa,SupaAssets,finSend,finCounts,dayCount};}catch(e){}
 Object.assign(LKH,{app:'Núcleo',toast:toast,rerender:()=>{render();if(S.sheet)renderSheet();}});
 lkInit();
 Object.assign(ROH,{write:roWrite,scroller:()=>$('main'),rerender:render,toast:toast,choose:(title,msg,options)=>pickMove({title,msg,options}),syncLoad:ordLoadN,syncSave:ordSaveN});
