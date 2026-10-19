@@ -1093,4 +1093,42 @@ global.__pend.push((async () => {
   t('voltar do segundo plano: logo em seguida não pede de novo', lk.style.display === 'none', true);
   limpa();
 })());
+
+// --- Planner: visão de mês (v63) ---
+const __prevP11 = Promise.all((global.__pend || []).slice());
+global.__pend.push((async () => {
+  await __prevP11;
+  const doc = w.document, q = s => doc.querySelector(s), wait = ms => new Promise(r => setTimeout(r, ms));
+  try { w.localStorage.removeItem('plan-mode'); } catch (e) {}
+  const rm = (id, d, n) => ({ id, title: 'L' + id, notes: '', date: d, time: '09:00', done: false, list: '', section: '', alarms: [], subtasks: [], images: [], files: [], createdAt: n || 1 });
+  const many = []; for (let i = 0; i < 11; i++) many.push(rm('m' + i, '2030-03-12', i));
+  ev(`const S=__NUCLEO_TEST__.S;S.ready=true;S.tab='hoje';S.sheet=null;S.conf='del';S.rview='plan';S.pmode='week';S.pm={y:2030,m:2};S.lists=[];S.events=[];S.inbox=[];S.notes=[];S.folders=[];
+    S.reminders=${JSON.stringify([rm('a', '2030-03-05'), rm('b', '2030-03-05'), rm('c', '2030-03-20')].concat(many))};
+    S.raw={reminders:S.reminders.slice(),lists:[],notes:[],folders:[],events:[],inbox:[]};`);
+  q('#tab-lembretes').click(); await wait(20);
+  t('planner: tem o seletor Semana | Mês e começa na semana', !!q('#main .plan-seg') && q('#main .plan-seg button.on').textContent === 'Semana' && !q('#main .cal'), true);
+  q('#main [data-act="plan-mode"][data-v="month"]').click(); await wait(20);
+  t('planner: tocar em Mês mostra a grade do mês com o nome do mês no título e guarda a escolha', !!q('#main .cal') && /Março 2030/.test(q('#main').textContent) && q('#main .plan-seg button.on').textContent === 'Mês' && w.localStorage.getItem('plan-mode') === 'month', true);
+  const cell = d => q('#main .cal [data-v="' + d + '"]');
+  t('planner mês: cada dia mostra quantos itens tem (2, 1, e "9+" quando passa de 9; sem nada fica sem número)', cell('2030-03-05').querySelector('.pm-n').textContent === '2' && cell('2030-03-20').querySelector('.pm-n').textContent === '1' && cell('2030-03-12').querySelector('.pm-n').textContent === '9+' && cell('2030-03-07').querySelector('.pm-n').classList.contains('no'), true);
+  t('planner mês: o dia 1º cai na coluna certa (março de 2030 começa numa sexta: 4 espaços antes) e há 31 dias', Array.from(q('#main .cal').children).filter(c => c.tagName === 'DIV' && !c.classList.contains('cal-h')).length === 4 && q('#main .cal').querySelectorAll('button.cal-d').length === 31, true);
+  t('planner mês: o resumo diz quantos itens há no mês', /14 itens neste mês/.test(q('#main').textContent), true);
+  t('planner mês: o botão de cada dia diz o dia e a quantidade para leitura de tela', /5 de março, 2 itens/i.test(cell('2030-03-05').getAttribute('aria-label')) && /nada marcado/.test(cell('2030-03-07').getAttribute('aria-label')), true);
+  q('#main [data-act="pmonth-next"]').click(); await wait(20);
+  t('planner mês: Próximo mês vai para Abril de 2030 (sem itens)', /Abril 2030/.test(q('#main').textContent) && /Nada marcado neste mês/.test(q('#main').textContent), true);
+  q('#main [data-act="pmonth-prev"]').click(); await wait(20); q('#main [data-act="pmonth-prev"]').click(); await wait(20);
+  t('planner mês: Mês anterior volta para Fevereiro de 2030', /Fevereiro 2030/.test(q('#main').textContent), true);
+  q('#main [data-act="pmonth-today"]').click(); await wait(20);
+  const n0 = new Date();
+  t('planner mês: Ir para este mês volta para o mês de hoje', new RegExp(String(n0.getFullYear())).test(q('#main .sub-hd, #main h1, #main').textContent) && /Este mês/.test(q('#main').textContent), true);
+  ev(`__NUCLEO_TEST__.S.pm={y:2030,m:2};`); q('#tab-hoje').click(); ev(`__NUCLEO_TEST__.S.rview='plan';`); q('#tab-lembretes').click(); await wait(20);
+  cell('2030-03-05').click(); await wait(20);
+  t('planner mês: tocar num dia abre a lista daquele dia (como na semana)', ev(`__NUCLEO_TEST__.S.rview`) === 'd:2030-03-05' && ev(`__NUCLEO_TEST__.S.rfromPlan`) === 1, true);
+  ev(`__NUCLEO_TEST__.S.rview='plan';`); q('#tab-hoje').click(); ev(`__NUCLEO_TEST__.S.rview='plan';`); q('#tab-lembretes').click(); await wait(20);
+  t('planner: ao voltar do dia, continua na visão de mês', !!q('#main .cal') && q('#main .plan-seg button.on').textContent === 'Mês', true);
+  q('#main [data-act="plan-mode"][data-v="week"]').click(); await wait(20);
+  t('planner: tocar em Semana volta para a lista de dias da semana e guarda a escolha', !q('#main .cal') && !!q('#main .dayrow') && w.localStorage.getItem('plan-mode') === 'week', true);
+  try { w.localStorage.removeItem('plan-mode'); } catch (e) {}
+  ev(`const S=__NUCLEO_TEST__.S;S.sheet=null;S.tab='hoje';S.rview=null;S.pmode='week';S.reminders=[];S.raw={reminders:[],lists:[],notes:[],folders:[],events:[],inbox:[]};S.conf='all';`);
+})());
 Promise.all(global.__pend || []).then(() => { console.log(ok + ' ok, ' + bad + ' falhas'); process.exit(bad ? 1 : 0); });
