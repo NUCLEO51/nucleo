@@ -417,7 +417,88 @@ const count = (h, s) => h.split(s).length - 1;
   for (const c of '246810') await ev(`lkKey('${c}')`);
   t('FIN: a senha certa abre o app', lkf.style.display === 'none', true);
   limpaPin();
-  t('FIN: versão do cache subiu para v12', /fin-app-v12/.test(fs.readFileSync(path.join(__dirname, '..', 'fin', 'sw.js'), 'utf8')), true);
+  // ---- ler boleto e fatura (v13)
+  const lun = (s) => { let tt = 0; s.split('').reverse().map(Number).forEach((d, i) => { const p = d * (i % 2 === 0 ? 2 : 1); tt += p > 9 ? p - 9 : p; }); return (10 - tt % 10) % 10; };
+  const m11 = (s) => { const wv = [2, 3, 4, 5, 6, 7, 8, 9]; let tt = 0; s.split('').reverse().forEach((d, i) => { tt += (+d) * wv[i % 8]; }); const r = 11 - (tt % 11); return (r === 0 || r === 10 || r === 11) ? 1 : r; };
+  const parts47 = (banco, fator, valorC, livre) => { const f = String(fator).padStart(4, '0'), val = String(valorC).padStart(10, '0'), dvg = m11(banco + '9' + f + val + livre); const c1 = banco + '9' + livre.slice(0, 5), c2 = livre.slice(5, 15), c3 = livre.slice(15, 25); return { c1, c2, c3, f, val, dvg, linha: c1 + lun(c1) + c2 + lun(c2) + c3 + lun(c3) + dvg + f + val, barra: banco + '9' + dvg + f + val + livre }; };
+  const bonito = (p) => { const a = p.c1 + lun(p.c1), b = p.c2 + lun(p.c2), c = p.c3 + lun(p.c3); return a.slice(0, 5) + '.' + a.slice(5) + ' ' + b.slice(0, 5) + '.' + b.slice(5) + ' ' + c.slice(0, 5) + '.' + c.slice(5) + ' ' + p.dvg + ' ' + p.f + p.val; };
+  const dias = (a, b) => Math.round((Date.UTC(b.getFullYear(), b.getMonth(), b.getDate()) - Date.UTC(a.getFullYear(), a.getMonth(), a.getDate())) / 864e5);
+  const alvo = new Date(); alvo.setDate(alvo.getDate() + 40);
+  const fatorAlvo = 1000 + dias(new Date(2025, 1, 22), alvo);
+  const isoAlvo = alvo.getFullYear() + '-' + String(alvo.getMonth() + 1).padStart(2, '0') + '-' + String(alvo.getDate()).padStart(2, '0');
+  const P = parts47('341', fatorAlvo, 12345, '1234567890123456789012345');
+  const rp = ev(`bolParse('${P.linha}')`);
+  t('boleto: lê a linha digitável de 47 números (banco, valor em centavos) e os dígitos verificadores batem', rp.tipo === 'boleto' && rp.banco === '341' && rp.valorC === 12345 && rp.ok === true, true);
+  t('boleto: o fator de vencimento vira a data certa (depois de 22/02/2025 recomeça em 1000)', ev(`bolDate(${fatorAlvo},new Date())`) === isoAlvo && ev(`bolDate(1641,new Date(2026,9,18))`) === '2026-11-25' && ev(`bolDate(1000,new Date(2025,2,1))`) === '2025-02-22', true);
+  t('boleto: o fator antigo (antes de 2025) também funciona', ev(`bolDate(4000,new Date(2008,8,1))`) === '2008-09-06' || ev(`bolDate(4000,new Date(2008,8,1))`) === '2008-09-07' || /^2008-/.test(ev(`bolDate(4000,new Date(2008,8,1))`)), true);
+  t('boleto: o mesmo código com pontos e espaços (como vem impresso) é lido igual', ev(`bolParse(${JSON.stringify(bonito(P))})`).valorC === 12345 && ev(`bolParse(${JSON.stringify(bonito(P))})`).ok === true, true);
+  const errado = P.linha.slice(0, 3) + String((+P.linha[3] + 1) % 10) + P.linha.slice(4);
+  t('boleto: um número trocado faz o código NÃO bater (avisa para conferir)', ev(`bolParse('${errado}')`).ok === false, true);
+  t('boleto: número com tamanho que não é de boleto não é lido', ev(`bolParse('12345')`) === null && ev(`bolParse('')`) === null, true);
+  t('boleto: o código de barras de 44 números também é lido (mesmo valor, bate)', ev(`bolParse('${P.barra}')`).valorC === 12345 && ev(`bolParse('${P.barra}')`).ok === true, true);
+  const ruido = 'BANCO ITAU 341-7\nAg/Cod 1234 5678-9\nLinha digitável:\n' + bonito(P).replace(' ', ' \n') + '\nPagador: FULANO 99\n';
+  const rl = ev(`docLer(${JSON.stringify(ruido)},new Date())`);
+  t('foto: acha o código no meio do texto sujo (até quebrado em linhas) e lê valor, banco e vencimento', rl.tipo === 'boleto' && rl.ok === true && rl.valorC === 12345 && rl.banco === '341' && rl.venc === isoAlvo, true);
+  const rl2 = ev(`docLer(${JSON.stringify('texto qualquer 4 5 3\n' + errado.slice(0, 5) + '.' + errado.slice(5, 10) + ' ' + errado.slice(10, 15) + '.' + errado.slice(15, 21) + ' ' + errado.slice(21, 26) + '.' + errado.slice(26, 32) + ' ' + errado[32] + ' ' + errado.slice(33))},new Date())`);
+  t('foto: código com erro de leitura ainda mostra o que deu para ler, mas marcado como "não bateu"', rl2.tipo === 'boleto' && rl2.ok === false && rl2.valorC === 12345, true);
+  // convênio
+  const bar6 = '8' + '1' + '6' + '7' + '00000012345' + '12345678901234567890123456789';
+  const blocos = [0, 11, 22, 33].map(i => bar6.slice(i, i + 11));
+  const l48 = blocos.map(b => b + lun(b)).join('');
+  const c6 = ev(`bolParse('${l48}')`);
+  t('convênio (conta de consumo, 48 números): lê o valor e confere os dígitos', c6.tipo === 'convenio' && c6.valorC === 12345 && c6.ok === true, true);
+  const l48b = l48.slice(0, 11) + String((+l48[11] + 1) % 10) + l48.slice(12);
+  t('convênio: dígito errado não bate', ev(`bolParse('${l48b}')`).ok === false, true);
+  const bar8 = '8' + '1' + '8' + '7' + '00000099900' + '12345678901234567890123456789';
+  const c8 = ev(`bolParse('${bar8}')`);
+  t('convênio com valor efetivo (tipo 8): lê o valor e diz que não dá para conferir o dígito', c8.valorC === 99900 && c8.ok === null, true);
+  // fatura em texto
+  const fat = 'FATURA CARTÃO\nVencimento: 10/11/2026\nPagamento mínimo R$ 123,45\nTotal da fatura R$ 1.234,56\nLimite R$ 5.000,00\n';
+  const rf = ev(`docLer(${JSON.stringify(fat)},new Date())`);
+  t('fatura (sem código): acha o vencimento e o total pelos rótulos, ignora mínimo e limite', rf.tipo === 'texto' && rf.venc === '2026-11-10' && rf.valorC === 123456, true);
+  t('fatura: junta as datas e valores que viu (para ajudar a conferir)', rf.outrasDatas.indexOf('2026-11-10') >= 0 && rf.outrosValores.indexOf(123456) >= 0, true);
+  const rn = ev(`docLer('nada útil aqui',new Date())`);
+  t('sem nada legível: não inventa valor nem data', rn.valorC === null && rn.venc === null && rn.linha === '', true);
+  // tela
+  ev(`S.tab='bills';render();`);
+  t('FIN Mês: tem o botão Ler boleto ou fatura', !!doc.querySelector('#app [data-act="bill-read"]'), true);
+  click(doc.querySelector('#app [data-act="bill-read"]')); await wait(20);
+  t('janela: tem onde colar o código, o botão da foto e o Voltar', !!doc.querySelector('.modal #bl-code') && !!doc.querySelector('.modal #bl-foto') && !!doc.querySelector('.modal #bl-file') && !!doc.querySelector('.modal #c0'), true);
+  doc.querySelector('.modal #bl-code').value = bonito(P);
+  click(doc.querySelector('.modal #bl-go')); await wait(20);
+  const rtxt = doc.querySelector('.modal #bl-res').textContent;
+  t('janela: ao ler o código mostra valor, vencimento, banco e "o código bateu"', /R\$\s*123,45/.test(rtxt) && rtxt.indexOf(isoAlvo.split('-').reverse().join('/')) >= 0 && /Itaú/.test(rtxt) && /código bateu/.test(rtxt), true);
+  ev(`window.__presets=[];billForm=async(rec,preset)=>{window.__presets.push(preset);};`);
+  click(doc.querySelector('.modal #bl-use')); await wait(20);
+  const pr = ev('window.__presets[0]');
+  t('janela: "Criar a conta" abre o formulário com nome, dia, valor e mês do vencimento já preenchidos (conta de uma vez só)', pr && pr.name === 'Boleto Itaú' && pr.dueDay === +isoAlvo.slice(8, 10) && pr.amountC === 12345 && pr.recurring === false && pr.startYm === isoAlvo.slice(0, 7) && !doc.querySelector('.modal'), true);
+  click(doc.querySelector('#app [data-act="bill-read"]')); await wait(20);
+  doc.querySelector('.modal #bl-code').value = errado;
+  click(doc.querySelector('.modal #bl-go')); await wait(20);
+  t('janela: código com número errado avisa em vermelho para conferir', /não bateu/.test(doc.querySelector('.modal #bl-res').textContent), true);
+  doc.querySelector('.modal #bl-code').value = '123';
+  click(doc.querySelector('.modal #bl-go')); await wait(20);
+  t('janela: sem nada legível diz para tirar outra foto ou colar o código, e não oferece criar a conta', /Não encontrei valor nem vencimento/.test(doc.querySelector('.modal #bl-res').textContent) && !doc.querySelector('.modal #bl-use'), true);
+  // foto com o leitor simulado
+  ev(`ocrPrep=async f=>f;ocrRead=async()=>${JSON.stringify(fat)};`);
+  const fi = doc.querySelector('.modal #bl-file');
+  Object.defineProperty(fi, 'files', { value: [new w.File(['x'], 'a.png', { type: 'image/png' })], configurable: true });
+  fi.dispatchEvent(new w.Event('change')); await wait(40);
+  t('foto: o texto lido vira resultado na janela (fatura: total e vencimento)', /R\$\s*1\.234,56/.test(doc.querySelector('.modal #bl-res').textContent) && /10\/11\/2026/.test(doc.querySelector('.modal #bl-res').textContent), true);
+  ev(`ocrRead=async()=>{throw new Error('sem internet para carregar o leitor');};`);
+  fi.dispatchEvent(new w.Event('change')); await wait(40);
+  t('foto: se o leitor não carregar (sem internet), avisa e manda colar o código', /Não consegui ler a foto agora/.test(doc.querySelector('.modal #bl-res').textContent) && /colar o código/.test(doc.querySelector('.modal #bl-res').textContent), true);
+  click(doc.querySelector('.modal #c0')); await wait(20);
+  t('janela: Voltar fecha', !doc.querySelector('.modal'), true);
+  // plano de quitação
+  ev(`S.recs=[{id:'cap',kind:'proposal',version:1,data:{cfg:'capacity',capacityC:200000}},
+     {id:'d1',kind:'debt',version:1,data:{creditor:'Banco Alfa',balanceC:100000,installC:10000,dueDay:5,rateBp:200,status:'ATIVA',holder:'MARCELO',payer:'MARCELO'}},
+     {id:'d2',kind:'debt',version:1,data:{creditor:'Banco Beta',balanceC:300000,installC:20000,dueDay:15,rateBp:300,status:'ATIVA',holder:'MARCELO',payer:'MARCELO'}}];S.tab='plan';S.who='ALL';render();`);
+  const ph = doc.querySelector('#app').innerHTML;
+  t('plano de quitação: cada dívida mostra o mês e o ano em que acaba e uma barra do caminho', (ph.match(/class="plan-bar"/g) || []).length >= 4 && /Banco Alfa/.test(ph) && /Banco Beta/.test(ph) && /de 20\d\d · mês \d+/.test(ph), true);
+  t('plano de quitação: compara os dois caminhos e diz quanto um custa a menos', /Comparando os dois caminhos/.test(ph) && /a menos no total|os dois custam o mesmo/.test(ph), true);
+  ev(`S.tab='home';render();`);
+  t('FIN: versão do cache subiu para v13', /fin-app-v13/.test(fs.readFileSync(path.join(__dirname, '..', 'fin', 'sw.js'), 'utf8')), true);
 
   console.log(ok + ' ok, ' + bad + ' falhas (FIN)');
   process.exit(bad ? 1 : 0);

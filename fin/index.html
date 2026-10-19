@@ -65,6 +65,8 @@ html.lk-on body>*:not(#lock){visibility:hidden}
 #lock .lk-pad button.lk-ft{background:transparent;font-size:1.05rem;color:var(--accent,#FFD60A)}
 #lock .lk-link{background:transparent;border:0;color:var(--accent,#FFD60A);font:inherit;font-size:1.1rem;font-weight:700;padding:.8rem;cursor:pointer}
 #lock .lk-big{width:100%;min-height:3.6rem;border:0;border-radius:1.1rem;background:var(--accent,#FFD60A);color:#000;font:inherit;font-size:1.15rem;font-weight:800;cursor:pointer}
+.plan-bar{height:.5rem;border-radius:.3rem;background:var(--surface-2);margin:.15rem 0 .5rem;overflow:hidden}
+.plan-bar i{display:block;height:100%;background:var(--accent);border-radius:.3rem}
 .seg4{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-top:.4rem}
 .ibtn{width:3rem;height:3rem;border-radius:50%;border:0;background:var(--surface-2);color:var(--accent);font-size:1.5rem;font-weight:800;line-height:1;cursor:pointer}
 .sortbar{display:flex;align-items:center;gap:.5rem;width:100%;margin:.5rem 0;padding:.65rem .9rem;border:0;border-radius:.9rem;background:var(--surface-2);color:var(--fg);font:inherit;font-size:1rem;font-weight:600;cursor:pointer;text-align:left}
@@ -356,6 +358,156 @@ async function undoDo(){
 }
 const undoBtn=()=>'<button class="ibtn" data-act="undo" data-undobtn="1" aria-label="Desfazer" style="display:none">↶</button>';
 ['pointerdown','touchend','click','keydown'].forEach(e=>addEventListener(e,()=>{U.userAt=Date.now();},true));
+/* ---------- ler boleto e fatura (parte pura, testada): linha digitável, código de barras e texto da foto ---------- */
+const BOL_BANCOS={'001':'Banco do Brasil','003':'Banco da Amazônia','004':'Banco do Nordeste','033':'Santander','041':'Banrisul','070':'BRB','077':'Inter','104':'Caixa','212':'Original','237':'Bradesco','260':'Nubank','336':'C6 Bank','341':'Itaú','389':'Mercantil','422':'Safra','453':'Rural','633':'Rendimento','655':'Votorantim','745':'Citibank','748':'Sicredi','756':'Sicoob'};
+const bolDig=s=>String(s==null?'':s).replace(/\D/g,'');
+function bolMod10(n){let s=0,w=2;for(let i=n.length-1;i>=0;i--){let p=(+n[i])*w;if(p>9)p=Math.floor(p/10)+p%10;s+=p;w=w===2?1:2;}return (10-s%10)%10;}
+function bolMod11(n){let s=0,w=2;for(let i=n.length-1;i>=0;i--){s+=(+n[i])*w;w=w===9?2:w+1;}const dv=11-s%11;return (dv===0||dv===10||dv===11)?1:dv;}
+function bolIso(dt){return dt.getUTCFullYear()+'-'+String(dt.getUTCMonth()+1).padStart(2,'0')+'-'+String(dt.getUTCDate()).padStart(2,'0');}
+/* fator de vencimento: dias desde 07/10/1997; depois de 21/02/2025 recomeça em 1000 (22/02/2025). Vale a data mais perto de hoje. */
+function bolDate(fator,hoje){
+  if(!(fator>=1000))return null;
+  const base=Date.UTC(1997,9,7),rest=Date.UTC(2025,1,22),h=hoje||new Date(),t=Date.UTC(h.getFullYear(),h.getMonth(),h.getDate());
+  const a=base+fator*864e5,b=rest+(fator-1000)*864e5;
+  return bolIso(new Date(Math.abs(a-t)<=Math.abs(b-t)?a:b));
+}
+function bolBar44(d){
+  const g=bolMod11(d.slice(0,4)+d.slice(5));
+  return {tipo:'boleto',banco:d.slice(0,3),valorC:parseInt(d.slice(9,19),10),fator:parseInt(d.slice(5,9),10),ok:g===+d[4]};
+}
+function bolLinha47(d){
+  const ok1=bolMod10(d.slice(0,9))===+d[9],ok2=bolMod10(d.slice(10,20))===+d[20],ok3=bolMod10(d.slice(21,31))===+d[31];
+  const bar=d.slice(0,4)+d[32]+d.slice(33,47)+d.slice(4,9)+d.slice(10,20)+d.slice(21,31);
+  const r=bolBar44(bar);r.ok=r.ok&&ok1&&ok2&&ok3;return r;
+}
+function bolConv(bar,blocos){
+  const ref=bar[2],m10=(ref==='6'||ref==='7');
+  const ok=(m10&&blocos)?blocos.every(b=>bolMod10(b.slice(0,11))===+b[11]):null;
+  return {tipo:'convenio',banco:'',valorC:(ref==='6'||ref==='8')?parseInt(bar.slice(4,15),10):null,fator:0,ok};
+}
+function bolParse(txt){
+  const d=bolDig(txt);
+  if(d.length===47)return bolLinha47(d);
+  if(d.length===48){const bl=[0,12,24,36].map(i=>d.slice(i,i+12));return bolConv(bl.map(b=>b.slice(0,11)).join(''),bl);}
+  if(d.length===44)return d[0]==='8'?bolConv(d,null):bolBar44(d);
+  return null;
+}
+/* procura o código no texto lido da foto, mesmo com lixo em volta; prefere o trecho cujos dígitos verificadores batem */
+function bolFindInText(txt){
+  const t=String(txt||'');
+  const fm=/\d{5}[. ]?\d{5}\s+\d{5}[. ]?\d{6}\s+\d{5}[. ]?\d{6}\s+\d\s+\d{14}/.exec(t);
+  if(fm){const d=bolDig(fm[0]);if(d.length===47){const p=bolParse(d);if(p)return Object.assign(p,{linha:d});}}
+  const runs=t.match(/\d[\d .\-\n]{30,110}\d/g)||[];
+  let best=null;
+  for(const r of runs){
+    const d=bolDig(r);
+    for(const len of [47,48]){
+      for(let i=0;i+len<=d.length;i++){
+        const p=bolParse(d.slice(i,i+len));
+        if(p&&p.ok===true)return Object.assign(p,{linha:d.slice(i,i+len)});
+        if(p&&!best&&i===0&&d.length===len)best=Object.assign(p,{linha:d});
+      }
+    }
+    if(d.length>=44&&d.length<=46){
+      for(let i=0;i+44<=d.length;i++){
+        const p=bolParse(d.slice(i,i+44));
+        if(p&&p.ok===true)return Object.assign(p,{linha:d.slice(i,i+44)});
+        if(p&&!best&&i===0&&d.length===44)best=Object.assign(p,{linha:d});
+      }
+    }
+  }
+  return best;
+}
+const docCents=s=>parseInt(String(s).replace(/\./g,'').replace(',',''),10);
+/* sem código: procura vencimento e total pelos rótulos e junta as datas e valores vistos */
+function docTexto(txt){
+  const t=String(txt||''),out={datas:[],valores:[],venc:null,total:null};
+  const re=/(\d{2})[\/.\-](\d{2})[\/.\-](\d{4})/g;let m;
+  while((m=re.exec(t))){const dd=+m[1],mm=+m[2],yy=+m[3];if(dd>=1&&dd<=31&&mm>=1&&mm<=12&&yy>=2020&&yy<=2100){const dt=new Date(Date.UTC(yy,mm-1,dd));if(dt.getUTCMonth()===mm-1){const iso=bolIso(dt);if(out.datas.indexOf(iso)<0)out.datas.push(iso);}}}
+  const rv=/(?:R\$\s*)?(\d{1,3}(?:\.\d{3})*,\d{2})(?!\d)/g;
+  while((m=rv.exec(t))){const c=docCents(m[1]);if(c>0&&out.valores.indexOf(c)<0)out.valores.push(c);}
+  t.split('\n').forEach(ln=>{
+    const l=ln.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+    if(!out.venc&&/venc/.test(l)){const d=/(\d{2})[\/.\-](\d{2})[\/.\-](\d{4})/.exec(ln);if(d){const dt=new Date(Date.UTC(+d[3],+d[2]-1,+d[1]));if(dt.getUTCMonth()===+d[2]-1)out.venc=bolIso(dt);}}
+    if(out.total==null&&/(total|valor|pagar|documento)/.test(l)&&!/minimo|parcela|encargo|juros|limite/.test(l)){const v=/(\d{1,3}(?:\.\d{3})*,\d{2})/.exec(ln);if(v&&docCents(v[1])>0)out.total=docCents(v[1]);}
+  });
+  return out;
+}
+function docLer(txt,hoje){
+  const b=bolFindInText(txt),tx=docTexto(txt);
+  const r={tipo:'texto',valorC:null,venc:null,banco:'',ok:null,linha:'',outrasDatas:tx.datas.slice(0,4),outrosValores:tx.valores.slice(0,4)};
+  if(b){r.tipo=b.tipo;r.valorC=(b.valorC>0)?b.valorC:null;r.banco=b.banco;r.ok=b.ok;r.linha=b.linha;if(b.fator)r.venc=bolDate(b.fator,hoje);}
+  if(r.valorC==null&&tx.total!=null)r.valorC=tx.total;
+  if(!r.venc&&tx.venc)r.venc=tx.venc;
+  return r;
+}
+
+/* ---- leitor da foto (carrega o leitor de texto na primeira vez; precisa de internet nessa vez) ---- */
+const OCR_SRC='https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
+function ocrLoad(){
+  if(window.Tesseract)return Promise.resolve();
+  return new Promise((res,rej)=>{const s=document.createElement('script');s.src=OCR_SRC;s.onload=()=>res();s.onerror=()=>rej(new Error('sem internet para carregar o leitor'));document.head.appendChild(s);});
+}
+async function ocrRead(blob,onProg){
+  await ocrLoad();
+  const wk=await Tesseract.createWorker('por',1,{logger:m=>{if(onProg&&m&&m.status)onProg(m.status,m.progress||0);}});
+  try{const r=await wk.recognize(blob);return (r.data&&r.data.text)||'';}finally{try{await wk.terminate();}catch(e){}}
+}
+/* deixa a foto mais fácil de ler: tamanho até 2200 px, cinza e contraste esticado */
+async function ocrPrep(file){
+  try{
+    const bmp=await createImageBitmap(file),k=Math.min(1,2200/Math.max(bmp.width,bmp.height)),w=Math.round(bmp.width*k),h=Math.round(bmp.height*k);
+    const c=document.createElement('canvas');c.width=w;c.height=h;const g=c.getContext('2d');g.drawImage(bmp,0,0,w,h);
+    const im=g.getImageData(0,0,w,h),d=im.data;let lo=255,hi=0;
+    for(let i=0;i<d.length;i+=4){const v=(d[i]*0.3+d[i+1]*0.59+d[i+2]*0.11)|0;d[i]=d[i+1]=d[i+2]=v;if(v<lo)lo=v;if(v>hi)hi=v;}
+    const sc=hi>lo?255/(hi-lo):1;
+    for(let i=0;i<d.length;i+=4){const v=Math.max(0,Math.min(255,((d[i]-lo)*sc)|0));d[i]=d[i+1]=d[i+2]=v;}
+    g.putImageData(im,0,0);
+    return await new Promise(r=>c.toBlob(r,'image/png'));
+  }catch(e){return file;}
+}
+const docDia=iso=>{if(!iso)return '—';const p=iso.split('-');return p[2]+'/'+p[1]+'/'+p[0];};
+function docNome(r){return r.tipo==='boleto'?('Boleto'+(BOL_BANCOS[r.banco]?' '+BOL_BANCOS[r.banco]:'')):(r.tipo==='convenio'?'Conta de consumo':'Conta (da foto)');}
+function docResultado(r){
+  const tipo={boleto:'Boleto bancário',convenio:'Conta de consumo (convênio)',texto:'Texto da foto'}[r.tipo];
+  const ok=r.ok===true?'<div class="note" style="background:var(--ok-soft,#103a24);color:var(--ok,#34c27a)">✓ O código bateu: os dígitos verificadores estão certos.</div>'
+    :(r.ok===false?'<div class="err">O código não bateu. Confira os números antes de pagar.</div>'
+    :(r.linha?'<div class="note">Não consegui conferir este tipo de código. Confira o valor e a data.</div>':''));
+  const nada=(r.valorC==null&&!r.venc);
+  let h='<div class="card"><div class="row"><span class="mut">Tipo</span><b>'+esc(tipo)+(r.banco&&BOL_BANCOS[r.banco]?' · '+esc(BOL_BANCOS[r.banco]):'')+'</b></div>'
+    +'<div class="row"><span class="mut">Valor</span><b>'+(r.valorC!=null?money(r.valorC):'não achei')+'</b></div>'
+    +'<div class="row"><span class="mut">Vencimento</span><b>'+docDia(r.venc)+'</b></div></div>'+ok;
+  if(nada)h+='<div class="err">Não encontrei valor nem vencimento. Tire outra foto, mais de perto e com boa luz, ou cole o código do boleto.</div>';
+  if(r.outrosValores&&r.outrosValores.length&&r.valorC==null)h+='<div class="note">Valores que vi: '+r.outrosValores.map(money).join(' · ')+'</div>';
+  if(r.outrasDatas&&r.outrasDatas.length&&!r.venc)h+='<div class="note">Datas que vi: '+r.outrasDatas.map(docDia).join(' · ')+'</div>';
+  if(!nada)h+='<button class="btn" id="bl-use">Criar a conta com estes dados</button><div class="hint" style="text-align:center">Você ainda confere tudo antes de salvar.</div>';
+  return h;
+}
+async function lerDocModal(){
+  const m=modal('<h3>Ler boleto ou fatura</h3><p class="hint">Cole o código do boleto (a linha digitável) ou tire uma foto. A foto é lida aqui, no aparelho.</p>'
+    +'<textarea id="bl-code" rows="3" placeholder="Código do boleto" style="width:100%;font-size:1rem"></textarea>'
+    +'<button class="btn" id="bl-go">Ler o código</button><button class="btn sec" id="bl-foto">📷 Tirar foto ou escolher imagem</button>'
+    +'<input type="file" id="bl-file" accept="image/*" style="display:none"><div id="bl-res"></div><button class="btn sec" id="c0">Voltar</button>');
+  const res=m.querySelector('#bl-res');
+  const show=r=>{
+    res.innerHTML=docResultado(r);
+    const use=m.querySelector('#bl-use');
+    if(use)use.onclick=()=>{m.remove();billForm(null,{name:docNome(r),dueDay:r.venc?+r.venc.slice(8,10):undefined,amountC:r.valorC,recurring:false,variable:false,startYm:r.venc?r.venc.slice(0,7):undefined});};
+  };
+  m.querySelector('#bl-go').onclick=()=>show(docLer(m.querySelector('#bl-code').value,new Date()));
+  m.querySelector('#bl-foto').onclick=()=>m.querySelector('#bl-file').click();
+  m.querySelector('#bl-file').onchange=async e=>{
+    const f=e.target.files&&e.target.files[0];if(!f)return;
+    res.innerHTML='<div class="card">Lendo a foto… pode levar alguns segundos.</div>';
+    try{
+      const blob=await ocrPrep(f);
+      const txt=await ocrRead(blob,(st,p)=>{res.innerHTML='<div class="card">Lendo a foto… '+Math.round(p*100)+'%</div>';});
+      show(docLer(txt,new Date()));
+    }catch(err){res.innerHTML='<div class="err">Não consegui ler a foto agora ('+esc(err.message)+'). Precisa de internet na primeira vez. Você pode colar o código do boleto.</div>';}
+  };
+  m.querySelector('#c0').onclick=()=>m.remove();
+}
+
 /* ---------- ordenar e arrastar (tela): segurar um item e levar para onde quiser ---------- */
 const RO={reg:{},sel:null,timer:null,pend:null,drag:null,noClick:0,x0:0,y0:0};
 const ROH={write:async()=>{},scroller:()=>window,rerender:()=>{},toast:()=>{},choose:async()=>null,syncLoad:async()=>null,syncSave:async()=>null};
@@ -784,8 +936,9 @@ function vPlan(){
   if(cap<mins)h+='<div class="note" style="background:var(--danger-soft);color:var(--danger)"><b>Falta dinheiro:</b> as parcelas somam '+money(mins)+' e você separou '+money(cap)+'. Faltam '+money(mins-cap)+' por mês. Algumas parcelas ficam sem pagar e os juros crescem.</div>';
   const unk=ok.filter(d=>d.data.rateBp==null).length;
   if(unk)h+='<div class="note">Faltam os juros de '+unk+' dívida(s). Elas entram na conta sem juros, então o tempo e o custo reais podem ser maiores. O custo total fica “Não informado”.</div>';
+  const rs={};
   [['snow','Menor saldo primeiro','Quita as pequenas rápido, uma por uma.'],['aval','Maior juros primeiro','Costuma custar menos quando os juros são conhecidos.']].forEach(sc=>{
-    const r=simulate(ok,cap,sc[0]);
+    const r=simulate(ok,cap,sc[0]);rs[sc[0]]=r;
     h+='<h2 style="margin-left:0">'+esc(sc[1])+'</h2><div class="card"><div class="mut">'+esc(sc[2])+'</div>';
     if(!r.done)h+='<div class="err" style="margin-top:.5rem">Com '+money(cap)+' por mês não quita em 50 anos: o valor mal cobre os juros.</div>';
     else{
@@ -793,10 +946,11 @@ function vPlan(){
         +'<div class="row"><span class="mut">Total pago (estimado)</span><b>'+money(r.total)+'</b></div>'
         +'<div class="row"><span class="mut">Juros no caminho</span><b>'+(r.anyUnk?'Não informado':money(r.interest))+'</b></div>';
       h+='<div class="mut" style="margin-top:.5rem">Ordem em que cada dívida some:</div>';
-      r.ds.slice().sort((a,b)=>a.paidMonth-b.paidMonth).forEach((x,i)=>{h+='<div class="row"><span>'+(i+1)+'. '+esc(x.name)+'</span><span class="mut">mês '+x.paidMonth+'</span></div>';});
+      r.ds.slice().sort((a,b)=>a.paidMonth-b.paidMonth).forEach((x,i)=>{const pct=Math.max(6,Math.round(100*x.paidMonth/Math.max(1,r.months)));h+='<div class="row" style="margin-top:.35rem"><span>'+(i+1)+'. '+esc(x.name)+'</span><span class="mut">'+esc(ymLabel(addMonths(ymOf(todayIso()),x.paidMonth)))+' · mês '+x.paidMonth+'</span></div><div class="plan-bar"><i style="width:'+pct+'%"></i></div>';});
     }
     h+='</div>';
   });
+  if(rs.snow&&rs.aval&&rs.snow.done&&rs.aval.done&&!rs.snow.anyUnk&&!rs.aval.anyUnk){const dif=rs.snow.total-rs.aval.total;h+='<div class="note"><b>Comparando os dois caminhos:</b> '+(dif>0?'escolhendo “Maior juros primeiro” você paga cerca de '+money(dif)+' a menos no total.':(dif<0?'escolhendo “Menor saldo primeiro” você paga cerca de '+money(-dif)+' a menos no total.':'os dois custam o mesmo.'))+'</div>';}
   h+='<div class="note">Isto é só conta. Não inclui desconto de negociação nem multa. Antes de pagar ou renegociar, confira com o banco. O FIN não paga nada.</div>';
   return h+'</div>';
 }
@@ -1193,6 +1347,7 @@ function vMonth(){
   else if(!shown.length)h+='<div class="card mut">Nada nesta lista.</div>';
   else h+='<div class="tbl" role="table"><div class="tr th" role="row"><span>Dia</span><span>O que</span><span>Valor</span></div>'+shown.map(mRow).join('')+'</div>';
   h+='<button class="btn" data-act="bill-new">+ Nova conta</button>';
+  h+='<button class="btn sec" data-act="bill-read">📷 Ler boleto ou fatura</button>';
   if(all.length)h+='<p class="hint">Toque numa linha para pagar, informar o valor ou editar. “Confirmar” = a data já passou e você ainda não marcou como paga.</p>';
   /* contas cadastradas que NÃO vencem neste mês (a mesma conta nunca aparece duas vezes) */
   const used=new Set(all.filter(i=>i.k==='bill'||i.k==='billp').map(i=>i.billId));
@@ -1612,7 +1767,7 @@ async function billForm(rec,preset){
     validate:o=>o.variable?null:null,
     summary:o=>['Conta: '+o.name,'Vence dia '+o.dueDay,o.variable?'Valor muda todo mês (o app cobra)':'Valor: '+money(o.amountC),o.recurring?'Repete todo mês':'Só neste mês','De: '+pname(o.holder)+(o.account?' · conta '+o.account:'')],
     save:async o=>{
-      const data={name:o.name,dueDay:o.dueDay,variable:o.variable,amountC:o.variable?null:o.amountC,recurring:o.recurring,holder:o.holder,account:o.account||'',startYm:rec?rec.data.startYm:ymOf(todayIso())};
+      const data={name:o.name,dueDay:o.dueDay,variable:o.variable,amountC:o.variable?null:o.amountC,recurring:o.recurring,holder:o.holder,account:o.account||'',startYm:rec?rec.data.startYm:((preset&&preset.startYm)||ymOf(todayIso()))};
       if(rec)await Api.update(rec,data);else{await Api.create('bill',data);await ensureMonth();}
     },
     onDelete:rec?async()=>{
@@ -1744,6 +1899,7 @@ document.addEventListener('click',async ev=>{
   else if(act==='bk-down')bkDown();
   else if(act==='sort-open')sortOpenPage();
   else if(act==='bill-new')billForm(null);
+  else if(act==='bill-read')lerDocModal();
   else if(act==='bill-edit')billForm(get(id));
   else if(act==='bill-open'){const r=get(id);billMonthForm({r,bill:get(r.data.billId)});}
   else if(act==='card-new')cardForm(null);
