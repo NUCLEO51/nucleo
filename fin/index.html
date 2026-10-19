@@ -111,6 +111,22 @@ html.lk-on body>*:not(#lock){visibility:hidden}
 .tag.ok{background:var(--accent-soft);color:var(--accent)}
 .tag.warn{background:var(--warn-soft);color:var(--warn)}
 .tag.bad{background:var(--danger-soft);color:var(--danger)}
+.hd.home h1{font-size:1.7rem;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hd.home>div{display:flex;gap:.35rem;flex-shrink:0}
+.hd.home .ibtn{width:2.4rem;height:2.4rem;font-size:1.15rem}
+.cnt{display:inline-flex;align-items:center;justify-content:center;min-width:1.9rem;height:1.9rem;padding:0 .5rem;border-radius:999px;background:#3DFF9A;color:#000;font-weight:900;font-size:1rem}
+.up{border:1px solid var(--line);border-radius:1rem;overflow:hidden;background:var(--surface);margin:.5rem 0}
+.up button{display:grid;grid-template-columns:3rem 1fr auto;gap:.6rem;align-items:center;width:100%;min-height:3.4rem;padding:.55rem .8rem;border:0;border-bottom:1px solid var(--line);background:transparent;color:var(--fg);font:inherit;text-align:left;cursor:pointer}
+.up.s2 button{grid-template-columns:1fr auto;min-height:3.8rem}
+.up button:last-child{border-bottom:0}
+.up .dt{font-weight:800}
+.up .late .dt{color:var(--danger)}
+.up .nm{display:flex;flex-direction:column;min-width:0}
+.up .nm b{overflow-wrap:anywhere}
+.up .nm i{font-style:normal;font-size:.85rem;color:var(--muted)}
+.up .vl{font-weight:800;white-space:nowrap}
+.up.s2 .vl{font-size:1.15rem}
+.clamp{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .btn{display:block;width:100%;min-height:3.6rem;border-radius:1rem;border:0;font-weight:800;font-size:1.1rem;background:var(--accent);color:var(--accent-fg);margin:.5rem 0;cursor:pointer}
 .btn.sec{background:var(--surface-2);color:var(--fg)}
 .btn.bad{background:var(--danger);color:#fff}
@@ -1044,7 +1060,7 @@ function invStatus(card,v,openYm){
 const bestDay=c=>c.closeDay>=dim(todayIso().slice(0,7))?1:c.closeDay+1;
 
 /* ---------- telas ---------- */
-function header(t,extra){return '<header class="hd"><h1>'+esc(t)+'</h1><div>'+(extra||'')+'</div></header>';}
+function header(t,extra,cls){return '<header class="hd'+(cls?' '+cls:'')+'"><h1>'+esc(t)+'</h1><div>'+(extra||'')+'</div></header>';}
 function tabs(){
   const T=[['home','🏠','Início'],['bills','📅','Mês'],['cards','💳','Cartões'],['debts','📉','Dívidas'],['plan','🎯','Quitar']];
   return '<nav class="tabs">'+T.map(t=>'<button data-act="tab" data-v="'+t[0]+'" class="'+(S.tab===t[0]?'on':'')+'"><span class="e">'+t[1]+'</span>'+t[2]+'</button>').join('')+'</nav>';
@@ -1214,51 +1230,50 @@ async function clearDemo(){
   const ids=new Set(S.recs.filter(r=>r.data&&r.data.demo).map(r=>r.id));
   for(const r of S.recs.slice()){if(ids.has(r.id)||(r.kind==='billmonth'&&ids.has(r.data.billId))||(r.kind==='invpay'&&ids.has(r.data.cardId)))await Api.remove(r);}
 }
+const rbtn=(act,ico,label,v)=>'<button class="ibtn" data-act="'+act+'"'+(v?' data-v="'+v+'"':'')+' aria-label="'+esc(label)+'" title="'+esc(label)+'">'+ico+'</button>';
+const srow=(v,label,val,sub)=>'<button data-act="tab" data-v="'+v+'"><span class="nm"><b>'+label+'</b><i>'+(sub||'')+'</i></span><span class="vl">'+val+'</span></button>';
 function vHome(){
-  const ym=ymOf(todayIso()),rows=monthRows(ym);
+  const ym=ymOf(todayIso()),td=todayIso(),rows=monthRows(ym);
   const open=rows.filter(x=>!x.r.data.paidAt);
   const known=open.filter(x=>x.r.data.amountC!=null).reduce((a,x)=>a+x.r.data.amountC,0);
   const sem=open.filter(x=>x.r.data.amountC==null).length;
-  const late=open.filter(x=>billDue(x)<todayIso()).length;
-  let h=header('FIN')+'<p class="sub">'+esc(ymLabel(ym))+'</p>'+'<div class="wrap">';
+  const late=open.filter(x=>billDue(x)<td).length;
+  let h=header('Financeiro',undoBtn()+rbtn('tab','📄','Extratos do banco','stmt')+rbtn('chat','💬','Chat financeiro')+rbtn('tab','⚙️','Ajustes','cfg'),'home')+'<p class="sub">'+esc(ymLabel(ym))+'</p><div class="wrap">';
   const pend=pendList();
   if(pend.length){
-    h+='<div class="card" style="border:2px solid var(--accent)"><div class="t" style="font-weight:800;font-size:1.15rem">📥 '+pend.length+' pendente(s) do Núcleo</div><div class="mut">Toque para conferir e cadastrar.</div></div>';
-    pend.slice(0,20).forEach(r=>{h+='<button class="item" data-act="prop" data-id="'+r.id+'"><div class="t">'+esc(r.data.text)+'</div><div class="mut">Toque para revisar</div></button>';});
+    h+='<button class="item" data-act="hp-toggle" aria-expanded="'+(!!S.hp)+'"><div class="row"><span class="t">📥 Pendentes do Núcleo</span><span><span class="cnt">'+pend.length+'</span> <span class="mut" style="font-size:1.3rem">'+(S.hp?'▾':'▸')+'</span></span></div></button>';
+    if(S.hp)pend.slice(0,20).forEach(r=>{h+='<button class="item" data-act="prop" data-id="'+r.id+'"><div class="clamp">'+esc(r.data.text)+'</div></button>';});
   }
-  h+='<div class="card"><div class="mut">Contas do mês ainda a pagar (valores conhecidos)</div><div class="big">'+money(known)+'</div>'
-    +(sem?'<div style="margin-top:.4rem"><span class="tag warn">'+sem+' sem valor</span> <span class="mut">preencha em Mês</span></div>':'')
-    +(late?'<div style="margin-top:.4rem"><span class="tag bad">'+late+' em atraso</span></div>':'')
-    +(!rows.length?'<div class="mut" style="margin-top:.4rem">Nenhuma conta cadastrada ainda.</div>':'')+'</div>';
-  const up=upcoming();
-  if(up.length){
-    h+='<h2>Próximos vencimentos (30 dias)</h2>';
-    up.forEach(u=>{h+='<div class="card"><div class="row"><span class="t" style="font-weight:800">'+esc(u.name)+'</span><b'+(u.recv?' class="rc"':'')+'>'+(u.recv?'+ ':'')+money(u.c)+'</b></div><div class="row"><span class="mut">'+u.kind+' · '+brDate(u.dt)+'</span>'+(u.late?'<span class="tag bad">Em atraso</span>':'')+'</div></div>';});
-  }
-  const cardsH=byKind('card');
-  if(cardsH.length){
-    let totH=0;cardsH.forEach(cr=>{totH+=cardCalc(cr).used;});
-    h+='<h2>Cartões</h2><button class="item" data-act="tab" data-v="cards"><div class="row"><span class="mut">Total usado ('+cardsH.length+(cardsH.length===1?' cartão':' cartões')+')</span><b>'+money(totH)+'</b></div><div class="mut">Toque para ver cada cartão, a fatura e o limite.</div></button>';
-  }
+  const cardsH=byKind('card');let totH=0;cardsH.forEach(cr=>{totH+=cardCalc(cr).used;});
   const debtsAll=byKind('debt').filter(d=>d.data.status!=='PAGA');
   const debts=debtsAll.filter(d=>d.data.dir!=='RECEBER'),recvs=debtsAll.filter(d=>d.data.dir==='RECEBER');
-  if(debts.length||recvs.length){
-    let inner='';
-    if(debts.length){const sum=debts.reduce((a,d)=>a+(d.data.balanceC||0),0),miss=debts.some(d=>d.data.balanceC==null);inner+='<div class="row"><span class="mut">Saldo a pagar ('+debts.length+')</span><b>'+money(sum)+'</b></div>'+(miss?'<div class="mut">Algum saldo está “Não informado”.</div>':'');}
-    if(recvs.length){const sr=recvs.reduce((a,d)=>a+(d.data.balanceC||0),0);inner+='<div class="row"><span class="mut">Saldo a receber ('+recvs.length+')</span><b class="rc">'+money(sr)+'</b></div>';}
-    h+='<h2>Dívidas e parcelas</h2><div class="card">'+inner+'</div>';
+  const dsum=debts.reduce((a,d)=>a+(d.data.balanceC||0),0),dmiss=debts.some(d=>d.data.balanceC==null);
+  const g=gastosMes(ym);
+  h+='<div class="up s2">'
+    +srow('bills','A pagar no mês',money(known),(late?'<span class="tag bad">'+late+(late===1?' atrasada':' atrasadas')+'</span> ':'')+(sem?'<span class="tag warn">'+sem+' sem valor</span>':'')+(!rows.length?'Nenhuma conta cadastrada':'')+((rows.length&&!late&&!sem)?'Valores conhecidos':''))
+    +srow('cards','Cartões',cardsH.length?money(totH):'—',cardsH.length?cardsH.length+(cardsH.length===1?' cartão · total usado':' cartões · total usado'):'Nenhum cartão')
+    +srow('debts','Dívidas',debts.length?money(dsum):'—',(debts.length?debts.length+' a pagar':'Nenhuma a pagar')+(dmiss?' · <span class="tag warn">saldo não informado</span>':'')+(recvs.length?' · <span class="rc">a receber '+money(recvs.reduce((a,d)=>a+(d.data.balanceC||0),0))+'</span>':''))
+    +srow('spend','Gastos do mês',g.rows.length?money(g.total):'—',g.semN?'<span class="tag warn">'+g.semN+' sem categoria</span>':(g.rows.length?'Por categoria':'Sem gastos neste mês'))
+    +'</div>';
+  const up=upcoming();
+  if(up.length){
+    h+='<h2>Próximos vencimentos</h2><div class="up">';
+    up.slice(0,5).forEach(u=>{h+='<button data-act="tab" data-v="bills" class="'+(u.late?'late':'')+'"><span class="dt">'+brDate(u.dt).slice(0,5)+'</span><span class="nm"><b>'+esc(u.name)+'</b><i>'+u.kind+(u.late?' · em atraso':'')+'</i></span><span class="vl'+(u.recv?' rc':'')+'">'+(u.recv?'+ ':'')+money(u.c)+'</span></button>';});
+    if(up.length>5)h+='<button data-act="tab" data-v="bills"><span class="dt">+'+(up.length-5)+'</span><span class="nm"><i>mais, veja em Mês</i></span><span class="vl mut">›</span></button>';
+    h+='</div>';
   }
-  if(S.remErr)h+='<div class="note"><span class="tag warn">Lembretes</span> Não consegui conferir os lembretes no Núcleo agora ('+esc(S.remErr)+'). Tento de novo na próxima vez.</div>';
-  h+='<div class="note">Projeção parcial não é dinheiro disponível. O FIN só organiza e lembra: quem paga é você.</div>';
+  if(S.remErr)h+='<div class="note"><span class="tag warn">Lembretes</span> Não consegui conferir os lembretes no Núcleo agora ('+esc(S.remErr)+').</div>';
+  return h+'</div>';
+}
+function vCfg(){
+  let h=header('Ajustes')+'<div class="wrap"><button class="btn sec" data-back="1" data-act="tab" data-v="home">← Voltar</button>';
+  h+='<h2>Segurança</h2>'+lkBlock('fin');
+  h+='<h2>Aparência</h2>'+fsBlock();
+  h+='<h2>Cópia de segurança</h2>'+backupBlock();
+  h+='<h2>Conta</h2><button class="btn sec" data-act="refresh">Atualizar</button><button class="btn sec" data-act="logout">Sair</button>';
   h+=hasDemo()?'<button class="btn sec" data-act="demo-off">Apagar os exemplos de teste</button>':(S.recs.length?'':'<button class="btn sec" data-act="demo-on">Carregar exemplos de teste</button>');
-  h+='<button class="btn" data-act="tab" data-v="spend">📊 Gastos: para onde vai o dinheiro</button>';
-  h+='<button class="btn" data-act="tab" data-v="stmt">📄 Extratos do banco</button>';
-  h+='<button class="btn" data-act="chat">🤝 Chat financeiro</button>';
-  h+=lkBlock('fin');
-  h+=fsBlock();
-  h+=backupBlock();
-  h+='<button class="btn sec" data-act="refresh">Atualizar</button><button class="btn sec" data-act="logout">Sair</button>';
-  h+='<p class="hint" style="text-align:center"><a class="lnk" href="../">Abrir o Núcleo</a></p></div>';
+  h+='<p class="hint" style="text-align:center"><a class="lnk" href="../">Abrir o Núcleo</a></p>';
+  h+='<p class="hint">Projeção parcial não é dinheiro disponível. O Financeiro só organiza e lembra: quem paga é você.</p></div>';
   return h;
 }
 /* ---------- parcelas das dívidas mês a mês ---------- */
@@ -1877,7 +1892,7 @@ function render(){
   if(!S.sess||!S.ready){return;}
   RO.reg={};
   let body;
-  if(S.tab==='home')body=vHome();else if(S.tab==='bills')body=vMonth();else if(S.tab==='cards')body=S.cardId?vCard():vCards();else if(S.tab==='debts')body=vDebts();else if(S.tab==='plan')body=vPlan();else if(S.tab==='stmt')body=vStmt();else if(S.tab==='spend')body=vGastos();else body=vHome();
+  if(S.tab==='home')body=vHome();else if(S.tab==='bills')body=vMonth();else if(S.tab==='cards')body=S.cardId?vCard():vCards();else if(S.tab==='debts')body=vDebts();else if(S.tab==='plan')body=vPlan();else if(S.tab==='stmt')body=vStmt();else if(S.tab==='spend')body=vGastos();else if(S.tab==='cfg')body=vCfg();else body=vHome();
   a.innerHTML=body+(S.msg?'<div class="wrap"><div class="err">'+esc(S.msg)+'</div></div>':'')+tabs();
   roAfterRender();
 }
@@ -2021,6 +2036,7 @@ document.addEventListener('click',async ev=>{
   else if(act==='sp-prev'){S.sp=S.sp||{ym:ymOf(todayIso()),cat:null,all:false};S.sp.ym=addMonths(S.sp.ym,-1);S.sp.cat=null;render();}
   else if(act==='sp-next'){S.sp=S.sp||{ym:ymOf(todayIso()),cat:null,all:false};S.sp.ym=addMonths(S.sp.ym,1);S.sp.cat=null;render();}
   else if(act==='sp-cat'){S.sp.cat=(S.sp.cat===b.dataset.c?null:b.dataset.c);render();}
+  else if(act==='hp-toggle'){S.hp=!S.hp;render();}
   else if(act==='sp-all'){S.sp.all=!S.sp.all;render();}
   else if(act==='sp-queue')catQueue();
   else if(act==='sp-pick'){const r=gastosRows().find(x=>String(x.i)===b.dataset.i);if(r)catPick(r,false);}
