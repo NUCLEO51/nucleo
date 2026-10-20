@@ -2394,10 +2394,12 @@ function notesBody(){
   }
   /* pasta de verdade: primeiro as notas dela (recolhíveis), depois as subpastas */
   const direct=ordSort('notes:'+cf,'notes',S.notes.filter(n=>noteFolder(n,fm)===cf).sort(noteSort),GN,true),ks=orderedKids(cf,fm),open=!S.nn[cf];
-  let h='<div class="sec-h"><button class="sec-tog'+(open?' open':'')+'" data-act="nx-notes" data-id="'+esc(cf)+'" aria-expanded="'+open+'" aria-label="'+(open?'Recolher':'Mostrar')+' as notas desta pasta">'+ic('right',1.05,2.6)+'<h2>Notas '+cnt(direct.length,1)+'</h2></button></div>';
+  const fo=fm[cf]||{},nN=((fo.secN||'')+'').trim()||'Notas',nP=((fo.secP||'')+'').trim()||'Pastas';
+  const secEd='<button class="iconbtn rowedit" data-act="edit-folder" data-id="'+esc(cf)+'" aria-label="Mudar os títulos desta pasta">'+ic('edit',1,2.2)+'</button>';
+  let h='<div class="sec-h"><button class="sec-tog'+(open?' open':'')+'" data-act="nx-notes" data-id="'+esc(cf)+'" aria-expanded="'+open+'" aria-label="'+(open?'Recolher':'Mostrar')+' '+esc(nN)+' desta pasta">'+ic('right',1.05,2.6)+'<h2>'+esc(nN)+' '+cnt(direct.length,1)+'</h2></button>'+secEd+'</div>';
   if(open)h+=direct.length?sortBarFor('notes:'+cf)+notesList(direct,fm,false,'','notes:'+cf,true):'<div class="group">'+(ks.length?emptyRow('Nenhuma nota nesta pasta.','Use os botões de cima para criar.'):emptyRow('Pasta vazia.','Crie uma nota ou escaneie um documento.'))+'</div>';
   if(ks.length){
-    h+=secH('Pastas '+cnt(ks.length,1));
+    h+=secH(esc(nP)+' '+cnt(ks.length,1),secEd);
     h+=sortBarFor('folders:'+cf);
     h+='<div class="group subtree"'+ordAttr('folders:'+cf,true)+'>'+ks.map(k=>subNode(k,fm,1)).join('')+'</div>';
   }
@@ -3187,6 +3189,10 @@ function sheetFolder(){
   const sh=S.sheet,d=sh.draft,fm=fmap();
   let h='<div class="sheet"><div class="sheet-in">'+head(sh.isNew?'Nova pasta':'Pasta','Salvar')+'<div class="sheet-body" id="sheetBody">';
   h+='<div><label class="lbl" for="f-title">Nome da pasta</label><input class="inp" id="f-title" data-bind="name" value="'+esc(d.name)+'" placeholder="Ex.: Saúde" autocomplete="off"></div>';
+  if(!sh.isNew){
+    h+='<div><label class="lbl" for="f-secn">Título da parte das notas (padrão: Notas)</label><input class="inp" id="f-secn" data-bind="secN" value="'+esc(d.secN||'')+'" placeholder="Notas" autocomplete="off"></div>';
+    h+='<div><label class="lbl" for="f-secp">Título da parte das pastas (padrão: Pastas)</label><input class="inp" id="f-secp" data-bind="secP" value="'+esc(d.secP||'')+'" placeholder="Pastas" autocomplete="off"></div>';
+  }
   h+='<div><label class="lbl" for="f-parent">Fica dentro de</label><select class="inp" id="f-parent" data-bind="parent">'+folderOptions(d.parent&&fm[d.parent]?d.parent:'',fm,d.id||null,'Nenhuma (pasta principal)')+'</select></div>';
   if(!sh.isNew)h+='<div class="note-s">Se apagar a pasta, as notas e pastas dela sobem para a pasta de cima. Nenhuma nota é apagada.</div>';
   h+='</div>'+footer(sh,'Apagar pasta')+'</div></div>';

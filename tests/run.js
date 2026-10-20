@@ -1234,4 +1234,6 @@ t('etiquetas: #589 e #882 (só número) não viram etiqueta', JSON.stringify(ev(
 t('etiquetas: #consulta e #2026-meta continuam valendo', JSON.stringify(ev('__NUCLEO_TEST__.tagsOf({title:"",body:"#consulta #2026-meta #589"})')), '["consulta","2026-meta"]');
 // --- editar nota e pasta direto da lista (v66) ---
 t('lista: cada nota e cada pasta tem botão de editar', /data-act="edit-note"/.test(html) && /data-act="edit-folder" data-id="'\+esc\(f\.id\)/.test(html), true);
+// --- títulos editáveis das partes de cada pasta (v67) ---
+t('pasta: títulos das partes (notas e pastas) podem ser mudados', /fo\.secN/.test(html) && /data-bind="secN"/.test(html) && /data-bind="secP"/.test(html), true);
 Promise.all(global.__pend || []).then(() => { console.log(ok + ' ok, ' + bad + ' falhas'); process.exit(bad ? 1 : 0); });
