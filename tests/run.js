@@ -173,21 +173,24 @@ ev(`__NUCLEO_TEST__.S.gq='';__NUCLEO_TEST__.S.tab='hoje';`);
   ev(`const S=__NUCLEO_TEST__.S;S.ready=true;S.tab='notas';S.folder=null;S.q='';S.sheet=null;
     S.folders=[{id:'f1',name:'Documentos'}];S.notes=[];S.reminders=[];S.events=[];S.inbox=[];S.lists=[];`);
   const raiz = TT.viewNotas();
-  const iS = raiz.indexOf('data-act="scan-new"'), iN = raiz.indexOf('data-act="new-note"'), iD = raiz.indexOf('data-act="draw-new"'), iA = raiz.indexOf('data-act="settings"');
-  t('notas: Escanear, Nova nota, Desenhar e Buscar numa fileira logo abaixo do título, antes da lista', iS > 0 && iS < iN && iN < iD && iD < raiz.indexOf('data-act="ns-toggle"') && raiz.indexOf('data-act="ns-toggle"') < raiz.indexOf('id="notesFolders"') && /class="notes-tools"/.test(raiz) && iA > 0 && iA < iS, true);
-  t('notas: botões têm nome para leitura (aria-label)', /aria-label="Escanear"/.test(raiz) && /aria-label="Nova nota"/.test(raiz) && /aria-label="Desenhar"/.test(raiz), true);
-  t('notas: a barra de baixo com os 3 botões saiu', !/class="actbar"/.test(raiz) && (raiz.match(/data-act="scan-new"/g) || []).length === 1 && (raiz.match(/data-act="new-note"/g) || []).length === 1, true);
+  ev(`__NUCLEO_TEST__.S.nMenu=true;`);const raizM = TT.viewNotas();ev(`__NUCLEO_TEST__.S.nMenu=false;`);
+  const iS = raizM.indexOf('data-act="scan-new"'), iN = raizM.indexOf('data-act="new-note"'), iD = raizM.indexOf('data-act="draw-new"');
+  t('notas: Buscar e criar ficam na barra de baixo; o menu de criar tem Nova nota, Escanear e Desenhar; Editar e Nova pasta no topo', iN > 0 && iN < iS && iS < iD && /class="nbar"/.test(raiz) && /data-act="n-menu"/.test(raiz) && /data-act="ns-toggle"/.test(raiz) && /data-act="n-edit">Editar</.test(raiz) && /data-act="new-folder" data-parent=""/.test(raiz) && !/class="notes-tools"/.test(raiz), true);
+  t('notas: botões têm nome para leitura (aria-label)', /aria-label="Nova pasta"/.test(raiz) && /aria-label="Criar: nova nota, escanear ou desenhar"/.test(raiz) && /data-act="n-edit"/.test(raiz), true);
+  t('notas: sem o menu aberto, só aparece o botão de criar (3 opções escondidas)', !/data-act="scan-new"/.test(raiz) && !/data-act="draw-new"/.test(raiz) && !/data-act="new-note"/.test(raiz), true);
   t('notas: Nova nota e Desenhar não repetem o mesmo ícone', /noteplus:/.test(html) && /brush:/.test(html), true);
   // toque em Nova nota abre o formulário de nota
   doc.getElementById('tab-notas').click();
-  clickAct(q('#main [data-act="new-note"]'));
+  clickAct(q('#main [data-act="n-menu"]'));clickAct(q('#main [data-act="new-note"]'));
   t('notas: tocar em Nova nota abre o formulário', ev('__NUCLEO_TEST__.S.sheet&&__NUCLEO_TEST__.S.sheet.type') === 'note', true);
   ev('__NUCLEO_TEST__.S.sheet=null');
   // dentro de uma pasta, os botões continuam no topo e criam dentro dela
   ev(`__NUCLEO_TEST__.S.folder='f1';`);
   const pasta = TT.viewNotas();
-  t('notas: dentro da pasta os botões também estão no topo e usam a pasta', /data-act="new-note" data-folder="f1"/.test(pasta) && /data-act="scan-new" data-folder="f1"/.test(pasta) && /data-act="draw-new" data-folder="f1"/.test(pasta) && !/class="actbar"/.test(pasta), true);
-  t('notas: dentro da pasta o lápis de renomear continua', /data-act="edit-folder"/.test(pasta), true);
+  ev(`__NUCLEO_TEST__.S.nMenu=true;`);const pastaM = TT.viewNotas();ev(`__NUCLEO_TEST__.S.nMenu=false;`);
+  t('notas: dentro da pasta o menu de criar usa a pasta', /data-act="new-note" data-folder="f1"/.test(pastaM) && /data-act="scan-new" data-folder="f1"/.test(pastaM) && /data-act="draw-new" data-folder="f1"/.test(pastaM) && !/class="actbar"/.test(pasta), true);
+  ev(`__NUCLEO_TEST__.S.nEdit=true;`);const pastaE = TT.viewNotas();ev(`__NUCLEO_TEST__.S.nEdit=false;`);
+  t('notas: no modo Editar a pasta mostra ⋯ (editar) e ≡ (arrastar); fora dele a lista fica limpa', /data-act="edit-folder"/.test(pastaE) && /data-grip="1"/.test(pastaE) && !/data-act="edit-folder"/.test(pasta) && !/data-grip/.test(pasta), true);
   // em "Todas as notas" (não é pasta real) cria sem pasta
   ev(`__NUCLEO_TEST__.S.folder='v:all';`);
   t('notas: em Todas as notas cria sem pasta', /data-act="new-note" data-folder=""/.test(TT.viewNotas()), true);
@@ -274,8 +277,8 @@ ev(`__NUCLEO_TEST__.S.gq='';__NUCLEO_TEST__.S.tab='hoje';`);
   const pg = TT.viewNotas();
   t('pasta: primeiro as notas da pasta, depois as subpastas', pg.indexOf('Nota da Elisa') > 0 && pg.indexOf('Nota da Elisa') < pg.indexOf('Pastas <'), true);
   t('pasta: sem o botão "Nova subpasta" dentro da lista e sem barra de busca fixa', !/txtbtn[^>]*new-folder/.test(pg) && !/Nova subpasta<\/button>/.test(pg) && !/id="q"/.test(pg), true);
-  t('pasta: botões Nova subpasta e Buscar no topo, ao lado dos outros', (() => { const a = pg.indexOf('data-act="draw-new"'), b = pg.indexOf('data-act="new-folder" data-parent="f1"'), c = pg.indexOf('data-act="ns-toggle"'), d = pg.indexOf('data-act="edit-folder"'); return a > 0 && a < b && b < c && c < d; })(), true);
-  t('pasta: botões novos têm nome para leitura', /aria-label="Nova pasta aqui dentro"/.test(pg) && /aria-label="Buscar nas notas"/.test(pg), true);
+  t('pasta: Nova pasta e Editar no topo, Buscar embaixo', (() => { const b = pg.indexOf('data-act="new-folder" data-parent="f1"'), e = pg.indexOf('data-act="n-edit"'), c = pg.indexOf('data-act="ns-toggle"'); return b > 0 && b < e && e < c; })(), true);
+  t('pasta: botões novos têm nome para leitura', /aria-label="Nova pasta aqui dentro"/.test(pg) && /<span>Buscar<\/span>/.test(pg), true);
   t('pasta: cada subpasta mostra quantas notas tem dentro (inclui as de dentro dela)', /Documentos<\/div>[^]*?aria-label="2 notas">2</.test(pg) && /Fotos<\/div>[^]*?aria-label="0 notas">0</.test(pg), true);
   t('pasta: subpastas começam recolhidas', !/class="sub-body"/.test(pg), true);
 
@@ -704,6 +707,7 @@ global.__pend.push((async () => {
   ev(`const S=__NUCLEO_TEST__.S;S.ready=true;S.tab='lembretes';S.sheet=null;S.conf='del';S.folder=null;S.assetsOk=true;S.notes=[];S.folders=[];S.lists=[];S.reminders=[];S.events=[];S.inbox=[];
     S.raw={reminders:[],lists:[],notes:[],folders:[],events:[],inbox:[]};`);
   q('#tab-notas').click(); await wait(10);
+  ev('__NUCLEO_TEST__.S.nMenu=false'); q('#main [data-act="n-menu"]').click(); await wait(10);
   q('#main [data-act="scan-new"]').click(); await wait(30);
   const mv = q('#mvRoot'), ops = mv ? Array.from(mv.querySelectorAll('.mv-opt')).map(b => b.textContent) : [];
   t('Escanear (Notas): 4 opções — Escanear documento (vira PDF), Foto rápida, Foto da galeria e Arquivo (PDF já digitalizado) — e a explicação', ops.length === 4 && /Escanear documento \(vira PDF\)/.test(ops[0]) && /Foto rápida/.test(ops[1]) && /Foto da galeria/.test(ops[2]) && /Arquivo \(PDF já digitalizado\)/.test(ops[3]) && /acha as bordas do papel/.test(mv.textContent), true);
@@ -711,6 +715,7 @@ global.__pend.push((async () => {
   t('escolher Escanear documento: abre o scanner do app (dentro do toque) e prepara a nota nova', !!q('#scanUI') && ev('__NUCLEO_TEST__.S.pendingNew') === true && !q('#mvRoot'), true);
   q('#scBack').click(); await wait(10);
   // arquivo já digitalizado (PDF do app Arquivos)
+  ev('__NUCLEO_TEST__.S.nMenu=false'); q('#main [data-act="n-menu"]').click(); await wait(10);
   q('#main [data-act="scan-new"]').click(); await wait(30);
   q('#mvRoot').querySelectorAll('.mv-opt')[3].click(); await wait(20);
   t('escolher Arquivo (PDF já digitalizado): prepara a nota nova', ev('__NUCLEO_TEST__.S.pendingNew') === true && !q('#mvRoot'), true);
@@ -1233,7 +1238,7 @@ global.__pend.push((async () => {
 t('etiquetas: #589 e #882 (só número) não viram etiqueta', JSON.stringify(ev('__NUCLEO_TEST__.tagsOf({title:"x #589",body:"ref #882 e #12"})')), '[]');
 t('etiquetas: #consulta e #2026-meta continuam valendo', JSON.stringify(ev('__NUCLEO_TEST__.tagsOf({title:"",body:"#consulta #2026-meta #589"})')), '["consulta","2026-meta"]');
 // --- editar nota e pasta direto da lista (v66) ---
-t('lista: cada nota e cada pasta tem botão de editar', /data-act="edit-note"/.test(html) && /data-act="edit-folder" data-id="'\+esc\(f\.id\)/.test(html), true);
+t('lista: no modo Editar cada nota e cada pasta tem botão ⋯', /editBtn\('edit-note'/.test(html) && /editBtn\('edit-folder'/.test(html), true);
 // --- títulos editáveis das partes de cada pasta (v67) ---
 t('pasta: títulos das partes (notas e pastas) podem ser mudados', /fo\.secN/.test(html) && /data-bind="secN"/.test(html) && /data-bind="secP"/.test(html), true);
 Promise.all(global.__pend || []).then(() => { console.log(ok + ' ok, ' + bad + ' falhas'); process.exit(bad ? 1 : 0); });

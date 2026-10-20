@@ -271,6 +271,18 @@ input,textarea,select{font:inherit;font-size:1rem;color:var(--fg)}
 .notes-tools{display:flex;justify-content:flex-end;gap:.4rem;margin:.1rem 0 .2rem}
 .notes-tools.dense{gap:.3rem}
 .notes-tools.dense .iconbtn{width:2.3rem;height:2.3rem}
+.editpill{min-height:2.6rem;padding:0 .9rem;border-radius:1.3rem;background:var(--surface-2,var(--surface));font-size:1.05rem}
+.editpill.on{background:var(--accent);color:var(--accent-fg)}
+.li.editing{gap:.6rem}
+.li.editing .cnt{display:none}
+.ebtn{width:2.3rem;height:2.3rem;border-radius:50%;background:var(--surface-2,var(--surface));flex:none}
+.grip{flex:none;width:2.6rem;height:2.6rem;display:flex;align-items:center;justify-content:center;color:var(--muted);touch-action:none;cursor:grab}
+.nbar{position:sticky;bottom:0;z-index:20;display:flex;align-items:center;gap:.6rem;padding:.6rem 0 .3rem;background:linear-gradient(to top,var(--bg) 70%,transparent)}
+.npill{flex:1;min-height:3rem;border:0;border-radius:1.5rem;background:var(--surface);color:var(--muted);font:inherit;font-size:1.05rem;display:flex;align-items:center;gap:.5rem;padding:0 1rem;box-shadow:0 1px 6px rgba(0,0,0,.18)}
+.npill.on{color:var(--link)}
+.ncomp{flex:none;width:3.2rem;height:3.2rem;border-radius:50%;border:0;background:var(--accent);color:var(--accent-fg);display:flex;align-items:center;justify-content:center;box-shadow:0 2px 10px rgba(0,0,0,.25)}
+.nmenu{position:absolute;right:0;bottom:4.4rem;display:flex;flex-direction:column;gap:.4rem;background:var(--surface);padding:.5rem;border-radius:1.1rem;box-shadow:0 4px 18px rgba(0,0,0,.35)}
+.nmenu .btn{justify-content:flex-start;gap:.6rem;white-space:nowrap;min-height:3rem}
 .iconbtn.rowedit{width:2.2rem;height:2.2rem;background:var(--surface-2,var(--surface));margin-left:.2rem}
 .iconbtn.on{background:var(--accent);color:var(--accent-fg)}
 .search .iconbtn{background:none;width:2.4rem;height:2.4rem}
@@ -1217,10 +1229,11 @@ function roInit(){
     if(RO.pend&&(Math.abs(x-RO.x0)>10||Math.abs(y-RO.y0)>10)){clearTimeout(RO.timer);RO.pend=null;}
   };
   const up=()=>{clearTimeout(RO.timer);RO.pend=null;if(RO.drag)roEnd();};
-  document.addEventListener('touchstart',e=>{if(e.touches.length===1)arm(e.target,e.touches[0].clientX,e.touches[0].clientY);else up();},{passive:true});
+  const grip=(t,x,y)=>{const g=t&&t.closest?t.closest('[data-grip]'):null;if(!g)return false;const f=roFind(g);if(!f)return false;RO.x0=x;RO.y0=y;roBegin(f);return true;};
+  document.addEventListener('touchstart',e=>{if(e.touches.length===1&&grip(e.target,e.touches[0].clientX,e.touches[0].clientY))return;if(e.touches.length===1)arm(e.target,e.touches[0].clientX,e.touches[0].clientY);else up();},{passive:true});
   document.addEventListener('touchmove',e=>{if(e.touches.length)move(e.touches[0].clientX,e.touches[0].clientY,e);},{passive:false});
   document.addEventListener('touchend',up);document.addEventListener('touchcancel',up);
-  document.addEventListener('mousedown',e=>{if(e.button===0)arm(e.target,e.clientX,e.clientY);});
+  document.addEventListener('mousedown',e=>{if(e.button===0&&grip(e.target,e.clientX,e.clientY))return;if(e.button===0)arm(e.target,e.clientX,e.clientY);});
   document.addEventListener('mousemove',e=>move(e.clientX,e.clientY,null));
   document.addEventListener('mouseup',up);
   document.addEventListener('contextmenu',e=>{if(RO.pend||RO.drag)e.preventDefault();});
@@ -1284,6 +1297,8 @@ const P={
   image:'<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/>',
   check:'<path d="M5 12.5l4.5 4.5L19 7.5"/>',
   folder:'<path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>',
+  more:'<circle cx="6" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="18" cy="12" r="1.3"/>',
+  grip:'<path d="M5 8h14M5 12h14M5 16h14"/>',
   folderPlus:'<path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><path d="M12 10.5v5M9.5 13h5"/>',
   inbox:'<path d="M3 13l3-8h12l3 8v6H3z"/><path d="M3 13h5l1 2h6l1-2h5"/>',
   alert:'<circle cx="12" cy="12" r="9"/><path d="M12 7v6M12 16.5v.5"/>',
@@ -2297,6 +2312,8 @@ function viewAgenda(){
 function notesList(list,fm,showPath,emptyHtml,gk,man){
   return list.length?'<div class="notes-cards"'+(gk?ordAttr(gk,man):'')+'>'+list.map(n=>noteRow(n,fm,showPath)).join('')+'</div>':'<div class="group">'+emptyHtml+'</div>';
 }
+const editBtn=(act,id,label)=>'<button class="iconbtn ebtn" data-act="'+act+'" data-id="'+esc(id)+'" aria-label="'+esc(label)+'">'+ic('more',1.1,2.4)+'</button>';
+const gripH=label=>'<span class="grip" data-grip="1" role="img" aria-label="'+esc(label)+'">'+ic('grip',1.1,2.4)+'</span>';
 function noteRow(n,fm,showPath){
   const img=(n.images||[])[0],ni=(n.images||[]).length,today=isoDate(new Date());
   const ts=n.updatedAt||n.createdAt,bits=[];
@@ -2309,13 +2326,15 @@ function noteRow(n,fm,showPath){
   const prev=(n.body||'').replace(/\s+/g,' ').trim().slice(0,70);
   if(prev&&!showPath)bits.push(prev);
   const kcls=isScan(n)?' k-scan':(isDraw(n)?' k-draw':(cl.length?' k-list':''));
-  return '<div class="li note'+kcls+'" data-act="open-note" data-id="'+esc(n.id)+'" data-rid="'+esc(n.id)+'"><div class="thumb">'+(img?'<img src="'+imgSrc(img)+'" data-img="'+esc(img)+'" alt="" loading="lazy">':ic(n.kind==='scan'?'scan':(cl.length?'list':'note'),1.1))+'</div><div class="li-main"><div class="li-t">'+(n.pinned?'<span style="color:var(--link)">'+ic('pin',.75,2.4)+'</span> ':'')+esc(n.title||'Sem título')+'</div><div class="li-s">'+bits.map(esc).join(' · ')+'</div></div><button class="iconbtn rowedit" data-act="edit-note" data-id="'+esc(n.id)+'" aria-label="Editar ou mover a nota '+esc(n.title||'Sem título')+'">'+ic('edit',1,2.2)+'</button></div>';
+  const ed=!!S.nEdit,nm0=n.title||'Sem título';
+  return '<div class="li note'+kcls+(ed?' editing':'')+'"'+(ed?'':' data-act="open-note"')+' data-id="'+esc(n.id)+'" data-rid="'+esc(n.id)+'">'+(ed?editBtn('edit-note',n.id,'Editar ou mover a nota '+nm0):'')+'<div class="thumb">'+(img?'<img src="'+imgSrc(img)+'" data-img="'+esc(img)+'" alt="" loading="lazy">':ic(n.kind==='scan'?'scan':(cl.length?'list':'note'),1.1))+'</div><div class="li-main"><div class="li-t">'+(n.pinned?'<span style="color:var(--link)">'+ic('pin',.75,2.4)+'</span> ':'')+esc(n.title||'Sem título')+'</div><div class="li-s">'+bits.map(esc).join(' · ')+'</div></div>'+(ed?gripH('Arrastar para mudar a ordem'):'')+'</div>';
 }
 const isDraw=n=>n.kind==='desenho'||Object.keys(n.drawSrc||{}).length>0;
 const isScan=n=>n.kind==='scan'||((n.images||[]).length>Object.keys(n.drawSrc||{}).length&&n.kind!=='desenho');
 const noteSort=(a,b)=>(b.pinned?1:0)-(a.pinned?1:0)||(b.updatedAt||b.createdAt||0)-(a.updatedAt||a.createdAt||0);
 function folderRow(id,name,count,sub,icn,color){
-  return '<div class="li ic" data-act="open-folder" data-id="'+esc(id)+'"'+(id&&String(id).indexOf(':')<0?' data-rid="'+esc(id)+'"':'')+'><span class="li-ic'+(icn?'':' folder')+'"'+(color?' style="color:'+color+'"':'')+'>'+ic(icn||'folder',1.35,1.9)+'</span><div class="li-main"><div class="li-t">'+esc(name)+'</div>'+(sub?'<div class="li-s">'+esc(sub)+'</div>':'')+'</div>'+cnt(count)+chev()+'</div>';
+  const real=!!(id&&String(id).indexOf(':')<0),ed=!!S.nEdit&&real;
+  return '<div class="li ic'+(ed?' editing':'')+'"'+(ed?'':' data-act="open-folder"')+' data-id="'+esc(id)+'"'+(real?' data-rid="'+esc(id)+'"':'')+'>'+(ed?editBtn('edit-folder',id,'Editar a pasta '+name):'')+'<span class="li-ic'+(icn?'':' folder')+'"'+(color?' style="color:'+color+'"':'')+'>'+ic(icn||'folder',1.35,1.9)+'</span><div class="li-main"><div class="li-t">'+esc(name)+'</div>'+(sub?'<div class="li-s">'+esc(sub)+'</div>':'')+'</div>'+cnt(count)+(ed?gripH('Arrastar para mudar a ordem'):chev())+'</div>';
 }
 function subLabel(fid,fm){const k=kids(fid,fm).length;return k?k+(k===1?' pasta':' pastas'):'';}
 function curFolder(){
@@ -2326,7 +2345,7 @@ function curFolder(){
 function notesFolders(){
   const fm=fmap();let h='';
     const rk=orderedKids('',fm);
-    h+=secH('Pastas','<button class="txtbtn" data-act="new-folder" data-parent="">'+ic('folderPlus',1.1,2.2)+'Nova pasta</button>');
+    h+=secH('Pastas','');
     h+=sortBarFor('folders:');
     h+='<div class="group"'+ordAttr('folders:',true)+'>'+folderRow('','Geral',countIn('',fm),'notas sem pasta')+rk.map(f=>folderRow(f.id,f.name||'Sem nome',countIn(f.id,fm),subLabel(f.id,fm))).join('')+'</div>';
   return h;
@@ -2354,11 +2373,12 @@ function notesScope(cf,fm){
 /* uma subpasta na lista: setinha abre/recolhe aqui mesmo; tocar no nome abre a pasta */
 function subNode(f,fm,depth){
   const open=!!S.nx[f.id],n=countIn(f.id,fm),k=orderedKids(f.id,fm),nm=f.name||'Sem nome',sl=subLabel(f.id,fm);
-  let h='<div class="sub-node"><div class="li ic subrow" data-rid="'+esc(f.id)+'">'
+  const ed=!!S.nEdit;
+  let h='<div class="sub-node"><div class="li ic subrow'+(ed?' editing':'')+'" data-rid="'+esc(f.id)+'">'+(ed?editBtn('edit-folder',f.id,'Editar a pasta '+nm):'')
     +'<button class="arrbtn'+(open?' open':'')+'" data-act="nx-sub" data-id="'+esc(f.id)+'" aria-expanded="'+open+'" aria-label="'+(open?'Recolher ':'Abrir ')+esc(nm)+'">'+ic('right',1.05,2.6)+'</button>'
     +'<span class="li-ic folder">'+ic('folder',1.35,1.9)+'</span>'
     +'<div class="li-main" data-act="open-folder" data-id="'+esc(f.id)+'"><div class="li-t">'+esc(nm)+'</div>'+(sl?'<div class="li-s">'+esc(sl)+'</div>':'')+'</div>'
-    +cnt(n,0,n+(n===1?' nota':' notas'))+'<button class="iconbtn rowedit" data-act="edit-folder" data-id="'+esc(f.id)+'" aria-label="Renomear, mover ou apagar a pasta '+esc(nm)+'">'+ic('edit',1,2.2)+'</button></div>';
+    +cnt(n,0,n+(n===1?' nota':' notas'))+(ed?gripH('Arrastar para mudar a ordem'):'')+'</div>';
   if(open){
     const direct=ordSort('notes:'+f.id,'notes',S.notes.filter(x=>noteFolder(x,fm)===f.id).sort(noteSort),GN,true);
     h+='<div class="sub-body">'
@@ -2395,7 +2415,7 @@ function notesBody(){
   /* pasta de verdade: primeiro as notas dela (recolhíveis), depois as subpastas */
   const direct=ordSort('notes:'+cf,'notes',S.notes.filter(n=>noteFolder(n,fm)===cf).sort(noteSort),GN,true),ks=orderedKids(cf,fm),open=!S.nn[cf];
   const fo=fm[cf]||{},nN=((fo.secN||'')+'').trim()||'Notas',nP=((fo.secP||'')+'').trim()||'Pastas';
-  const secEd='<button class="iconbtn rowedit" data-act="edit-folder" data-id="'+esc(cf)+'" aria-label="Mudar os títulos desta pasta">'+ic('edit',1,2.2)+'</button>';
+  const secEd=!S.nEdit?'':'<button class="iconbtn rowedit" data-act="edit-folder" data-id="'+esc(cf)+'" aria-label="Mudar os títulos desta pasta">'+ic('edit',1,2.2)+'</button>';
   let h='<div class="sec-h"><button class="sec-tog'+(open?' open':'')+'" data-act="nx-notes" data-id="'+esc(cf)+'" aria-expanded="'+open+'" aria-label="'+(open?'Recolher':'Mostrar')+' '+esc(nN)+' desta pasta">'+ic('right',1.05,2.6)+'<h2>'+esc(nN)+' '+cnt(direct.length,1)+'</h2></button>'+secEd+'</div>';
   if(open)h+=direct.length?sortBarFor('notes:'+cf)+notesList(direct,fm,false,'','notes:'+cf,true):'<div class="group">'+(ks.length?emptyRow('Nenhuma nota nesta pasta.','Use os botões de cima para criar.'):emptyRow('Pasta vazia.','Crie uma nota ou escaneie um documento.'))+'</div>';
   if(ks.length){
@@ -2405,33 +2425,31 @@ function notesBody(){
   }
   return h;
 }
-function notesTools(into,o){
-  o=o||{};const f=' data-folder="'+esc(into||'')+'"';
-  return '<button class="iconbtn" data-act="scan-new"'+f+' aria-label="Escanear">'+ic('scan',1.2,2.2)+'</button>'
-    +'<button class="iconbtn" data-act="new-note"'+f+' aria-label="Nova nota">'+ic('noteplus',1.2,2.2)+'</button>'
-    +'<button class="iconbtn" data-act="draw-new"'+f+' aria-label="Desenhar">'+ic('brush',1.2,2.2)+'</button>'
-    +(o.sub?'<button class="iconbtn" data-act="new-folder" data-parent="'+esc(into||'')+'" aria-label="Nova pasta aqui dentro">'+ic('folderPlus',1.2,2.2)+'</button>':'')
-    +'<button class="iconbtn'+(S.nsOpen?' on':'')+'" data-act="ns-toggle" aria-pressed="'+(!!S.nsOpen)+'" aria-label="Buscar nas notas">'+ic('search',1.2,2.2)+'</button>';
+const editPill=()=>S.nEdit?'<button class="txtbtn editpill on" data-act="n-edit" aria-label="Concluir a edição">'+ic('check',1,2.6)+'Pronto</button>':'<button class="txtbtn editpill" data-act="n-edit">Editar</button>';
+function notesBar(into){
+  const f=' data-folder="'+esc(into||'')+'"';
+  if(S.nEdit)return '';
+  return '<div class="nbar">'+(S.nMenu?'<div class="nmenu" role="menu"><button class="btn" data-act="new-note"'+f+'>'+ic('noteplus',1.1,2.2)+'Nova nota</button><button class="btn" data-act="scan-new"'+f+'>'+ic('scan',1.1,2.2)+'Escanear</button><button class="btn" data-act="draw-new"'+f+'>'+ic('brush',1.1,2.2)+'Desenhar</button></div>':'')
+    +'<button class="npill'+(S.nsOpen?' on':'')+'" data-act="ns-toggle" aria-pressed="'+(!!S.nsOpen)+'">'+ic('search',1.05,2.2)+'<span>Buscar</span></button>'
+    +'<button class="ncomp" data-act="n-menu" aria-expanded="'+(!!S.nMenu)+'" aria-label="Criar: nova nota, escanear ou desenhar">'+ic(S.nMenu?'close':'noteplus',1.35,2.2)+'</button></div>';
 }
 function viewNotas(){
   const fm=fmap(),cf=curFolder();
   if(cf==='v:trash')return trashView(['notes'],'Pastas','folder-back');
   let h='',ph='Buscar em todas as notas';
-  if(cf===null)h+=hdr('','Notas',undoBtn()+sortBtn())+'<div class="notes-tools">'+notesTools('',{})+'</div>';
+  let into0='';
+  if(cf===null)h+=hdr('','Notas',undoBtn()+'<button class="iconbtn" data-act="new-folder" data-parent="" aria-label="Nova pasta">'+ic('folderPlus',1.2,2.2)+'</button>'+editPill());
   else{
     const isTag=cf.indexOf('t:')===0,real=cf&&cf.indexOf('v:')!==0&&!isTag,f=real?fm[cf]:null,par=real?parentOf(f,fm):'';
     const backTo=par?(fm[par].name||'Sem nome'):'Pastas';
-    const edit=real?'<button class="iconbtn" data-act="edit-folder" data-id="'+esc(cf)+'" aria-label="Renomear, mover ou apagar pasta">'+ic('edit',1.1,2.2)+'</button>':'';
-    const into0=cf&&cf.indexOf('v:')!==0&&cf.indexOf('t:')!==0?cf:'';
+    into0=cf&&cf.indexOf('v:')!==0&&cf.indexOf('t:')!==0?cf:'';
     ph='Buscar em '+scopeName(cf,fm);
-    h+=subHdr(backTo,'folder-back',par?pathOf(par,fm).join(' › '):(isTag?'Etiqueta':''),real?(f.name||'Sem nome'):(isTag?'#'+cf.slice(2):NVN[cf]),undoBtn());
-    const tl=notesTools(into0,{sub:!!real})+sortBtn()+edit;
-    h+='<div class="notes-tools'+((tl.match(/class="iconbtn/g)||[]).length>=7?' dense':'')+'">'+tl+'</div>';
+    h+=subHdr(backTo,'folder-back',par?pathOf(par,fm).join(' › '):(isTag?'Etiqueta':''),real?(f.name||'Sem nome'):(isTag?'#'+cf.slice(2):NVN[cf]),undoBtn()+(real?'<button class="iconbtn" data-act="new-folder" data-parent="'+esc(cf)+'" aria-label="Nova pasta aqui dentro">'+ic('folderPlus',1.2,2.2)+'</button>':'')+editPill());
   }
   if(S.nsOpen)h+='<div class="search">'+ic('search',1.05,2.2)+'<label for="q" class="sr">Buscar nas notas</label><input id="q" type="search" placeholder="'+esc(ph)+'" value="'+esc(S.q)+'" autocomplete="off"><button class="iconbtn" data-act="ns-toggle" aria-label="Fechar a busca">'+ic('close',.95,2.4)+'</button></div>';
   if(cf===null)h+='<div id="notesFolders"'+(S.nsOpen&&S.q?' style="display:none"':'')+'>'+notesFolders()+'</div>';
   h+='<div id="notesBody">'+notesBody()+'</div>';
-  return h;
+  return h+notesBar(into0);
 }
 
 /* ---------- Relógio: cronômetro e temporizador ---------- */
@@ -3759,7 +3777,7 @@ function findTrash(c,id){const t=S.trash.find(x=>x.c===c&&x.x.id===id);return t?
 const A={
   tab:d=>go(()=>{S.rfromHoje=0;
     /* ao sair de Notas ou de Lembretes (ou tocar na aba em que já está), eles voltam para a página inicial */
-    if(S.tab==='notas'){S.folder=null;S.q='';S.nsOpen=false;S.nx={};S.nn={};}
+    if(S.tab==='notas'){S.folder=null;S.q='';S.nsOpen=false;S.nEdit=false;S.nMenu=false;S.nx={};S.nn={};}
     if(S.tab==='lembretes'){S.rview=null;S.rq='';S.rfromPlan=0;S.lc={};}
     S.tab=d.tab;}),
   'fin-open':()=>{location.href='fin/';},
@@ -3826,9 +3844,9 @@ const A={
     c0.done=!c0.done;await Store.put('notes',Object.assign({},n,{checklist:cl,updatedAt:Date.now()}));refreshView('notes',id);},
   'add-draw':()=>openDraw(r=>saveDrawing(r,'sheet')),
   'edit-draw':d=>{const sh=S.sheet;if(sh)editDrawing(d.id,sh.type==='notev'?'view':'sheet');},
-  'draw-new':d=>{if(!S.assetsOk){toast('Desenhar precisa de conexão com a nuvem.');return;}S.pendingFolder=d.folder||'';openDraw(r=>saveDrawing(r,'new'));},
-  'new-note':d=>openSheet('note',newNote(d.folder)),
-  'scan-new':async d=>{
+  'draw-new':d=>{S.nMenu=false;if(!S.assetsOk){toast('Desenhar precisa de conexão com a nuvem.');return;}S.pendingFolder=d.folder||'';openDraw(r=>saveDrawing(r,'new'));},
+  'new-note':d=>{S.nMenu=false;openSheet('note',newNote(d.folder));},
+  'scan-new':async d=>{S.nMenu=false;
     if(!S.assetsOk){toast('Escanear precisa de permissão de edição neste navegador.');return;}
     const go=k=>()=>{S.pendingNew=true;S.pendingFolder=d.folder||'';if(k==='doc')openScanner(f=>handleScanFiles([f]));else if(k==='scan'){const i=$('fileScan');i.value='';i.click();}else pickFiles(k);};
     await pickMove({title:'Como quer escanear?',msg:'“Escanear documento” acha as bordas do papel, endireita, melhora a leitura e junta as páginas em um PDF. Já digitalizou no app Arquivos? Escolha “Arquivo (PDF já digitalizado)”.',options:[
@@ -3837,11 +3855,13 @@ const A={
       {k:'lib',label:'🖼️ Foto da galeria',onPick:go('lib')},
       {k:'scan',label:'📎 Arquivo (PDF já digitalizado)',onPick:go('scan')}]});
   },
-  'open-folder':d=>go(()=>{S.folder=d.id;S.q='';S.nsOpen=false;}),
+  'open-folder':d=>go(()=>{S.nEdit=false;S.nMenu=false;S.folder=d.id;S.q='';S.nsOpen=false;}),
   'nx-sub':d=>{S.nx[d.id]=S.nx[d.id]?0:1;render();},
   'nx-notes':d=>{S.nn[d.id]=S.nn[d.id]?0:1;render();},
+  'n-edit':()=>{S.nEdit=!S.nEdit;S.nMenu=false;render();},
+  'n-menu':()=>{S.nMenu=!S.nMenu;render();},
   'ns-toggle':()=>{S.nsOpen=!S.nsOpen;if(!S.nsOpen){S.q='';try{const a=document.activeElement;if(a&&a.id==='q')a.blur();}catch(e){}}render();if(S.nsOpen){const i=$('q');if(i)try{i.focus();}catch(e){}}},
-  'folder-back':()=>go(()=>{const fm=fmap(),f=fm[S.folder];S.folder=f&&parentOf(f,fm)?parentOf(f,fm):null;S.q='';S.nsOpen=false;}),
+  'folder-back':()=>go(()=>{S.nEdit=false;S.nMenu=false;const fm=fmap(),f=fm[S.folder];S.folder=f&&parentOf(f,fm)?parentOf(f,fm):null;S.q='';S.nsOpen=false;}),
   'qcap-save':()=>qcapSave(),
   'tri-open':()=>triOpen(),
   'tri-close':()=>{triClose();render();},
