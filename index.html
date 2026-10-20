@@ -433,6 +433,7 @@ html.lk-on body>*:not(#lock){visibility:hidden}
 #lock .lk-link{background:transparent;border:0;color:var(--accent,#FFD60A);font:inherit;font-size:1.1rem;font-weight:700;padding:.8rem;cursor:pointer}
 #lock .lk-big{width:100%;min-height:3.6rem;border:0;border-radius:1.1rem;background:var(--accent,#FFD60A);color:#000;font:inherit;font-size:1.15rem;font-weight:800;cursor:pointer}
 .hd h1{white-space:nowrap}
+.hd.sub h1{white-space:normal;font-size:1.75rem;line-height:1.15}
 .hd-r:has(> .iconbtn:nth-child(5)){gap:.3rem}
 .hd-r:has(> .iconbtn:nth-child(5)) > .iconbtn{width:2.3rem;height:2.3rem}
 .sortbar{display:flex;align-items:center;gap:.5rem;width:100%;margin:.5rem 0;padding:.65rem .9rem;border:0;border-radius:.9rem;background:var(--surface-2);color:var(--fg);font:inherit;font-size:1rem;font-weight:600;cursor:pointer;text-align:left}
@@ -1966,7 +1967,7 @@ function hdrHoje(weekday,dateStr,extra){
   return '<div class="dateBlock"><div class="dateW">'+esc(weekday)+'</div><div class="dateD">'+esc(dateStr)+'</div>'+(sn?'<div class="eyebrow">'+sn+'</div>':'')+'</div><header class="hd" style="padding-top:.5rem"><div style="min-width:0"><h1>Hoje</h1></div><div class="hd-r">'+(extra||'')+'<button class="iconbtn" data-act="settings" aria-label="Ajustes">'+ic('gear',1.2)+'</button></div></header>';
 }
 function subHdr(back,act,eyebrow,title,extra,color){
-  return '<button class="back" data-act="'+act+'">'+ic('left',1.15,2.6)+esc(back)+'</button><header class="hd" style="padding-top:.2rem"><div style="min-width:0">'+(eyebrow?'<div class="eyebrow">'+esc(eyebrow)+'</div>':'')+'<h1'+(color?' style="color:'+esc(color)+'"':'')+'>'+esc(title)+'</h1></div><div class="hd-r">'+(extra||'')+'</div></header>';
+  return '<button class="back" data-act="'+act+'">'+ic('left',1.15,2.6)+esc(back)+'</button><header class="hd sub" style="padding-top:.2rem"><div style="min-width:0">'+(eyebrow?'<div class="eyebrow">'+esc(eyebrow)+'</div>':'')+'<h1'+(color?' style="color:'+esc(color)+'"':'')+'>'+esc(title)+'</h1></div><div class="hd-r">'+(extra||'')+'</div></header>';
 }
 function secH(title,right,id){return '<div class="sec-h"'+(id?' id="'+id+'"':'')+'><h2>'+title+'</h2>'+(right||'')+'</div>';}
 const cnt=(n,sm,label)=>'<span class="cnt'+(sm?' sm':'')+(+n?'':' zero')+' num"'+(label?' aria-label="'+label+'"':'')+'>'+n+'</span>';
@@ -2323,7 +2324,7 @@ function noteRow(n,fm,showPath){
   if(cl.length)bits.push(cl.filter(c=>c.done).length+' de '+cl.length+' itens');
   if(ni)bits.push(ni+(ni===1?' imagem':' imagens'));
   const nf=(n.files||[]).length;if(nf)bits.push(nf+(nf===1?' arquivo':' arquivos'));
-  const prev=(n.body||'').replace(/\s+/g,' ').trim().slice(0,70);
+  const prev=(n.body||'').split('\n').map(x=>x.replace(/^[\s#>*•\-–—\[\]x]+/i,'').replace(/[*_`]/g,'').trim()).filter(Boolean).join(' · ').slice(0,70);
   if(prev&&!showPath)bits.push(prev);
   const kcls=isScan(n)?' k-scan':(isDraw(n)?' k-draw':(cl.length?' k-list':''));
   const ed=!!S.nEdit,nm0=n.title||'Sem título';
