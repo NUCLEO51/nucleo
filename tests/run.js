@@ -272,10 +272,10 @@ ev(`__NUCLEO_TEST__.S.gq='';__NUCLEO_TEST__.S.tab='hoje';`);
     S.reminders=[];S.events=[];S.inbox=[];S.lists=[];`);
   ev(`__NUCLEO_TEST__.S.folder='f1';`);
   const pg = TT.viewNotas();
-  t('pasta: primeiro as notas da pasta, depois as subpastas', pg.indexOf('Nota da Elisa') > 0 && pg.indexOf('Nota da Elisa') < pg.indexOf('Subpastas'), true);
+  t('pasta: primeiro as notas da pasta, depois as subpastas', pg.indexOf('Nota da Elisa') > 0 && pg.indexOf('Nota da Elisa') < pg.indexOf('Pastas <'), true);
   t('pasta: sem o botão "Nova subpasta" dentro da lista e sem barra de busca fixa', !/txtbtn[^>]*new-folder/.test(pg) && !/Nova subpasta<\/button>/.test(pg) && !/id="q"/.test(pg), true);
   t('pasta: botões Nova subpasta e Buscar no topo, ao lado dos outros', (() => { const a = pg.indexOf('data-act="draw-new"'), b = pg.indexOf('data-act="new-folder" data-parent="f1"'), c = pg.indexOf('data-act="ns-toggle"'), d = pg.indexOf('data-act="edit-folder"'); return a > 0 && a < b && b < c && c < d; })(), true);
-  t('pasta: botões novos têm nome para leitura', /aria-label="Nova subpasta"/.test(pg) && /aria-label="Buscar nas notas"/.test(pg), true);
+  t('pasta: botões novos têm nome para leitura', /aria-label="Nova pasta aqui dentro"/.test(pg) && /aria-label="Buscar nas notas"/.test(pg), true);
   t('pasta: cada subpasta mostra quantas notas tem dentro (inclui as de dentro dela)', /Documentos<\/div>[^]*?aria-label="2 notas">2</.test(pg) && /Fotos<\/div>[^]*?aria-label="0 notas">0</.test(pg), true);
   t('pasta: subpastas começam recolhidas', !/class="sub-body"/.test(pg), true);
 
@@ -293,7 +293,7 @@ ev(`__NUCLEO_TEST__.S.gq='';__NUCLEO_TEST__.S.tab='hoje';`);
   // recolher as notas da pasta e ficar só com as subpastas
   clickAct(q('#main [data-act="nx-notes"][data-id="f1"]'));
   const so = q('#main').innerHTML;
-  t('recolher notas: some a lista de notas e ficam só as subpastas', !/Nota da Elisa/.test(so) && /Subpastas/.test(so) && /data-act="nx-sub" data-id="f2"/.test(so), true);
+  t('recolher notas: some a lista de notas e ficam só as subpastas', !/Nota da Elisa/.test(so) && /Pastas </.test(so) && /data-act="nx-sub" data-id="f2"/.test(so), true);
   clickAct(q('#main [data-act="nx-notes"][data-id="f1"]'));
   t('recolher notas: abre de novo', /Nota da Elisa/.test(q('#main').innerHTML), true);
   t('tocar no nome da subpasta abre a pasta', /data-act="open-folder" data-id="f2"/.test(q('#main').innerHTML), true);
@@ -346,7 +346,7 @@ ev(`__NUCLEO_TEST__.S.gq='';__NUCLEO_TEST__.S.tab='hoje';`);
   // Notas: dentro da pasta
   ev(`__NUCLEO_TEST__.S.folder='f1';`);
   const pasta = TT.viewNotas();
-  t('pasta: cabeçalhos Notas e Subpastas com a contagem em bolinha', /Notas <span class="cnt sm num">1</.test(pasta) && /Subpastas <span class="cnt sm num">2</.test(pasta), true);
+  t('pasta: cabeçalhos Notas e Subpastas com a contagem em bolinha', /Notas <span class="cnt sm num">1</.test(pasta) && /Pastas <span class="cnt sm num">2</.test(pasta), true);
   t('pasta: cada subpasta com a contagem em bolinha (e 0 só com contorno)', /Documentos<\/div>[^]*?class="cnt num" aria-label="1 nota">1</.test(pasta) && /class="cnt zero num" aria-label="0 notas">0</.test(pasta), true);
   t('pasta: sobrou nenhum número de contagem sem bolinha nas notas', !/class="li-n num"/.test(pasta) && !/class="pill"/.test(pasta), true);
   // Hoje: sem mudança
@@ -1232,4 +1232,6 @@ global.__pend.push((async () => {
 // --- etiquetas: #número não é etiqueta (v65) ---
 t('etiquetas: #589 e #882 (só número) não viram etiqueta', JSON.stringify(ev('__NUCLEO_TEST__.tagsOf({title:"x #589",body:"ref #882 e #12"})')), '[]');
 t('etiquetas: #consulta e #2026-meta continuam valendo', JSON.stringify(ev('__NUCLEO_TEST__.tagsOf({title:"",body:"#consulta #2026-meta #589"})')), '["consulta","2026-meta"]');
+// --- editar nota e pasta direto da lista (v66) ---
+t('lista: cada nota e cada pasta tem botão de editar', /data-act="edit-note"/.test(html) && /data-act="edit-folder" data-id="'\+esc\(f\.id\)/.test(html), true);
 Promise.all(global.__pend || []).then(() => { console.log(ok + ' ok, ' + bad + ' falhas'); process.exit(bad ? 1 : 0); });

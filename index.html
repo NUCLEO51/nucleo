@@ -271,6 +271,7 @@ input,textarea,select{font:inherit;font-size:1rem;color:var(--fg)}
 .notes-tools{display:flex;justify-content:flex-end;gap:.4rem;margin:.1rem 0 .2rem}
 .notes-tools.dense{gap:.3rem}
 .notes-tools.dense .iconbtn{width:2.3rem;height:2.3rem}
+.iconbtn.rowedit{width:2.2rem;height:2.2rem;background:var(--surface-2,var(--surface));margin-left:.2rem}
 .iconbtn.on{background:var(--accent);color:var(--accent-fg)}
 .search .iconbtn{background:none;width:2.4rem;height:2.4rem}
 .sec-tog{display:flex;align-items:center;gap:.1rem;border:0;background:none;color:var(--fg);padding:0;margin-left:-.35rem;min-height:2.6rem;text-align:left}
@@ -2308,7 +2309,7 @@ function noteRow(n,fm,showPath){
   const prev=(n.body||'').replace(/\s+/g,' ').trim().slice(0,70);
   if(prev&&!showPath)bits.push(prev);
   const kcls=isScan(n)?' k-scan':(isDraw(n)?' k-draw':(cl.length?' k-list':''));
-  return '<div class="li note'+kcls+'" data-act="open-note" data-id="'+esc(n.id)+'" data-rid="'+esc(n.id)+'"><div class="thumb">'+(img?'<img src="'+imgSrc(img)+'" data-img="'+esc(img)+'" alt="" loading="lazy">':ic(n.kind==='scan'?'scan':(cl.length?'list':'note'),1.1))+'</div><div class="li-main"><div class="li-t">'+(n.pinned?'<span style="color:var(--link)">'+ic('pin',.75,2.4)+'</span> ':'')+esc(n.title||'Sem título')+'</div><div class="li-s">'+bits.map(esc).join(' · ')+'</div></div></div>';
+  return '<div class="li note'+kcls+'" data-act="open-note" data-id="'+esc(n.id)+'" data-rid="'+esc(n.id)+'"><div class="thumb">'+(img?'<img src="'+imgSrc(img)+'" data-img="'+esc(img)+'" alt="" loading="lazy">':ic(n.kind==='scan'?'scan':(cl.length?'list':'note'),1.1))+'</div><div class="li-main"><div class="li-t">'+(n.pinned?'<span style="color:var(--link)">'+ic('pin',.75,2.4)+'</span> ':'')+esc(n.title||'Sem título')+'</div><div class="li-s">'+bits.map(esc).join(' · ')+'</div></div><button class="iconbtn rowedit" data-act="edit-note" data-id="'+esc(n.id)+'" aria-label="Editar ou mover a nota '+esc(n.title||'Sem título')+'">'+ic('edit',1,2.2)+'</button></div>';
 }
 const isDraw=n=>n.kind==='desenho'||Object.keys(n.drawSrc||{}).length>0;
 const isScan=n=>n.kind==='scan'||((n.images||[]).length>Object.keys(n.drawSrc||{}).length&&n.kind!=='desenho');
@@ -2316,7 +2317,7 @@ const noteSort=(a,b)=>(b.pinned?1:0)-(a.pinned?1:0)||(b.updatedAt||b.createdAt||
 function folderRow(id,name,count,sub,icn,color){
   return '<div class="li ic" data-act="open-folder" data-id="'+esc(id)+'"'+(id&&String(id).indexOf(':')<0?' data-rid="'+esc(id)+'"':'')+'><span class="li-ic'+(icn?'':' folder')+'"'+(color?' style="color:'+color+'"':'')+'>'+ic(icn||'folder',1.35,1.9)+'</span><div class="li-main"><div class="li-t">'+esc(name)+'</div>'+(sub?'<div class="li-s">'+esc(sub)+'</div>':'')+'</div>'+cnt(count)+chev()+'</div>';
 }
-function subLabel(fid,fm){const k=kids(fid,fm).length;return k?k+(k===1?' subpasta':' subpastas'):'';}
+function subLabel(fid,fm){const k=kids(fid,fm).length;return k?k+(k===1?' pasta':' pastas'):'';}
 function curFolder(){
   const f=S.folder;if(f===null)return null;
   if(f===''||f.indexOf('v:')===0||f.indexOf('t:')===0)return f;
@@ -2357,7 +2358,7 @@ function subNode(f,fm,depth){
     +'<button class="arrbtn'+(open?' open':'')+'" data-act="nx-sub" data-id="'+esc(f.id)+'" aria-expanded="'+open+'" aria-label="'+(open?'Recolher ':'Abrir ')+esc(nm)+'">'+ic('right',1.05,2.6)+'</button>'
     +'<span class="li-ic folder">'+ic('folder',1.35,1.9)+'</span>'
     +'<div class="li-main" data-act="open-folder" data-id="'+esc(f.id)+'"><div class="li-t">'+esc(nm)+'</div>'+(sl?'<div class="li-s">'+esc(sl)+'</div>':'')+'</div>'
-    +cnt(n,0,n+(n===1?' nota':' notas'))+'</div>';
+    +cnt(n,0,n+(n===1?' nota':' notas'))+'<button class="iconbtn rowedit" data-act="edit-folder" data-id="'+esc(f.id)+'" aria-label="Renomear, mover ou apagar a pasta '+esc(nm)+'">'+ic('edit',1,2.2)+'</button></div>';
   if(open){
     const direct=ordSort('notes:'+f.id,'notes',S.notes.filter(x=>noteFolder(x,fm)===f.id).sort(noteSort),GN,true);
     h+='<div class="sub-body">'
@@ -2396,7 +2397,7 @@ function notesBody(){
   let h='<div class="sec-h"><button class="sec-tog'+(open?' open':'')+'" data-act="nx-notes" data-id="'+esc(cf)+'" aria-expanded="'+open+'" aria-label="'+(open?'Recolher':'Mostrar')+' as notas desta pasta">'+ic('right',1.05,2.6)+'<h2>Notas '+cnt(direct.length,1)+'</h2></button></div>';
   if(open)h+=direct.length?sortBarFor('notes:'+cf)+notesList(direct,fm,false,'','notes:'+cf,true):'<div class="group">'+(ks.length?emptyRow('Nenhuma nota nesta pasta.','Use os botões de cima para criar.'):emptyRow('Pasta vazia.','Crie uma nota ou escaneie um documento.'))+'</div>';
   if(ks.length){
-    h+=secH('Subpastas '+cnt(ks.length,1));
+    h+=secH('Pastas '+cnt(ks.length,1));
     h+=sortBarFor('folders:'+cf);
     h+='<div class="group subtree"'+ordAttr('folders:'+cf,true)+'>'+ks.map(k=>subNode(k,fm,1)).join('')+'</div>';
   }
@@ -2407,7 +2408,7 @@ function notesTools(into,o){
   return '<button class="iconbtn" data-act="scan-new"'+f+' aria-label="Escanear">'+ic('scan',1.2,2.2)+'</button>'
     +'<button class="iconbtn" data-act="new-note"'+f+' aria-label="Nova nota">'+ic('noteplus',1.2,2.2)+'</button>'
     +'<button class="iconbtn" data-act="draw-new"'+f+' aria-label="Desenhar">'+ic('brush',1.2,2.2)+'</button>'
-    +(o.sub?'<button class="iconbtn" data-act="new-folder" data-parent="'+esc(into||'')+'" aria-label="Nova subpasta">'+ic('folderPlus',1.2,2.2)+'</button>':'')
+    +(o.sub?'<button class="iconbtn" data-act="new-folder" data-parent="'+esc(into||'')+'" aria-label="Nova pasta aqui dentro">'+ic('folderPlus',1.2,2.2)+'</button>':'')
     +'<button class="iconbtn'+(S.nsOpen?' on':'')+'" data-act="ns-toggle" aria-pressed="'+(!!S.nsOpen)+'" aria-label="Buscar nas notas">'+ic('search',1.2,2.2)+'</button>';
 }
 function viewNotas(){
@@ -3184,10 +3185,10 @@ function refreshView(c,id){
 }
 function sheetFolder(){
   const sh=S.sheet,d=sh.draft,fm=fmap();
-  let h='<div class="sheet"><div class="sheet-in">'+head(sh.isNew?(d.parent?'Nova subpasta':'Nova pasta'):'Pasta','Salvar')+'<div class="sheet-body" id="sheetBody">';
+  let h='<div class="sheet"><div class="sheet-in">'+head(sh.isNew?'Nova pasta':'Pasta','Salvar')+'<div class="sheet-body" id="sheetBody">';
   h+='<div><label class="lbl" for="f-title">Nome da pasta</label><input class="inp" id="f-title" data-bind="name" value="'+esc(d.name)+'" placeholder="Ex.: Saúde" autocomplete="off"></div>';
   h+='<div><label class="lbl" for="f-parent">Fica dentro de</label><select class="inp" id="f-parent" data-bind="parent">'+folderOptions(d.parent&&fm[d.parent]?d.parent:'',fm,d.id||null,'Nenhuma (pasta principal)')+'</select></div>';
-  if(!sh.isNew)h+='<div class="note-s">Se apagar a pasta, as notas e subpastas dela sobem para a pasta de cima. Nenhuma nota é apagada.</div>';
+  if(!sh.isNew)h+='<div class="note-s">Se apagar a pasta, as notas e pastas dela sobem para a pasta de cima. Nenhuma nota é apagada.</div>';
   h+='</div>'+footer(sh,'Apagar pasta')+'</div></div>';
   return h;
 }
@@ -3374,7 +3375,7 @@ async function deleteSheet(){
   const d=sh.draft;
   if(sh.type==='folder'){
     const fm=fmap(),to=parentOf(fm[d.id],fm),toName=to?(fm[to].name||'Sem nome'):'Geral';
-    if(!(await ask({title:'Apagar a pasta “'+(d.name||'')+'”?',msg:'As notas e subpastas dela vão para “'+toName+'”. Nenhuma nota é apagada.',ok:'Apagar pasta',danger:true})))return;
+    if(!(await ask({title:'Apagar a pasta “'+(d.name||'')+'”?',msg:'As notas e pastas dela vão para “'+toName+'”. Nenhuma nota é apagada.',ok:'Apagar pasta',danger:true})))return;
     const dest=await deleteFolder(d.id);
     if(S.folder===d.id)S.folder=dest||null;
     closeSheet();okToast('Pasta apagada.');render();return;
@@ -3857,6 +3858,7 @@ const A={
     if(!(await ask({title:'Virar nota?',msg:r.title+'\nVira uma nota em Geral. O lembrete vai para Apagados e pode ser recuperado em até 30 dias.',ok:'Virar nota'})))return;
     await Store.put('notes',Object.assign(newNote(''),{title:(r.title||'').slice(0,60),body:r.notes||'',updatedAt:Date.now()}));await softDelete('reminders',r);},
   'new-folder':d=>openSheet('folder',{name:'',parent:d.parent||'',createdAt:Date.now()}),
+  'edit-note':d=>{const n=S.notes.find(x=>x.id===d.id);if(n)openSheet('note',Object.assign({checklist:[]},clone(n)));},
   'edit-folder':d=>{const f=S.folders.find(x=>x.id===d.id);if(f)openSheet('folder',clone(f));},
   'undo':()=>undoDo(),
   'lk-new':()=>lkAct('lk-new'),
