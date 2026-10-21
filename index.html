@@ -273,6 +273,7 @@ input,textarea,select{font:inherit;font-size:1rem;color:var(--fg)}
 .notes-tools.dense .iconbtn{width:2.3rem;height:2.3rem}
 .editpill{min-height:2.6rem;padding:0 .9rem;border-radius:1.3rem;background:var(--surface-2,var(--surface));font-size:1.05rem}
 .editpill.on{background:var(--accent);color:var(--accent-fg)}
+.li.chkd{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
 .li.editing{gap:.6rem}
 .li.editing .cnt{display:none}
 .ebtn{width:2.3rem;height:2.3rem;border-radius:50%;background:var(--surface-2,var(--surface));flex:none}
@@ -1224,7 +1225,7 @@ function roAfterRender(){
 }
 function roInit(){
   document.addEventListener('click',e=>{if(Date.now()<RO.noClick){e.preventDefault();e.stopPropagation();}},true);
-  const arm=(t,x,y)=>{const f=roFind(t);if(!f)return;RO.x0=x;RO.y0=y;RO.pend=f;clearTimeout(RO.timer);RO.timer=setTimeout(()=>{if(RO.pend){const p=RO.pend;RO.pend=null;roBegin(p);}},450);};
+  const arm=(t,x,y)=>{let f=roFind(t);if(!f){const el=t&&t.closest?t.closest('.chkd[data-act="open-rem"]'):null;if(el)f={el,id:el.getAttribute('data-id'),g:null,key:''};}if(!f)return;RO.x0=x;RO.y0=y;RO.pend=f;clearTimeout(RO.timer);RO.timer=setTimeout(()=>{if(RO.pend){const p=RO.pend;RO.pend=null;if(p.el.classList.contains('chkd')&&p.el.getAttribute('data-act')==='open-rem'){RO.noClick=Date.now()+700;try{if(navigator.vibrate)navigator.vibrate(12);}catch(e){}remMenu(p);}else roBegin(p);}},450);};
   const move=(x,y,e)=>{
     if(RO.drag){if(e&&e.cancelable)e.preventDefault();roMove(y);return;}
     if(RO.pend&&(Math.abs(x-RO.x0)>10||Math.abs(y-RO.y0)>10)){clearTimeout(RO.timer);RO.pend=null;}
@@ -1824,6 +1825,31 @@ function finSend(){
   };
   el.querySelector('#finGo').onclick=go;
   el.querySelector('#finGoTop').onclick=go;
+}
+/* segurar um lembrete: menu grande, como no iPhone (Detalhes, Sinalizar, Apagar e as ações rápidas) */
+async function remMenu(f){
+  const r=S.reminders.find(x=>x.id===f.id);if(!r)return;
+  const put=(o,msg)=>async()=>{const old=r;await Store.put('reminders',Object.assign({},r,o));toast(msg);};
+  const today=new Date(),iso=n=>isoDate(addDays(today,n));
+  const sub=async(title,opts)=>{await pickMove({title:title,msg:r.title,options:opts});};
+  const prio=i=>({label:['Nenhuma','! Baixa','!! Média','!!! Alta'][i],current:(r.priority||0)===i,onPick:put({priority:i},'Prioridade mudada')});
+  const opts=[
+    {label:'Detalhes',onPick:()=>openRem(r)},
+    {label:r.flag?'Tirar o sinal':'Sinalizar',onPick:put({flag:!r.flag},r.flag?'Sinal tirado':'Sinalizado')},
+    {label:r.done?'Reabrir':'Marcar como concluído',onPick:()=>toggleDone(r.id)},
+    {label:'Data limite…',onPick:()=>setTimeout(()=>sub('Data limite',[
+      {label:'Hoje',onPick:put({date:iso(0)},'Data: hoje')},
+      {label:'Amanhã',onPick:put({date:iso(1)},'Data: amanhã')},
+      {label:'Daqui a 7 dias',onPick:put({date:iso(7)},'Data: daqui a 7 dias')},
+      {label:'Outra data (abrir)',onPick:()=>openSheet('rem',clone(r),{back:'remv'})},
+      {label:'Tirar a data',onPick:put({date:'',time:''},'Data tirada')}]),30)},
+    {label:'Mover para lista…',onPick:()=>setTimeout(()=>sub('Mover para qual lista?',[{label:'Lembretes (sem lista)',current:!r.list,onPick:put({list:''},'Movido')}].concat(S.lists.map(l=>({label:l.name||'Sem nome',color:l.color,current:r.list===l.id,onPick:put({list:l.id},'Movido para '+(l.name||'a lista'))})))),30)},
+    {label:'Prioridade…',onPick:()=>setTimeout(()=>sub('Prioridade',[0,1,2,3].map(prio)),30)},
+    {label:'Criar subtarefa',onPick:()=>{openSheet('rem',clone(r),{back:'remv'});setTimeout(()=>{const i=document.getElementById('newSub');if(i){try{i.scrollIntoView({block:'center'});i.focus();}catch(e){}}},250);}}
+  ];
+  if(f.g&&f.g.getAttribute('data-rman')==='1')opts.push({label:'Mudar a ordem',onPick:()=>{RO.sel={key:f.key,id:f.id};f.el.classList.add('ro-sel');roBar();}});
+  opts.push({label:'Apagar',onPick:async()=>{if(await ask({title:'Apagar este lembrete?',msg:r.title,ok:'Apagar',danger:true})){await softDelete('reminders',r);toast('Apagado');}}});
+  await pickMove({title:r.title||'Lembrete',options:opts});
 }
 function pickMove(o){
   return new Promise(res=>{
