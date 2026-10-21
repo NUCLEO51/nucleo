@@ -2176,8 +2176,8 @@ function planBody(ws,today){
 function remHome(){
   const sm=smart(),lm=lmap(),today=isoDate(new Date()),ws=S.weekStart;
   const cur=isoDate(ws)===isoDate(mondayOf(new Date()));
-  let h=hdr('Lembretes e planner','Lembretes',undoBtn()+sortBtn());
-  h+='<div class="search">'+ic('search',1.05,2.2)+'<label for="rq" class="sr">Buscar lembretes</label><input id="rq" type="search" placeholder="Buscar lembretes" value="'+esc(S.rq)+'" autocomplete="off"></div>';
+  let h=(S.rq?'<button class="back" data-act="rq-clear">'+ic('left',1.15,2.6)+'Lembretes</button>':'')+hdr('Lembretes e planner','Lembretes',undoBtn()+sortBtn());
+  h+='<div class="search">'+ic('search',1.05,2.2)+'<label for="rq" class="sr">Buscar lembretes</label><input id="rq" type="search" placeholder="Buscar lembretes" value="'+esc(S.rq)+'" autocomplete="off"><button class="iconbtn" id="rqx" data-act="rq-clear" aria-label="Limpar a busca e voltar"'+(S.rq?'':' style="display:none"')+'>'+ic('close',.95,2.4)+'</button></div>';
   h+='<div id="remBody">'+remHomeBody(sm,lm,today,ws,cur)+'</div>';
   return h;
 }
@@ -3809,6 +3809,7 @@ const A={
     S.tab=d.tab;}),
   'fin-open':()=>{location.href='fin/';},
   'fin-send':()=>finSend(),
+  'rq-clear':()=>{S.rq='';render();},
   'go-rem':d=>go(()=>{S.rfromHoje=S.tab==='hoje'?1:0;S.tab='lembretes';S.rview=d.v;S.rq='';S.rfromPlan=0;}),
   'go-caixa':()=>go(()=>{S.tab='caixa';}),
   'cx-back':()=>go(()=>{S.tab='hoje';}),
@@ -4029,7 +4030,7 @@ document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target&&e.target.i
 document.addEventListener('input',e=>{
   const t=e.target;
   if(t.id==='q'){S.q=t.value;const b=$('notesBody');if(b)b.innerHTML=notesBody();const nf=$('notesFolders');if(nf)nf.style.display=S.q?'none':'';return;}
-  if(t.id==='rq'){S.rq=t.value;renderRemBody();return;}
+  if(t.id==='rq'){S.rq=t.value;const x=$('rqx');if(x)x.style.display=S.rq?'':'none';renderRemBody();return;}
   if(t.id==='gq'){S.gq=t.value;const b=$('gsBody');if(b)b.innerHTML=gsBody();return;}
   if(!S.sheet)return;
   if(t.dataset.bind!==undefined){
