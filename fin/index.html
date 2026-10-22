@@ -1167,34 +1167,36 @@ async function viewFile(f){
     const sh=box.querySelector('#vf-share');if(sh)sh.onclick=()=>{navigator.share({files:[file],title:f.name}).catch(()=>{});};
   }catch(e){const body=m.querySelector('#vf-body');if(body)body.textContent=e.message||'Não consegui abrir.';}
 }
-async function reviewProp(rec){
+async function reviewProp(rec,done){
+  const fin=(k)=>done?done(k):markProp(rec,k);
   const pr=parseText(rec.data.text),tx=rec.data.text,files=rec.data.files||[];
   const sug=pr.type;
-  const m=modal('<h3>Veio do Núcleo</h3><div class="card sum">'+esc(tx)+'</div>'
+  const m=modal('<h3>'+(rec.data.source==='siri'?'Veio da Siri':'Pendência')+'</h3><div class="card sum">'+esc(tx)+'</div>'
     +(files.length?'<p class="mut">Documento anexo. O Financeiro não lê a foto sozinho: veja o documento, escolha o tipo abaixo e preencha. Dá para compartilhar com o chat.</p>'+files.map((f,i)=>'<button class="btn" data-vf="'+i+'">📎 Ver '+esc(f.name)+(f.size?' · '+sizeTxt(f.size):'')+'</button>').join(''):'')
     +'<p class="mut">O que é isso?'+(sug?' Sugestão marcada.':' Escolha.')+'</p>'
     +'<button class="btn'+(sug==='charge'?'':' sec')+'" id="p-ch">💳 Compra no cartão</button>'
     +'<button class="btn'+(sug==='bill'?'':' sec')+'" id="p-bi">🧾 Conta do mês</button>'
     +'<button class="btn'+(sug==='debt'?'':' sec')+'" id="p-de">📉 Dívida</button>'
-    +'<button class="btn bad" id="p-ig">Ignorar</button><button class="btn sec" id="p-no">Voltar</button>');
+    +'<button class="btn sec" id="p-re">🔔 Só um lembrete</button><button class="btn bad" id="p-ig">Ignorar</button><button class="btn sec" id="p-no">Voltar</button>');
   m.querySelector('#p-no').onclick=()=>m.remove();
   m.querySelectorAll('[data-vf]').forEach(b=>{b.onclick=()=>viewFile(files[+b.dataset.vf]);});
-  m.querySelector('#p-ig').onclick=async()=>{m.remove();if(await confirmBox('Ignorar este item?',[tx,'Ele sai da lista de pendentes.'],'Sim, ignorar',true))markProp(rec,'ignorado');};
+  m.querySelector('#p-ig').onclick=async()=>{m.remove();if(await confirmBox('Ignorar este item?',[tx,'Ele sai da lista de pendentes.'],'Sim, ignorar',true))fin('ignorado');};
   m.querySelector('#p-ch').onclick=async()=>{m.remove();
     const cards=byKind('card');
     if(!cards.length){await info('Falta o cartão','Cadastre o cartão primeiro, em Cartões. Depois volte neste item.');return;}
     const card=pr.card||cards[0];
     const out=await chargeForm(card,null,{date:pr.date,desc:pr.desc,totalC:pr.amountC,n:pr.n});
-    if(out)markProp(rec,'feito');};
-  m.querySelector('#p-bi').onclick=async()=>{m.remove();const out=await billForm(null,{name:pr.desc,dueDay:pr.dueDay,amountC:pr.amountC,variable:pr.amountC==null,recurring:true});if(out)markProp(rec,'feito');};
-  m.querySelector('#p-de').onclick=async()=>{m.remove();const out=await debtForm(null,{creditor:pr.desc,balanceC:pr.amountC,status:'ATIVA',dueDay:pr.dueDay,dir:pr.recv?'RECEBER':'PAGAR'});if(out)markProp(rec,'feito');};
+    if(out)fin('feito');};
+  m.querySelector('#p-bi').onclick=async()=>{m.remove();const out=await billForm(null,{name:pr.desc,dueDay:pr.dueDay,amountC:pr.amountC,variable:pr.amountC==null,recurring:true});if(out)fin('feito');};
+  m.querySelector('#p-de').onclick=async()=>{m.remove();const out=await debtForm(null,{creditor:pr.desc,balanceC:pr.amountC,status:'ATIVA',dueDay:pr.dueDay,dir:pr.recv?'RECEBER':'PAGAR'});if(out)fin('feito');};
+  m.querySelector('#p-re').onclick=()=>{m.remove();frForm(null,{title:tx.slice(0,200)},async()=>{await fin('feito');});};
 }
 
 function upcoming(){
   const td=todayIso(),lim=isoDate(new Date(Date.now()+30*864e5)),out=[];
   monthRows(ymOf(td)).filter(x=>!x.r.data.paidAt).forEach(x=>{const dt=billDue(x);if(dt<=lim)out.push({dt,kind:'Conta',name:x.bill.data.name,c:x.r.data.amountC,late:dt<td});});
   byKind('card').forEach(cr=>{const k=cardCalc(cr);Object.values(k.inv).filter(v=>!v.paid&&v.ym<=k.openYm&&v.totalC>0).forEach(v=>{const dt=dueDateFor(cr.data,v.ym);if(dt<=lim)out.push({dt,kind:'Fatura',name:cr.data.name+' · '+ymShort(v.ym),c:v.totalC,late:dt<td});});});
-  byKind('debt').filter(d=>d.data.dueDay).forEach(d=>{const dt=debtNext(d.data,true),rv=d.data.dir==='RECEBER';if(dt&&dt<=lim)out.push({dt,kind:rv?'A receber':'Dívida',recv:rv,name:d.data.creditor,c:d.data.installC,late:dt<td||d.data.status==='ATRASADA'});});
+  byKind('debt').filter(d=>d.data.dueDay).forEach(d=>{const dt=debtNext(d.data,true),rv=d.data.dir==='RECEBER';if(dt&&dt<=lim)out.push({dt,kind:rv?'A receber':'Dívida',recv:rv,name:d.data.creditor,c:debtAmt(d.data,dt.slice(0,7)),late:dt<td||d.data.status==='ATRASADA'});});
   return out.sort((a,b)=>a.dt<b.dt?-1:1);
 }
 const hasDemo=()=>S.recs.some(r=>r.data&&r.data.demo);
@@ -1241,16 +1243,18 @@ function vHome(){
   const sem=open.filter(x=>x.r.data.amountC==null).length;
   const late=open.filter(x=>billDue(x)<td).length;
   let h=header('Financeiro',undoBtn()+rbtn('tab','📝','Anotações','notes')+rbtn('tab','📄','Extratos do banco','stmt')+rbtn('chat','💬','Chat financeiro')+rbtn('tab','⚙️','Ajustes','cfg'),'home')+'<p class="sub">'+esc(ymLabel(ym))+'</p><div class="wrap">';
+  const ibn=ibList();
+  if(ibn.length)h+='<button class="item" data-act="tab" data-v="notes"><div class="row"><span class="t">📝 Anotações para decidir</span><span class="cnt">'+ibn.length+'</span></div><div class="mut">Siri ou digitadas: toque para dizer se é cartão, conta, dívida ou lembrete.</div></button>';
   const pend=pendList();
   if(pend.length){
-    h+='<button class="item" data-act="hp-toggle" aria-expanded="'+(!!S.hp)+'"><div class="row"><span class="t">📥 Pendentes do Núcleo</span><span><span class="cnt">'+pend.length+'</span> <span class="mut" style="font-size:1.3rem">'+(S.hp?'▾':'▸')+'</span></span></div></button>';
+    h+='<button class="item" data-act="hp-toggle" aria-expanded="'+(!!S.hp)+'"><div class="row"><span class="t">📥 Pendentes</span><span><span class="cnt">'+pend.length+'</span> <span class="mut" style="font-size:1.3rem">'+(S.hp?'▾':'▸')+'</span></span></div></button>';
     if(S.hp)pend.slice(0,20).forEach(r=>{h+='<button class="item" data-act="prop" data-id="'+r.id+'"><div class="clamp">'+esc(r.data.text)+'</div></button>';});
   }
   const cardsH=byKind('card');let totH=0;cardsH.forEach(cr=>{totH+=cardCalc(cr).used;});
   const debtsAll=byKind('debt').filter(d=>d.data.status!=='PAGA');
   const debts=debtsAll.filter(d=>d.data.dir!=='RECEBER'),recvs=debtsAll.filter(d=>d.data.dir==='RECEBER');
   const dsum=debts.reduce((a,d)=>a+(d.data.balanceC||0),0),dmiss=debts.some(d=>d.data.balanceC==null);
-  const nxD=debts.map(d=>({c:d.data.installC||0,dt:debtNext(d.data,true)})).filter(x=>x.dt).sort((a,b)=>a.dt<b.dt?-1:1)[0];
+  const nxD=debts.map(d=>{const dt=debtNext(d.data,true);return {c:(dt&&debtAmt(d.data,dt.slice(0,7)))||0,dt};}).filter(x=>x.dt).sort((a,b)=>a.dt<b.dt?-1:1)[0];
   const g=gastosMes(ym);
   h+='<div class="up s2">'
     +srow('bills','A pagar no mês',money(known),(late?'<span class="tag bad">'+late+(late===1?' atrasada':' atrasadas')+'</span> ':'')+(sem?'<span class="tag warn">'+sem+' sem valor</span>':'')+(!rows.length?'Nenhuma conta cadastrada':'')+((rows.length&&!late&&!sem)?'Valores conhecidos':''))
@@ -1288,9 +1292,13 @@ function debtFirst(x){
   const fd=x.firstDue?x.firstDue.slice(0,7):'';if(fd&&fd>f)f=fd;
   return f;
 }
+const debtFd=x=>x.firstDue?x.firstDue.slice(0,7):'';
+/* valor da parcela daquele mês: a 1ª pode ser diferente das outras */
+function debtAmt(x,ym){return (x.firstInstC!=null&&debtFd(x)&&ym===debtFd(x))?x.firstInstC:x.installC;}
 function debtOwes(x,ym){
   if(!x.dueDay||x.status==='PAGA')return false;
   const f=debtFirst(x);if(ym<f)return false;
+  if(x.nInst&&debtFd(x))return mdiff(debtFd(x),ym)<x.nInst;
   if(x.balanceC!=null&&x.installC)return mdiff(f,ym)<Math.ceil(x.balanceC/x.installC);
   return true;
 }
@@ -1309,9 +1317,9 @@ function debtPayData(x,ym,undo){
   const was=(x.paidYm||[]).indexOf(ym)>=0,n=Object.assign({},x),paid=(x.paidYm||[]).filter(m=>m!==ym);
   if(!undo){
     paid.push(ym);
-    if(x.balanceC!=null&&x.installC){n.balanceC=Math.max(0,x.balanceC-x.installC);if(n.balanceC===0)n.status='PAGA';}
+    const am=debtAmt(x,ym);if(x.balanceC!=null&&am){n.balanceC=Math.max(0,x.balanceC-am);if(n.balanceC===0||(x.nInst&&paid.length>=x.nInst))n.status='PAGA';}
   }else if(was){
-    if(x.balanceC!=null&&x.installC)n.balanceC=x.balanceC+x.installC;
+    const am2=debtAmt(x,ym);if(x.balanceC!=null&&am2)n.balanceC=x.balanceC+am2;
     if(n.status==='PAGA')n.status='ATIVA';
   }
   n.paidYm=paid.sort();
@@ -1319,13 +1327,13 @@ function debtPayData(x,ym,undo){
 }
 async function debtPay(rec,ym){
   const x=rec.data,rv=x.dir==='RECEBER',paid=(x.paidYm||[]).indexOf(ym)>=0,date=dateOf(ym,x.dueDay);
-  const m=modal('<h3>'+esc(x.creditor)+'</h3><div class="card sum">'+esc('Parcela de '+ymShort(ym)+'\nValor: '+money(x.installC)+'\nVence '+brDate(date)+'\n'+(rv?'Falta receber: ':'Saldo da dívida: ')+money(x.balanceC)+'\nSituação: '+(paid?(rv?'Recebida':'Paga'):(rv?'A receber':'A pagar')))+'</div>'
+  const m=modal('<h3>'+esc(x.creditor)+'</h3><div class="card sum">'+esc('Parcela de '+ymShort(ym)+'\nValor: '+money(debtAmt(x,ym))+'\nVence '+brDate(date)+'\n'+(rv?'Falta receber: ':'Saldo da dívida: ')+money(x.balanceC)+'\nSituação: '+(paid?(rv?'Recebida':'Paga'):(rv?'A receber':'A pagar')))+'</div>'
     +'<button class="btn" id="d-pay">'+(paid?(rv?'Desfazer “recebida”':'Desfazer “paga”'):(rv?'Marcar como recebida':'Marcar como paga'))+'</button><button class="btn sec" id="d-edit">Editar a dívida</button><button class="btn sec" id="d-no">Voltar</button>');
   m.querySelector('#d-no').onclick=()=>m.remove();
   m.querySelector('#d-edit').onclick=()=>{m.remove();debtForm(rec);};
   m.querySelector('#d-pay').onclick=async()=>{
-    const nx=debtPayData(x,ym,paid),lines=['Parcela de '+ymShort(ym)+' · '+money(x.installC)];
-    if(x.balanceC!=null&&x.installC)lines.push((rv?'Falta receber: ':'Saldo da dívida: ')+money(x.balanceC)+' → '+money(nx.balanceC));
+    const nx=debtPayData(x,ym,paid),lines=['Parcela de '+ymShort(ym)+' · '+money(debtAmt(x,ym))];
+    if(x.balanceC!=null&&debtAmt(x,ym))lines.push((rv?'Falta receber: ':'Saldo da dívida: ')+money(x.balanceC)+' → '+money(nx.balanceC));
     if(nx.status!==x.status)lines.push('Situação: '+dstTxt(x)+' → '+dstTxt(nx));
     lines.push(paid?(rv?'Volta para “a receber”.':'Volta para “a pagar”.'):(rv?'O Financeiro não recebe nada. Só registra que você recebeu.':'O Financeiro não paga nada. Só registra que você pagou.'));
     if(await confirmBox(paid?(rv?'Desfazer “recebida”?':'Desfazer “paga”?'):(rv?'Marcar como recebida?':'Marcar como paga?'),lines,'Sim')){
@@ -1367,11 +1375,11 @@ function remSpecForDebt(d){
   const due=debtNext(x,true);if(!due)return null;
   const rv=x.dir==='RECEBER',td=todayIso();
   let date=isoMinus1(due);if(date<td)date=td;
-  const val=x.installC!=null?' · '+plain(money(x.installC)):'';
+  const dam=debtAmt(x,due.slice(0,7)),val=dam!=null?' · '+plain(money(dam)):'';
   return {
     title:(rv?'Receber de ':'Pagar parcela — ')+x.creditor+val+' (vence dia '+x.dueDay+')',
     notes:'Lembrete automático do Financeiro: 1 dia antes do vencimento, às '+REM_TIME+'. '+(rv?'Depois de receber, marque no Financeiro: Mês › a parcela › Marcar como recebida.':'Depois de pagar, marque no Financeiro: Mês › a parcela › Marcar como paga.'),
-    date,remaining:(x.balanceC!=null&&x.installC)?Math.ceil(x.balanceC/x.installC):0
+    date,remaining:x.nInst?Math.max(0,x.nInst-(x.paidYm||[]).length):((x.balanceC!=null&&x.installC)?Math.ceil(x.balanceC/x.installC):0)
   };
 }
 function remDataFor(d,spec,listId,old,resched){
@@ -1563,7 +1571,7 @@ function frActions(rec){
   };
   q('#ra-del').onclick=async()=>{
     m.remove();
-    if(!await confirmBox('Apagar este lembrete?',[x.title,'Vai para a lixeira do Núcleo (30 dias).'],'Sim, apagar',true))return;
+    if(!await confirmBox('Apagar este lembrete?',[x.title,'Vai para a lixeira (30 dias).'],'Sim, apagar',true))return;
     try{const r=await itemsPatch(rec,{deleted_at:new Date().toISOString()});if(!r.length)throw new Error('Mudou em outro aparelho. Abra de novo.');S.msg='';await loadFinRems();}catch(e){S.msg=e.message;}render();
   };
 }
@@ -1655,7 +1663,7 @@ const ibList=()=>(S.ib||[]).filter(x=>x.data&&x.data.text).sort((a,b)=>(b.data.c
 function vNotes(){
   if(!S.ibLoaded&&!S.ibBusy){S.ibBusy=true;loadInbox().finally(()=>{S.ibBusy=false;});}
   let h=header('Anotações',rbtn('note-new','+','Nova anotação')+rbtn('tab','🏠','Início','home'),'home')+'<div class="wrap">';
-  h+='<p class="mut">O que você disser para a Siri («Anotar») cai aqui. Toque numa anotação para virar lembrete ou apagar.</p>';
+  h+='<p class="mut">O que você disser para a Siri («Anotar») cai aqui. Toque numa anotação para dizer se é compra no cartão, conta, dívida ou lembrete.</p>';
   if(S.ibErr)h+='<div class="note"><span class="tag warn">Anotações</span> Não consegui ler agora ('+esc(S.ibErr)+').</div>';
   if(!S.ibLoaded)return h+'<p class="mut">Carregando…</p></div>';
   const L=ibList();
@@ -1678,14 +1686,8 @@ async function noteDrop(rec){
   await loadInbox();
 }
 function noteActions(rec){
-  const m=modal('<h3>Anotação</h3><div class="card sum">'+esc(rec.data.text)+'</div><button class="btn" id="na-rem">Virar lembrete</button><button class="btn bad" id="na-del">Apagar</button><button class="btn sec" id="na-no">Voltar</button>');
-  m.querySelector('#na-no').onclick=()=>m.remove();
-  m.querySelector('#na-rem').onclick=()=>{m.remove();frForm(null,{title:rec.data.text.slice(0,200)},async()=>{try{await noteDrop(rec);}catch(e){S.msg=e.message;}});};
-  m.querySelector('#na-del').onclick=async()=>{
-    m.remove();
-    if(!await confirmBox('Apagar esta anotação?',[rec.data.text.slice(0,200)],'Sim, apagar',true))return;
-    try{await noteDrop(rec);S.msg='';}catch(e){S.msg=e.message;}render();
-  };
+  /* mesma pergunta das pendências: cartão, conta, dívida, lembrete ou apagar; ao concluir, a anotação sai da caixa */
+  reviewProp(rec,async()=>{try{await noteDrop(rec);S.msg='';}catch(e){S.msg=e.message;}render();});
 }
 
 /* ---------- a planilha do mês: tudo que vence, com data, valor e situação ---------- */
@@ -1716,10 +1718,10 @@ function monthItems(ym){
     if(!paid&&!debtOwes(x,ym))return;
     const date=dateOf(ym,x.dueDay);let state,cls='';
     if(paid){state=rv?'Recebida':'Paga';cls='ok';}
-    else if(x.installC==null){state='Sem valor';cls='warn';}
+    else if(debtAmt(x,ym)==null){state='Sem valor';cls='warn';}
     else if(date<td){if(x.status==='ATRASADA'){state='Em atraso';cls='bad';}else{state='Confirmar';cls='warn';}}
     else state=rv?'A receber':'A pagar';
-    out.push({k:'debt',id:d.id,ym,date,name:x.creditor,tipo:(rv?'A receber':'Dívida')+(x.kindD?' · '+x.kindD:''),amountC:x.installC,state,cls,dir:rv?'RECEBER':'PAGAR'});
+    out.push({k:'debt',id:d.id,ym,date,name:x.creditor,tipo:(rv?'A receber':'Dívida')+(x.kindD?' · '+x.kindD:''),amountC:debtAmt(x,ym),state,cls,dir:rv?'RECEBER':'PAGAR'});
   });
   return out.sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:(a.name<b.name?-1:1));
 }
@@ -2063,7 +2065,7 @@ async function bkNow(){
   }catch(e){finToast('Não consegui fazer o backup agora.');}
 }
 async function bkDown(){
-  if(!await confirmBox('Baixar o último backup?',['Vai salvar um arquivo com os seus dados do Núcleo e do Financeiro.','Ele tem informação financeira: guarde em lugar seguro.'],'Sim, baixar'))return;
+  if(!await confirmBox('Baixar o último backup?',['Vai salvar um arquivo com os seus dados do Financeiro.','Ele tem informação financeira: guarde em lugar seguro.'],'Sim, baixar'))return;
   let b;
   try{
     const r=await Api.rest('backups?select=data,taken_at&order=taken_at.desc&limit=1');
@@ -2240,7 +2242,9 @@ async function debtForm(rec,preset){
     {k:'dir',label:'Esta parcela é…',type:'select',opts:[['PAGAR','A pagar (eu devo)'],['RECEBER','A receber (me devem)']]},
     {k:'creditor',label:'Nome (a quem você deve ou quem te deve)',type:'text',req:true},
     {k:'balanceC',label:'Saldo (quanto falta pagar ou receber)',type:'money',hint:'Vazio = Não informado.'},
-    {k:'installC',label:'Valor da parcela',type:'money'},
+    {k:'installC',label:'Valor da parcela (das próximas)',type:'money'},
+    {k:'firstInstC',label:'Valor da 1ª parcela (só se for diferente)',type:'money',hint:'Ex.: a 1ª é R$ 120,00 e as outras são R$ 100,00. Vazio = igual às outras.'},
+    {k:'nInst',label:'Quantas parcelas no total (opcional)',type:'int',min:1,max:120,hint:'Ex.: 6. Com isso eu calculo o saldo e paro de cobrar depois da última.'},
     {k:'rateBp',label:'Juros ao mês, em % (se souber)',type:'money',hint:'Ex.: 1,99. Vazio = Não informado (não vira zero).'},
     {k:'dueDay',label:'Vence todo dia',type:'int',min:1,max:31},
     {k:'firstDue',label:'1ª parcela vence em (opcional)',type:'date',hint:'Só se a primeira parcela ainda não venceu. A planilha do mês começa nesta data.'},
@@ -2249,7 +2253,13 @@ async function debtForm(rec,preset){
     {k:'account',label:'Conta de onde sai o pagamento (opcional)',type:'text'},
     {k:'note',label:'Observação',type:'text'}
   ],Object.assign({dir:'PAGAR'},d),{
-    summary:o=>[(o.dir==='RECEBER'?'A receber de: ':'Dívida: ')+o.creditor,'Saldo: '+money(o.balanceC),'Parcela: '+money(o.installC),'Juros ao mês: '+(o.rateBp==null?'Não informado':(o.rateBp/100).toFixed(2).replace('.',',')+'%'),'Situação: '+o.status,'Tipo: '+(o.kindD||'Não definido')],
+    validate:o=>{
+      if((o.firstInstC!=null||o.nInst!=null)&&!o.firstDue)return 'Para usar parcelas diferentes ou o total de parcelas, preencha “1ª parcela vence em”.';
+      if(o.firstInstC!=null&&o.installC==null)return 'Preencha também o valor das próximas parcelas.';
+      if(o.balanceC==null&&o.nInst&&o.installC!=null)o.balanceC=(o.firstInstC!=null?o.firstInstC:o.installC)+(o.nInst-1)*o.installC;
+      return '';
+    },
+    summary:o=>[(o.dir==='RECEBER'?'A receber de: ':'Dívida: ')+o.creditor,'Saldo: '+money(o.balanceC),(o.firstInstC!=null?'1ª parcela: '+money(o.firstInstC)+' · ':'')+'Parcela: '+money(o.installC)+(o.nInst?' · '+o.nInst+' parcelas':''),'Juros ao mês: '+(o.rateBp==null?'Não informado':(o.rateBp/100).toFixed(2).replace('.',',')+'%'),'Situação: '+o.status,'Tipo: '+(o.kindD||'Não definido')],
     save:async o=>{if(rec)await Api.update(rec,Object.assign({},rec.data,o));else await Api.create('debt',o);},
     onDelete:rec?async()=>{if(await confirmBox('Apagar esta dívida?',[d.creditor],'Sim, apagar',true)){try{await Api.remove(rec);}catch(e){S.msg=e.message;}render();}}:null
   });
@@ -2333,7 +2343,7 @@ document.addEventListener('click',async ev=>{
 function loginScreen(msg){
   let el=$('lg');if(!el){el=document.createElement('div');el.id='lg';document.body.appendChild(el);}
   el.style.cssText='position:fixed;inset:0;z-index:99999;background:var(--bg);display:flex;flex-direction:column;justify-content:center;padding:1.5rem;overflow:auto';
-  el.innerHTML='<div style="max-width:28rem;width:100%;margin:0 auto"><h1>Financeiro</h1><p>Entre com o mesmo e-mail e a mesma senha do Núcleo.</p>'
+  el.innerHTML='<div style="max-width:28rem;width:100%;margin:0 auto"><h1>Financeiro</h1><p>Entre com o seu e-mail e a sua senha.</p>'
     +'<label class="f" for="lg-mail">E-mail</label><input class="in" id="lg-mail" type="email" autocomplete="username" autocapitalize="off">'
     +'<label class="f" for="lg-pass">Senha</label><input class="in" id="lg-pass" type="password" autocomplete="current-password">'
     +'<div class="err" id="lg-err" role="alert">'+esc(msg||'')+'</div><button class="btn" id="lg-go">Entrar</button></div>';

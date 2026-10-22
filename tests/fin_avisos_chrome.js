@@ -37,7 +37,7 @@ const { chromium } = require('playwright');
     S.tab='notes';render();await new Promise(r=>setTimeout(r,300));
     out.noteRows=document.querySelectorAll('#app [data-act="note-open"]').length;
     document.querySelector('[data-act="note-open"]').click();
-    document.querySelector('#na-rem').click();await new Promise(r=>setTimeout(r,100));
+    document.querySelector('#p-re').click();await new Promise(r=>setTimeout(r,100));
     out.prefill=document.querySelector('#f-title').value;
     document.querySelector('#f-date').value=td;document.querySelector('#f-ok').click();await new Promise(r=>setTimeout(r,100));
     document.querySelector('#cf-ok').click();await new Promise(r=>setTimeout(r,600));
