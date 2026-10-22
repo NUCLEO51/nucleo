@@ -2714,7 +2714,7 @@ async function processSiri(){
     }catch(e){delete siriBusy[it.id];}
   }
 }
-function onData(){render();checkAlarms();purgeOld();processSiri();}
+function onData(){render();checkAlarms();purgeOld();/* processSiri() desligado em 21/10: as anotações da Siri ficam na caixa para o Financeiro */}
 
 /* ---------- avisos ---------- */
 function toast(msg,action,fn){

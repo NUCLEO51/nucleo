@@ -1240,7 +1240,7 @@ function vHome(){
   const known=open.filter(x=>x.r.data.amountC!=null).reduce((a,x)=>a+x.r.data.amountC,0);
   const sem=open.filter(x=>x.r.data.amountC==null).length;
   const late=open.filter(x=>billDue(x)<td).length;
-  let h=header('Financeiro',undoBtn()+rbtn('tab','📄','Extratos do banco','stmt')+rbtn('chat','💬','Chat financeiro')+rbtn('tab','⚙️','Ajustes','cfg'),'home')+'<p class="sub">'+esc(ymLabel(ym))+'</p><div class="wrap">';
+  let h=header('Financeiro',undoBtn()+rbtn('tab','📝','Anotações','notes')+rbtn('tab','📄','Extratos do banco','stmt')+rbtn('chat','💬','Chat financeiro')+rbtn('tab','⚙️','Ajustes','cfg'),'home')+'<p class="sub">'+esc(ymLabel(ym))+'</p><div class="wrap">';
   const pend=pendList();
   if(pend.length){
     h+='<button class="item" data-act="hp-toggle" aria-expanded="'+(!!S.hp)+'"><div class="row"><span class="t">📥 Pendentes do Núcleo</span><span><span class="cnt">'+pend.length+'</span> <span class="mut" style="font-size:1.3rem">'+(S.hp?'▾':'▸')+'</span></span></div></button>';
@@ -1455,6 +1455,7 @@ async function loadFinRems(){
     }
   }catch(e){S.frErr=e.message||'erro';}
   S.frLoaded=true;
+  try{await syncFinAlarms();}catch(e){}
   try{if(S.tab==='rem'&&!document.querySelector('.modal'))render();}catch(e){}
 }
 const frSort=(a,b)=>((a.data.date||'9999')+(a.data.time||'99:99'))<((b.data.date||'9999')+(b.data.time||'99:99'))?-1:1;
@@ -1474,7 +1475,9 @@ function vRem(){
   if(S.frErr)h+='<div class="note"><span class="tag warn">Lembretes</span> Não consegui ler os lembretes agora ('+esc(S.frErr)+').</div>';
   if(!S.frLoaded)return h+'<p class="mut">Carregando…</p></div>';
   if(!S.frList&&!S.frErr)h+='<div class="card">Ainda não há lembretes do Financeiro. Toque no + para criar o primeiro. Os de dívidas aparecem aqui sozinhos.</div>';
-  h+='<div class="hint">🔔 O alarme toca na hora marcada, mesmo com o app fechado. Regra das dívidas: 1 dia antes do vencimento, às '+REM_TIME+'.</div>';
+  const ps=pushState();
+  h+='<div class="'+(ps.on?'hint':'note')+'">'+esc(ps.t)+'</div>'+(ps.on?'':(ps.bad?'':'<button class="btn" data-act="push-on">🔔 Ligar avisos neste aparelho</button>'));
+  h+='<div class="hint">🔔 O aviso chega como notificação na hora marcada, mesmo com o app fechado, e repete até você abrir o app. Regra das dívidas: 1 dia antes do vencimento, às '+REM_TIME+'.</div>'+(S.alarmErr?'<div class="note"><span class="tag warn">Avisos</span> Não consegui agendar no servidor ('+esc(S.alarmErr)+').</div>':'');
   if(m==='week')h+=frWeek(td);else if(m==='month')h+=frMonth(td);else h+=frList(td);
   return h+'</div>';
 }
@@ -1520,8 +1523,8 @@ function frData(o,old){
     createdAt:(old&&old.createdAt)||t,updatedAt:t
   });
 }
-async function frForm(rec){
-  const x=rec?rec.data:{},isAuto=false;
+async function frForm(rec,pre,after){
+  const x=rec?rec.data:Object.assign({},pre||{});
   await form(rec?'Editar lembrete':'Novo lembrete do Financeiro',[
     {k:'title',label:'O que lembrar',type:'text',req:true},
     {k:'date',label:'Dia',type:'date',req:true},
@@ -1539,6 +1542,7 @@ async function frForm(rec){
         const r=await Api.rest('items',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify({id,kind:'reminder',data})});
         if(!r.ok)throw new Error('lembretes '+r.status);
       }
+      if(after)await after();
       await loadFinRems();
     }
   });
@@ -1561,6 +1565,126 @@ function frActions(rec){
     m.remove();
     if(!await confirmBox('Apagar este lembrete?',[x.title,'Vai para a lixeira do Núcleo (30 dias).'],'Sim, apagar',true))return;
     try{const r=await itemsPatch(rec,{deleted_at:new Date().toISOString()});if(!r.length)throw new Error('Mudou em outro aparelho. Abra de novo.');S.msg='';await loadFinRems();}catch(e){S.msg=e.message;}render();
+  };
+}
+
+/* ---------- avisos (notificação com repetição até você abrir) + anotações da Siri ---------- */
+const VAPID_PUB='BBwhnhSGwKGzLFNAknU9aV924oArn5H5kG64vugJ32U_BvIQdLPrtL90qV_qkmPAMhJ52PLod7Ms-nJ1jl3iRoQ';
+const b64u=t=>{const r=atob((t+'='.repeat((4-t.length%4)%4)).replace(/-/g,'+').replace(/_/g,'/'));const a=new Uint8Array(r.length);for(let i=0;i<r.length;i++)a[i]=r.charCodeAt(i);return a;};
+const pushOk=()=>('serviceWorker' in navigator)&&('PushManager' in window)&&!!window.Notification;
+function pushState(){
+  if(!pushOk())return {t:'Este aparelho ainda não recebe avisos aqui. No iPhone: abra o Financeiro pelo ícone da Tela de Início (Compartilhar › Adicionar à Tela de Início).',on:false,bad:true};
+  if(Notification.permission==='denied')return {t:'Os avisos estão bloqueados. Abra Ajustes do iPhone › Notificações › Financeiro e permita.',on:false,bad:true};
+  if(Notification.permission==='granted'&&lsGet('fin-push')==='1')return {t:'Avisos ligados neste aparelho.',on:true};
+  return {t:'Avisos desligados neste aparelho.',on:false};
+}
+async function savePushSub(){
+  const reg=await navigator.serviceWorker.ready,want=b64u(VAPID_PUB);
+  let sub=await reg.pushManager.getSubscription();
+  if(sub){const cur=sub.options&&sub.options.applicationServerKey?new Uint8Array(sub.options.applicationServerKey):null;
+    const same=cur&&cur.length===want.length&&cur.every((v,i)=>v===want[i]);if(!same){try{await sub.unsubscribe();}catch(e){}sub=null;}}
+  if(!sub)sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:want});
+  const j=sub.toJSON();
+  const r=await Api.rest('push_subscriptions?on_conflict=endpoint',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify({endpoint:j.endpoint,keys:j.keys})});
+  if(!r.ok)throw new Error('aparelho '+r.status);
+  lsSet('fin-push','1');
+}
+async function enablePush(){
+  if(!pushOk())return info('Avisos','Abra o Financeiro pelo ícone da Tela de Início para ligar os avisos.');
+  try{
+    const perm=await Notification.requestPermission();
+    if(perm!=='granted'){S.msg='Sem permissão, os avisos não chegam.';render();return;}
+    await savePushSub();S.msg='';lsSet('fin-alarmhash','');await syncFinAlarms();
+  }catch(e){S.msg='Não consegui ligar os avisos: '+String(e.message||e).slice(0,80);}
+  render();
+}
+async function refreshPush(){try{if(pushOk()&&Notification.permission==='granted'&&lsGet('fin-push')==='1')await savePushSub();}catch(e){}}
+/* abriu o app: para as repetições do aviso no servidor e limpa as notificações na tela */
+let lastAck=0;
+async function ackAvisos(force){
+  if(!force&&Date.now()-lastAck<60000)return;
+  lastAck=Date.now();
+  try{
+    if(!S.sess)return;
+    await Api.rest('alarm_repeats?id=not.is.null',{method:'DELETE'});
+    if('serviceWorker' in navigator){const reg=await navigator.serviceWorker.ready;(await reg.getNotifications()).forEach(n=>n.close());}
+  }catch(e){}
+}
+const DOW3=['dom','seg','ter','qua','qui','sex','sáb'];
+function finAlarmsWanted(){
+  const out=[],now=Date.now();
+  (S.fr||[]).forEach(r=>{
+    const x=r.data;if(x.done||!x.date||!x.time)return;
+    (x.alarms||[]).forEach(a=>{
+      const base=new Date(x.date+'T'+x.time+':00'),f=new Date(base.getTime()-(a.min||0)*60000),t=f.getTime();
+      if(isNaN(t)||t<now-300e3||t>now+90*864e5)return;
+      const msg=x.title+' · '+DOW3[f.getDay()]+', '+pad(f.getDate())+'/'+pad(f.getMonth()+1)+' às '+pad(f.getHours())+':'+pad(f.getMinutes());
+      let hh=0;for(let i=0;i<msg.length;i++)hh=(hh*31+msg.charCodeAt(i))|0;
+      out.push({key:r.id+'|'+(a.id||'a')+'|'+f.toISOString()+'|'+(hh>>>0).toString(36),item_id:r.id,fire_at:f.toISOString(),message:msg});
+    });
+  });
+  return out;
+}
+/* mexe só nos avisos dos lembretes do Financeiro (não toca em avisos de teste nem de outros itens) */
+let alarmBusy=false;
+async function syncFinAlarms(){
+  if(alarmBusy||!S.sess||!S.frLoaded||S.frErr)return;
+  const want=finAlarmsWanted(),h=JSON.stringify(want.map(x=>x.key).sort());
+  if(h===lsGet('fin-alarmhash'))return;
+  alarmBusy=true;
+  try{
+    const r=await Api.rest('alarms?select=id,key,item_id&fired_at=is.null&key=not.is.null');
+    if(!r.ok)throw new Error('alarmes '+r.status);
+    const have=await r.json(),hk=new Set(have.map(x=>x.key)),wk=new Set(want.map(x=>x.key)),mine=new Set((S.fr||[]).map(x=>x.id));
+    const stale=have.filter(x=>mine.has(x.item_id)&&!wk.has(x.key)).map(x=>x.id);
+    if(stale.length){const d=await Api.rest('alarms?id=in.('+stale.join(',')+')',{method:'DELETE'});if(!d.ok)throw new Error('alarmes del '+d.status);}
+    const add=want.filter(x=>!hk.has(x.key));
+    if(add.length){const q=await Api.rest('alarms?on_conflict=key',{method:'POST',headers:{Prefer:'resolution=ignore-duplicates,return=minimal'},body:JSON.stringify(add)});if(!q.ok)throw new Error('alarmes add '+q.status);}
+    lsSet('fin-alarmhash',h);S.alarmErr='';
+  }catch(e){S.alarmErr=String(e.message||e);}
+  alarmBusy=false;
+}
+/* anotações: o que a Siri ("Anotar") e o botão + mandam para a caixa; daqui viram lembrete ou são apagadas */
+async function loadInbox(){
+  try{S.ib=await itemsGet('kind=eq.inbox&deleted_at=is.null&select=id,version,data&limit=500');S.ibErr='';}
+  catch(e){S.ibErr=e.message||'erro';}
+  S.ibLoaded=true;
+  try{if((S.tab==='notes'||S.tab==='home')&&!document.querySelector('.modal'))render();}catch(e){}
+}
+const ibList=()=>(S.ib||[]).filter(x=>x.data&&x.data.text).sort((a,b)=>(b.data.createdAt||0)-(a.data.createdAt||0));
+function vNotes(){
+  if(!S.ibLoaded&&!S.ibBusy){S.ibBusy=true;loadInbox().finally(()=>{S.ibBusy=false;});}
+  let h=header('Anotações',rbtn('note-new','+','Nova anotação')+rbtn('tab','🏠','Início','home'),'home')+'<div class="wrap">';
+  h+='<p class="mut">O que você disser para a Siri («Anotar») cai aqui. Toque numa anotação para virar lembrete ou apagar.</p>';
+  if(S.ibErr)h+='<div class="note"><span class="tag warn">Anotações</span> Não consegui ler agora ('+esc(S.ibErr)+').</div>';
+  if(!S.ibLoaded)return h+'<p class="mut">Carregando…</p></div>';
+  const L=ibList();
+  h+=L.length?L.map(r=>'<button class="item" data-act="note-open" data-id="'+esc(r.id)+'"><div class="clamp">'+esc(r.data.text)+'</div><div class="mut">'+(r.data.createdAt?brDate(isoDate(new Date(r.data.createdAt))).slice(0,5)+' · ':'')+(r.data.source==='siri'?'via Siri':'digitada')+'</div></button>').join(''):'<div class="card">Nenhuma anotação agora.</div>';
+  return h+'</div>';
+}
+async function noteNew(){
+  await form('Nova anotação',[{k:'text',label:'O que anotar',type:'text',req:true,max:2000}],{text:''},{
+    summary:o=>['Anotação: '+o.text],
+    save:async o=>{
+      const id=uuid(),r=await Api.rest('items',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify({id,kind:'inbox',data:{_id:id,text:o.text.slice(0,2000),source:'digitado',createdAt:Date.now()}})});
+      if(!r.ok)throw new Error('anotações '+r.status);
+      await loadInbox();
+    }
+  });
+}
+async function noteDrop(rec){
+  const r=await itemsPatch(rec,{deleted_at:new Date().toISOString()});
+  if(!r.length)throw new Error('Mudou em outro aparelho. Abra de novo.');
+  await loadInbox();
+}
+function noteActions(rec){
+  const m=modal('<h3>Anotação</h3><div class="card sum">'+esc(rec.data.text)+'</div><button class="btn" id="na-rem">Virar lembrete</button><button class="btn bad" id="na-del">Apagar</button><button class="btn sec" id="na-no">Voltar</button>');
+  m.querySelector('#na-no').onclick=()=>m.remove();
+  m.querySelector('#na-rem').onclick=()=>{m.remove();frForm(null,{title:rec.data.text.slice(0,200)},async()=>{try{await noteDrop(rec);}catch(e){S.msg=e.message;}});};
+  m.querySelector('#na-del').onclick=async()=>{
+    m.remove();
+    if(!await confirmBox('Apagar esta anotação?',[rec.data.text.slice(0,200)],'Sim, apagar',true))return;
+    try{await noteDrop(rec);S.msg='';}catch(e){S.msg=e.message;}render();
   };
 }
 
@@ -2022,7 +2146,7 @@ function render(){
   if(!S.sess||!S.ready){return;}
   RO.reg={};
   let body;
-  if(S.tab==='home')body=vHome();else if(S.tab==='bills')body=vMonth();else if(S.tab==='cards')body=S.cardId?vCard():vCards();else if(S.tab==='debts')body=vDebts();else if(S.tab==='rem')body=vRem();else if(S.tab==='plan')body=vPlan();else if(S.tab==='stmt')body=vStmt();else if(S.tab==='spend')body=vGastos();else if(S.tab==='cfg')body=vCfg();else body=vHome();
+  if(S.tab==='home')body=vHome();else if(S.tab==='bills')body=vMonth();else if(S.tab==='cards')body=S.cardId?vCard():vCards();else if(S.tab==='debts')body=vDebts();else if(S.tab==='rem')body=vRem();else if(S.tab==='notes')body=vNotes();else if(S.tab==='plan')body=vPlan();else if(S.tab==='stmt')body=vStmt();else if(S.tab==='spend')body=vGastos();else if(S.tab==='cfg')body=vCfg();else body=vHome();
   a.innerHTML=body+(S.msg?'<div class="wrap"><div class="err">'+esc(S.msg)+'</div></div>':'')+tabs();
   roAfterRender();
 }
@@ -2139,6 +2263,9 @@ document.addEventListener('click',async ev=>{
   if(act==='tab'){S.tab=b.dataset.v;if(S.tab!=='cards')S.cardId=null;if(S.tab==='cards'&&b.dataset.v==='cards')S.cardId=null;render();window.scrollTo(0,0);}
   else if(act==='rem-mode'){S.lt=b.dataset.v;render();}
   else if(act==='rem-new')frForm(null);
+  else if(act==='push-on')enablePush();
+  else if(act==='note-new')noteNew();
+  else if(act==='note-open'){const r=(S.ib||[]).find(x=>x.id===id);if(r)noteActions(r);}
   else if(act==='rem-open'){const r=(S.fr||[]).find(x=>x.id===id);if(r)frActions(r);}
   else if(act==='wk-prev'||act==='wk-next'||act==='wk-today'){const w=S.wk||mondayIso(todayIso());S.wk=act==='wk-today'?null:plusDays(w,act==='wk-prev'?-7:7);render();}
   else if(act==='pm-prev'||act==='pm-next'||act==='pm-today'){const y=S.pmY||todayIso().slice(0,7);S.pmY=act==='pm-today'?null:addMonths(y,act==='pm-prev'?-1:1);S.pday=null;render();}
@@ -2227,6 +2354,7 @@ async function start(){
   if(!S.sess){loginScreen();return;}
   try{const c=JSON.parse(lsGet('fin-cache')||'[]');if(Array.isArray(c))S.recs=c;}catch(e){}
   S.ready=true;render();
+  ackAvisos(true);refreshPush();loadFinRems();loadInbox();
   try{
     await Api.load();
     ordPull();
@@ -2239,7 +2367,7 @@ async function start(){
   render();
 }
 if('serviceWorker' in navigator)addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
-document.addEventListener('visibilitychange',()=>{if(!document.hidden&&S.ready&&!document.querySelector('.modal')){Api.load().then(()=>{ordPull();render();}).catch(()=>{});}});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&S.ready){ackAvisos(false);loadInbox();}if(!document.hidden&&S.ready&&!document.querySelector('.modal')){Api.load().then(()=>{ordPull();render();}).catch(()=>{});}});
 roInit();
 start();
 </script>
