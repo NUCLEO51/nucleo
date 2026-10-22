@@ -1690,6 +1690,77 @@ function noteActions(rec){
   reviewProp(rec,async()=>{try{await noteDrop(rec);S.msg='';}catch(e){S.msg=e.message;}render();});
 }
 
+/* ---------- ficha: tudo sobre uma conta ou dívida (abre ao tocar; editar é um botão) ---------- */
+const frow=(l,v)=>'<div class="row"><span class="mut">'+esc(l)+'</span><b>'+esc(v)+'</b></div>';
+const yesNo=v=>v?'Sim':'Não';
+function debtSchedule(x){
+  const paidSet=new Set(x.paidYm||[]),fd=debtFd(x);let yms=[];
+  if(x.nInst&&fd){for(let i=0;i<x.nInst;i++)yms.push(addMonths(fd,i));}
+  else{yms=(x.paidYm||[]).slice();let m=debtFirst(x);for(let i=0;i<120&&debtOwes(x,m);i++,m=addMonths(m,1))if(yms.indexOf(m)<0)yms.push(m);}
+  yms=Array.from(new Set(yms)).sort();
+  const td=todayIso(),rv=x.dir==='RECEBER';
+  return yms.map(ym=>{
+    const date=x.dueDay?dateOf(ym,x.dueDay):'',paid=paidSet.has(ym);
+    let st=paid?(rv?'Recebida ✔':'Paga ✔'):(date&&date<td?(x.status==='ATRASADA'?'Em atraso':'Confirmar'):(rv?'A receber':'A pagar'));
+    return {ym,date,amt:debtAmt(x,ym),paid,st};
+  });
+}
+function fichaDebt(rec,ymHint){
+  const x=rec.data,rv=x.dir==='RECEBER',sch=debtSchedule(x),paidN=sch.filter(s=>s.paid).length;
+  const totalPaid=sch.filter(s=>s.paid).reduce((a,s)=>a+(s.amt||0),0);
+  let h='<h3>'+esc(x.creditor)+'</h3><div class="card">';
+  h+=frow('O que é',(rv?'Dinheiro a receber':'Dívida')+(x.kindD?' · '+x.kindD:''));
+  h+=frow(rv?'Quem deve a você':'Para quem você deve',x.creditor);
+  if(x.holder)h+=frow('Titular',x.holder);
+  if(x.payer)h+=frow('Quem paga',x.payer);
+  if(x.account)h+=frow('Conta de onde sai',x.account);
+  h+=frow('Situação',dstTxt(x));
+  h+=frow(rv?'Falta receber':'Saldo da dívida',x.balanceC==null?'Não informado':money(x.balanceC));
+  if(x.firstInstC!=null)h+=frow('1ª parcela',money(x.firstInstC));
+  h+=frow(x.firstInstC!=null?'Demais parcelas':'Parcela',x.installC==null?'Não informado':money(x.installC));
+  if(x.nInst)h+=frow('Total de parcelas',String(x.nInst));
+  h+=frow('Juros ao mês',x.rateBp==null?'Não informado':(x.rateBp/100).toFixed(2).replace('.',',')+'%');
+  h+=frow('Vence todo dia',x.dueDay?String(x.dueDay):'Não informado');
+  if(x.firstDue)h+=frow('1ª parcela vence em',brDate(x.firstDue));
+  if(x.note)h+=frow('Observação',x.note);
+  h+='</div>';
+  if(sch.length){
+    h+='<h2>Parcelas</h2><div class="card">'+sch.map(s=>'<div class="row"><span>'+(s.date?brDate(s.date):esc(ymShort(s.ym)))+'</span><span>'+(s.amt==null?'—':money(s.amt))+'</span><b>'+esc(s.st)+'</b></div>').join('')+'</div>';
+    h+='<div class="card">'+frow(rv?'Já recebidas':'Já pagas',paidN+' de '+sch.length)+frow(rv?'Total já recebido':'Total já pago',money(totalPaid))+frow('Faltam',String(sch.length-paidN))+'</div>';
+  }else h+='<div class="card mut">Sem parcelas a mostrar (falta o dia do vencimento ou a dívida está quitada).</div>';
+  const ym=ymHint||(sch.find(s=>!s.paid)||{}).ym;
+  const m=modal(h+(ym&&x.dueDay?'<button class="btn" id="fd-pay">'+((x.paidYm||[]).indexOf(ym)>=0?'Mexer na parcela de ':'Marcar paga a parcela de ')+esc(ymShort(ym))+'</button>':'')+'<button class="btn sec" id="fd-edit">Editar a dívida</button><button class="btn sec" id="fd-no">Voltar</button>');
+  m.querySelector('#fd-no').onclick=()=>m.remove();
+  m.querySelector('#fd-edit').onclick=()=>{m.remove();debtForm(rec);};
+  const pb=m.querySelector('#fd-pay');if(pb)pb.onclick=()=>{m.remove();debtPay(rec,ym);};
+}
+function fichaBill(bill,row){
+  const b=bill.data,months=byKind('billmonth').filter(r=>r.data.billId===bill.id).sort((a,c)=>a.data.ym<c.data.ym?-1:1);
+  const seen=new Set(),ms=months.filter(r=>{if(seen.has(r.data.ym))return false;seen.add(r.data.ym);return true;});
+  const td=todayIso();
+  let h='<h3>'+esc(b.name)+'</h3><div class="card">';
+  h+=frow('O que é','Conta do mês');
+  h+=frow('Vence todo dia',String(b.dueDay));
+  h+=frow('Valor',b.variable?'Muda todo mês':(b.amountC==null?'Não informado':money(b.amountC)));
+  h+=frow('Repete',b.recurring?'Todo mês':'Só em '+ymShort(b.startYm||ms[0]&&ms[0].data.ym||ymOf(td)));
+  if(b.holder)h+=frow('Titular',b.holder);
+  h+=frow('Conta bancária que paga',b.account||'Não informada');
+  h+='</div>';
+  if(ms.length){
+    h+='<h2>Mês a mês</h2><div class="card">'+ms.map(r=>{
+      const d=r.data,due=dateOf(d.ym,b.dueDay);
+      const st=d.paidAt?'Paga em '+brDate(d.paidAt):(due<td?'Em atraso':'A pagar');
+      return '<div class="row"><span>'+esc(ymShort(d.ym))+' · '+brDate(due).slice(0,5)+'</span><span>'+(d.amountC==null?'—':money(d.amountC))+'</span><b>'+esc(st)+'</b></div>';
+    }).join('')+'</div>';
+    const paid=ms.filter(r=>r.data.paidAt);
+    h+='<div class="card">'+frow('Meses pagos',paid.length+' de '+ms.length)+frow('Total já pago',money(paid.reduce((a,r)=>a+(r.data.amountC||0),0)))+'</div>';
+  }
+  const m=modal(h+(row?'<button class="btn" id="fb-pay">Pagar, informar valor ou desfazer</button>':'')+'<button class="btn sec" id="fb-edit">Editar a conta</button><button class="btn sec" id="fb-no">Voltar</button>');
+  m.querySelector('#fb-no').onclick=()=>m.remove();
+  m.querySelector('#fb-edit').onclick=()=>{m.remove();billForm(bill);};
+  const pb=m.querySelector('#fb-pay');if(pb)pb.onclick=()=>{m.remove();billMonthForm(row);};
+}
+
 /* ---------- a planilha do mês: tudo que vence, com data, valor e situação ---------- */
 function monthItems(ym){
   const td=todayIso(),cur=ymOf(td),out=[],seen=new Set();
@@ -1750,7 +1821,7 @@ function vMonth(){
   if(!all.length)h+='<div class="card mut">Nada vence neste mês. Contas, faturas de cartão e parcelas de dívidas aparecem aqui sozinhas.</div>';
   else if(!shown.length)h+='<div class="card mut">Nada nesta lista.</div>';
   else h+='<div class="tbl" role="table"><div class="tr th" role="row"><span>Dia</span><span>O que</span><span>Valor</span></div>'+shown.map(mRow).join('')+'</div>';
-  if(all.length)h+='<p class="hint">Toque numa linha para pagar, informar o valor ou editar.</p>';
+  if(all.length)h+='<p class="hint">Toque numa linha para ver a ficha completa (parcelas, o que já foi pago). Lá dentro tem os botões de pagar e editar.</p>';
   /* contas cadastradas que NÃO vencem neste mês (a mesma conta nunca aparece duas vezes) */
   const used=new Set(all.filter(i=>i.k==='bill'||i.k==='billp').map(i=>i.billId));
   const outras=byKind('bill').filter(b=>!used.has(b.id));
@@ -2242,8 +2313,8 @@ async function debtForm(rec,preset){
     {k:'dir',label:'Esta parcela é…',type:'select',opts:[['PAGAR','A pagar (eu devo)'],['RECEBER','A receber (me devem)']]},
     {k:'creditor',label:'Nome (a quem você deve ou quem te deve)',type:'text',req:true},
     {k:'balanceC',label:'Saldo (quanto falta pagar ou receber)',type:'money',hint:'Vazio = Não informado.'},
-    {k:'installC',label:'Valor da parcela (das próximas)',type:'money'},
     {k:'firstInstC',label:'Valor da 1ª parcela (só se for diferente)',type:'money',hint:'Ex.: a 1ª é R$ 120,00 e as outras são R$ 100,00. Vazio = igual às outras.'},
+    {k:'installC',label:'Valor das próximas parcelas',type:'money'},
     {k:'nInst',label:'Quantas parcelas no total (opcional)',type:'int',min:1,max:120,hint:'Ex.: 6. Com isso eu calculo o saldo e paro de cobrar depois da última.'},
     {k:'rateBp',label:'Juros ao mês, em % (se souber)',type:'money',hint:'Ex.: 1,99. Vazio = Não informado (não vira zero).'},
     {k:'dueDay',label:'Vence todo dia',type:'int',min:1,max:31},
@@ -2301,10 +2372,10 @@ document.addEventListener('click',async ev=>{
   else if(act==='m-filter'){S.mf=b.dataset.v;render();}
   else if(act==='m-open'){
     const k=b.dataset.k,ym=b.dataset.ym;
-    if(k==='bill'){const r=get(id);billMonthForm({r,bill:get(r.data.billId)});}
-    else if(k==='billp')billForm(get(id));
+    if(k==='bill'){const r=get(id),bl=get(r.data.billId);fichaBill(bl,{r,bill:bl});}
+    else if(k==='billp')fichaBill(get(id),null);
     else if(k==='inv'){S.cardId=id;S.tab='cards';S.invYm=ym;render();window.scrollTo(0,0);}
-    else if(k==='debt')debtPay(get(id),ym);
+    else if(k==='debt')fichaDebt(get(id),ym);
   }
   else if(act==='sp-prev'){S.sp=S.sp||{ym:ymOf(todayIso()),cat:null,all:false};S.sp.ym=addMonths(S.sp.ym,-1);S.sp.cat=null;render();}
   else if(act==='sp-next'){S.sp=S.sp||{ym:ymOf(todayIso()),cat:null,all:false};S.sp.ym=addMonths(S.sp.ym,1);S.sp.cat=null;render();}
@@ -2321,7 +2392,7 @@ document.addEventListener('click',async ev=>{
   else if(act==='sort-open')sortOpenPage();
   else if(act==='bill-new')billForm(null);
   else if(act==='bill-read')lerDocModal();
-  else if(act==='bill-edit')billForm(get(id));
+  else if(act==='bill-edit')fichaBill(get(id),null);
   else if(act==='bill-open'){const r=get(id);billMonthForm({r,bill:get(r.data.billId)});}
   else if(act==='card-new')cardForm(null);
   else if(act==='card-edit')cardForm(get(id));
@@ -2336,7 +2407,7 @@ document.addEventListener('click',async ev=>{
       try{if(ex)await Api.remove(ex);else await Api.create('invpay',{cardId:cr.id,ym});}catch(e){S.msg=e.message;}render();}
   }
   else if(act==='debt-new')debtForm(null);
-  else if(act==='debt-edit')debtForm(get(id));
+  else if(act==='debt-edit')fichaDebt(get(id));
 });
 
 /* ---------- entrada ---------- */
