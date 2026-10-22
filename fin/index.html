@@ -67,6 +67,7 @@ html.lk-on body>*:not(#lock){visibility:hidden}
 #lock .lk-pad button.lk-ft{background:transparent;font-size:1.05rem;color:var(--accent,#FFD60A)}
 #lock .lk-link{background:transparent;border:0;color:var(--accent,#FFD60A);font:inherit;font-size:1.1rem;font-weight:700;padding:.8rem;cursor:pointer}
 #lock .lk-big{width:100%;min-height:3.6rem;border:0;border-radius:1.1rem;background:var(--accent,#FFD60A);color:#000;font:inherit;font-size:1.15rem;font-weight:800;cursor:pointer}
+.hero{display:block;width:100%;text-align:left;border:1px solid var(--line);border-radius:1.4rem;padding:1.1rem 1.2rem;margin:.6rem 0;background:linear-gradient(145deg,var(--accent-soft),var(--surface));color:var(--fg);cursor:pointer}.hero .hl{display:block;color:var(--muted);font-weight:700;font-size:.9rem}.hero .hv{display:block;font-size:2.4rem;font-weight:800;letter-spacing:-.02em;margin:.1rem 0 .5rem}.hero .hbar{display:block;height:.6rem;border-radius:.4rem;background:var(--surface-2);overflow:hidden}.hero .hbar i{display:block;height:100%;border-radius:.4rem;background:var(--accent);transition:width .5s ease}.hero .hs{display:block;margin-top:.5rem;font-size:.9rem;color:var(--muted)}.hero.warn{background:linear-gradient(145deg,var(--warn-soft),var(--surface))}.hero.warn .hbar i{background:var(--warn)}.hero.bad{background:linear-gradient(145deg,var(--danger-soft),var(--surface))}.hero.bad .hbar i{background:var(--danger)}@media (prefers-reduced-motion:reduce){.hero .hbar i{transition:none}}
 .plan-bar{height:.5rem;border-radius:.3rem;background:var(--surface-2);margin:.15rem 0 .5rem;overflow:hidden}
 .plan-bar i{display:block;height:100%;background:var(--accent);border-radius:.3rem}
 .spnav{display:flex;align-items:center;justify-content:space-between;gap:.6rem;margin:.6rem 0}
@@ -1256,6 +1257,11 @@ function vHome(){
   const dsum=debts.reduce((a,d)=>a+(d.data.balanceC||0),0),dmiss=debts.some(d=>d.data.balanceC==null);
   const nxD=debts.map(d=>{const dt=debtNext(d.data,true);return {c:(dt&&debtAmt(d.data,dt.slice(0,7)))||0,dt};}).filter(x=>x.dt).sort((a,b)=>a.dt<b.dt?-1:1)[0];
   const g=gastosMes(ym);
+  const paidN=rows.filter(x=>x.r.data.paidAt).length,totN=rows.length,paidC=rows.filter(x=>x.r.data.paidAt&&x.r.data.amountC!=null).reduce((a,x)=>a+x.r.data.amountC,0);
+  if(totN){
+    const pct=Math.round(paidN/totN*100),st=late?'bad':(sem?'warn':'ok');
+    h+='<button class="hero '+st+'" data-act="tab" data-v="bills" aria-label="Ver as contas do mês"><span class="hl">Falta pagar neste mês</span><span class="hv">'+money(known)+'</span><span class="hbar"><i style="width:'+pct+'%"></i></span><span class="hs">'+paidN+' de '+totN+' contas pagas'+(paidC?' · '+money(paidC)+' já pago':'')+(late?' · '+late+(late===1?' atrasada':' atrasadas'):'')+(sem?' · '+sem+' sem valor':'')+'</span></button>';
+  }
   h+='<div class="up s2">'
     +srow('bills','A pagar no mês',money(known),(late?'<span class="tag bad">'+late+(late===1?' atrasada':' atrasadas')+'</span> ':'')+(sem?'<span class="tag warn">'+sem+' sem valor</span>':'')+(!rows.length?'Nenhuma conta cadastrada':'')+((rows.length&&!late&&!sem)?'Valores conhecidos':''))
     +srow('cards','Cartões',cardsH.length?money(totH):'—',cardsH.length?cardsH.length+(cardsH.length===1?' cartão · total usado':' cartões · total usado'):'Nenhum cartão')
