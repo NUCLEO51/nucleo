@@ -1,7 +1,7 @@
-# GUIA DO NÚCLEO E DO FIN PARA O CHATGPT — v2.0 — 16/10/2026
+# GUIA DO NÚCLEO E DO Financeiro PARA O CHATGPT — v2.0 — 16/10/2026
 
-Escrito pelo NCLD512 (Claude), a pedido do Marcelo, para o ChatGPT conseguir operar o **Núcleo** e o **FIN** por completo.
-Estado descrito: **Núcleo v48** (commit `a79c756` na `main`, 145 testes automáticos) e **FIN v1** (código de 14/10/2026).
+Escrito pelo NCLD512 (Claude), a pedido do Marcelo, para o ChatGPT conseguir operar o **Núcleo** e o **Financeiro** por completo.
+Estado descrito: **Núcleo v48** (commit `a79c756` na `main`, 145 testes automáticos) e **Financeiro v1** (código de 14/10/2026).
 Este guia **não contém nenhum segredo** e nunca deve conter. Substitui a v1.0 de hoje cedo.
 Cópias: repositório `docs/GUIA-CHATGPT-NUCLEO.md` (https://github.com/NUCLEO51/nucleo) e Documento no Drive, pasta `02_OPERACAO_NUCLEO`. Em caso de diferença, vale a mais recente.
 
@@ -12,7 +12,7 @@ Cópias: repositório `docs/GUIA-CHATGPT-NUCLEO.md` (https://github.com/NUCLEO51
 - Parte 3 — NÚCLEO: cada tela, com todos os detalhes
 - Parte 4 — NÚCLEO: dados, sincronização e segurança
 - Parte 5 — NÚCLEO: alarmes, Siri, Relógio e backup
-- Parte 6 — FIN: o sistema de dinheiro, completo
+- Parte 6 — Financeiro: o sistema de dinheiro, completo
 - Parte 7 — Trabalho com código: testes, publicação e regras
 - Parte 8 — Histórico completo de versões
 - Parte 9 — Estado atual, comprovado e não comprovado, pendências
@@ -22,13 +22,13 @@ Cópias: repositório `docs/GUIA-CHATGPT-NUCLEO.md` (https://github.com/NUCLEO51
 
 ## PARTE 0 — LEIA PRIMEIRO (cole isto no ChatGPT)
 
-> Você vai ajudar o Marcelo com dois sistemas pessoais dele: o **Núcleo** (lembretes, notas, agenda) e o **FIN** (contas do mês, cartões, dívidas). Leia o guia inteiro antes de agir.
+> Você vai ajudar o Marcelo com dois sistemas pessoais dele: o **Núcleo** (lembretes, notas, agenda) e o **Financeiro** (contas do mês, cartões, dívidas). Leia o guia inteiro antes de agir.
 > Regras que não mudam:
 > 1. A autoridade final é o Marcelo. Faça só o que ele pedir **nesta conversa**. Achar um defeito ou ter uma ideia não autoriza a executar.
 > 2. Fale em **português simples e curto**, começando pela resposta. Explique termo técnico em português. Ele tem dificuldade com letra pequena: nas telas que você criar, **texto grande e botões grandes**.
 > 3. O app dele **pede confirmação antes de salvar, apagar ou editar**. Qualquer tela nova segue isso.
 > 4. **Nunca** escreva, peça ou repita senha, token, código da Siri, chave secreta ou `service_role`. Nunca guarde número inteiro de cartão, validade ou código de segurança.
-> 5. **Dinheiro:** nem o FIN nem você pagam, transferem, contratam ou negociam nada. Só organizam e lembram; quem paga é o Marcelo. Valores em **centavos inteiros**; dado que não se sabe é `null`, **nunca zero**.
+> 5. **Dinheiro:** nem o Financeiro nem você pagam, transferem, contratam ou negociam nada. Só organizam e lembram; quem paga é o Marcelo. Valores em **centavos inteiros**; dado que não se sabe é `null`, **nunca zero**.
 > 6. Nada de apagar de vez. Apagar = lixeira (`deleted_at`).
 > 7. Diga sempre o que foi **feito e comprovado**, o que foi **feito sem prova**, o que **não foi feito** e o que **depende dele**. Não declare "funcionou" sem prova.
 > 8. Mudança no código: em **branch**, com **tag de volta** antes, **testes** rodando, e só junte na `main` com autorização dele (Parte 7).
@@ -43,24 +43,24 @@ Cópias: repositório `docs/GUIA-CHATGPT-NUCLEO.md` (https://github.com/NUCLEO51
 
 ### 1.1 Pessoas
 - **Marcelo** — dono de tudo. Autoridade final. Usa iPhone. Prefere letras grandes, botões grandes, confirmação antes de salvar, português simples.
-- **Marlene (mãe)** — a mãe do Marcelo. No FIN aparece como `MARLENE` («Marlene (mãe)»). As finanças dela e as dele são **separadas** no FIN por titular (`holder`) e por quem paga (`payer`).
+- **Marlene (mãe)** — a mãe do Marcelo. No Financeiro aparece como `MARLENE` («Marlene (mãe)»). As finanças dela e as dele são **separadas** no Financeiro por titular (`holder`) e por quem paga (`payer`).
 - **Elisa** — pessoa para quem o Marcelo mantém uma lista de lembretes própria no Núcleo.
 
 ### 1.2 Sistemas
 | Sistema | O que é | Onde |
 |---|---|---|
 | **Núcleo** | App pessoal (PWA): lembretes, notas, agenda, relógio, busca | https://nucleo51.github.io/nucleo/ |
-| **FIN** | App de dinheiro, **separado** do Núcleo: contas do mês, cartões, dívidas, extratos, plano de quitação | https://nucleo51.github.io/nucleo/fin/ |
-| **Código** | Repositório público do Núcleo e do FIN | https://github.com/NUCLEO51/nucleo (branch `main` = publicado) |
+| **Financeiro** | App de dinheiro, **separado** do Núcleo: contas do mês, cartões, dívidas, extratos, plano de quitação | https://nucleo51.github.io/nucleo/fin/ |
+| **Código** | Repositório público do Núcleo e do Financeiro | https://github.com/NUCLEO51/nucleo (branch `main` = publicado) |
 | **Banco** | Supabase pessoal gratuito: banco, login e arquivos (anexos) | endereço e chave **pública** na constante `CFG` de `index.html` e de `fin/index.html` |
 | **Drive** | Casa do NCLD512: identidade, regras e histórico | pasta `1HLATmmVC9ZKolS5nNV-Zh4w2KubMzwo9` |
 | **Trello** | Painel de acompanhamento do NCLD512 (só projeção; a verdade está no Drive) | quadro «NCLD512» |
 | **Mac do Marcelo** | Cópia do código para trabalhar | `~/Projects/nucleo` (git e `gh` já logados) |
 
 ### 1.3 Agentes (quem faz o quê)
-- **NCLD512** — núcleo técnico Claude. **Dono técnico do Núcleo** e do app FIN. Mantém HV/HVI/EAO no Drive. Escreveu este guia.
+- **NCLD512** — núcleo técnico Claude. **Dono técnico do Núcleo** e do app Financeiro. Mantém HV/HVI/EAO no Drive. Escreveu este guia.
 - **ChatGPT / Helena** — ajuda o Marcelo; **não** assume a autoridade do NCLD512 sobre o histórico e os documentos canônicos.
-- **FIN512** — o *owner financeiro do ecossistema* (outro agente). **Não é o app FIN.** Construir o app FIN não dá autoridade sobre as finanças do Marcelo.
+- **FIN512** — o *owner financeiro do ecossistema* (outro agente). **Não é o app Financeiro.** Construir o app Financeiro não dá autoridade sobre as finanças do Marcelo.
 - Outros (COM, GDA512 etc.) existem no ecossistema CEO512 OS; o COM coordena os chats. Só o NCLD512 escreve nos documentos dele.
 
 ### 1.4 Documentos canônicos do NCLD512 no Drive (só leitura para você)
@@ -77,7 +77,7 @@ App pessoal do Marcelo, instalado no iPhone como **PWA** (página que vira app).
 - `index.html` — o Núcleo inteiro (HTML, CSS e scripts). Cerca de 3.100 linhas.
 - `sw.js` — service worker: guarda o app para abrir sem internet e recebe os avisos (push). A constante `V` é o nome do cache (`nucleo-app-v48`).
 - `manifest.webmanifest`, `icon-192.png`, `icon-512.png`, `icon-maskable-512.png`, `apple-touch-icon.png`, `logo.svg` — instalação e ícone (caveira verde neon).
-- `fin/` — o FIN (Parte 6): `index.html`, `sw.js`, `manifest.webmanifest`, ícones e `API.md`.
+- `fin/` — o Financeiro (Parte 6): `index.html`, `sw.js`, `manifest.webmanifest`, ícones e `API.md`.
 - `supabase/001..011_*.sql` — o banco, na ordem em que foi criado (Parte 4 e 6), e `supabase/functions/enviar-alarmes/index.ts` (função dos avisos).
 - `tests/` — testes automáticos (`cd tests && npm install && npm test`); `tests/run.js` é o arquivo único dos testes.
 - `docs/` — este guia. `README.md` aponta para ele.
@@ -117,7 +117,7 @@ App pessoal do Marcelo, instalado no iPhone como **PWA** (página que vira app).
   - **Agenda hoje** — abre a Agenda no dia de hoje.
   - **Atrasados** — os atrasados (inclui os de hoje cuja hora já passou), com o botão «Passar os atrasados para hoje» (só move os de dias anteriores).
   - **Caixa de entrada** — anotações soltas e lembretes sem data (3.5).
-- Depois: **Enviar ao FIN** e **Abrir o FIN** (Parte 6) e, por último, o botão **Cronômetro e temporizador** (3.12).
+- Depois: **Enviar ao Financeiro** e **Abrir o Financeiro** (Parte 6) e, por último, o botão **Cronômetro e temporizador** (3.12).
 - **Ouvir** lê o dia em voz alta com a voz do iPhone (exige áudio liberado e botão de silêncio desligado).
 - A tela Hoje **não** usa as bolinhas neon (pedido do Marcelo: «está perfeito»).
 
@@ -182,7 +182,7 @@ Números de contagem no **Planner** e em **Notas** aparecem dentro de bolinhas *
 - **Temporizador:** atalhos 1, 5, 10, 15, 30, 45 min e 1 h; ajuste ±1 min; Iniciar/Pausar/Zerar; «⏱ Acabou!». Com o app **fechado**, o fim do temporizador avisa pelo servidor (alarme com chave `tempo|…`), **em até 1 minuto depois** — precisa dos avisos ligados em Ajustes.
 
 ### 3.13 Ajustes (engrenagem)
-Tamanho do texto · Pedir confirmação · Aparência (Automático, Claro, Escuro) · Onde ficam os dados · **Envio para a nuvem** (última vez salvo, itens esperando internet, itens com erro, «Enviar agora», «Tentar de novo») · **Avisos de alarme com o app fechado** (estado, «Ligar avisos neste aparelho», «Testar») · painel **Saúde do app** (registro de erros) · **FIN** (botão «Abrir o FIN») · **Exportar backup (arquivo)** e **Importar backup (arquivo)** (aviso quando o último backup tem mais de 7 dias) · **Sair da conta**.
+Tamanho do texto · Pedir confirmação · Aparência (Automático, Claro, Escuro) · Onde ficam os dados · **Envio para a nuvem** (última vez salvo, itens esperando internet, itens com erro, «Enviar agora», «Tentar de novo») · **Avisos de alarme com o app fechado** (estado, «Ligar avisos neste aparelho», «Testar») · painel **Saúde do app** (registro de erros) · **Financeiro** (botão «Abrir o Financeiro») · **Exportar backup (arquivo)** e **Importar backup (arquivo)** (aviso quando o último backup tem mais de 7 dias) · **Sair da conta**.
 
 ### 3.14 Anexos e arquivos
 Fotos e arquivos de lembretes e notas ficam no **bucket privado `anexos`** do Supabase, cada pessoa só na própria pasta (`id-do-dono/arquivo`). Limite do app: **45 MB** por arquivo. Apagar de vez um lembrete/nota **não apaga** um arquivo que outro item ainda usa (proteção da v36). Um anexo que sumiu mostra uma mensagem clara.
@@ -203,7 +203,7 @@ Fotos e arquivos de lembretes e notas ficam no **bucket privado `anexos`** do Su
 | `updated_by` | quem mexeu: `app`, `claude`, `helena`, `siri`, `chat` |
 | `created_at`, `updated_at` | datas |
 
-**Regras do banco:** RLS ligado em todas as tabelas — só o dono lê e altera. Gatilhos: `items_guard` (soma versão, grava histórico, protege `owner`), `fin_guard` (o mesmo para o FIN). Não há política de DELETE: nada some de verdade.
+**Regras do banco:** RLS ligado em todas as tabelas — só o dono lê e altera. Gatilhos: `items_guard` (soma versão, grava histórico, protege `owner`), `fin_guard` (o mesmo para o Financeiro). Não há política de DELETE: nada some de verdade.
 
 ### 4.2 Formato do `data` por tipo (o campo `_id` pode repetir o id local)
 - **reminder:** `title, notes, date (AAAA-MM-DD ou vazio), time (HH:mm ou vazio), repeat (none|daily|weekly|monthly|yearly|custom), repN, repU (day|week|month|year), repDays[], repUntil, repAnchor?, agenda (bool), list (id da lista ou vazio), section (id da seção ou vazio), flag, priority 0–3, pinned, strong (alarme forte), alarms[{id,min,msg}], subtasks[{t,done}], images[], files[{id,name,size,type}], done, doneAt, noInbox (true = «Deixar assim», some da Caixa de entrada), createdAt, updatedAt`.
@@ -218,7 +218,7 @@ Fotos e arquivos de lembretes e notas ficam no **bucket privado `anexos`** do Su
 Login por e-mail/senha (sessão em `localStorage`). Cada alteração vai para uma **fila** (`nucleo-q`) e é enviada por REST (`/rest/v1/items`) com a `version` atual; se outro aparelho mudou o item, o envio é recusado e o app recarrega. Itens que falham várias vezes vão para a lista «com erro» (Ajustes). O app mantém uma **cópia local** (`nucleo-cache`), um mapa de ids local↔servidor (`nucleo-map`) e a sessão (`nucleo-sess`). Outros guardados no aparelho: `nucleo-hidedone` (concluídos ocultos por lista), `nucleo-draw` (preferências do desenho), tamanho do texto, tema e confirmação.
 
 ### 4.4 Outras tabelas (todas com RLS)
-`item_history` (cada versão antiga), `alarms` (avisos agendados; chave `key` única), `alarm_repeats` (repetições de aviso), `push_subscriptions` (aparelhos que recebem aviso), `push_config` e `app_secrets` (**chaves e código — fechadas: ninguém lê pela API; nunca copie nem mostre**), `fin_records` (FIN, Parte 6).
+`item_history` (cada versão antiga), `alarms` (avisos agendados; chave `key` única), `alarm_repeats` (repetições de aviso), `push_subscriptions` (aparelhos que recebem aviso), `push_config` e `app_secrets` (**chaves e código — fechadas: ninguém lê pela API; nunca copie nem mostre**), `fin_records` (Financeiro, Parte 6).
 **Funções do banco (schema public):** `alarmes_fortes`, `chamar_alarmes`, `siri_captura`, `fin_guard`, `items_guard`, `rls_auto_enable` (ajuda do próprio Supabase). **Função de borda:** `enviar-alarmes` (versão 6). **Não existe** a função `fin_chat` (o SQL 006 não foi aplicado).
 
 ### 4.5 Estado do banco em 16/10/2026 (somente contagens, lidas hoje)
@@ -259,12 +259,12 @@ O Relógio do iPhone não aceita data. Lembretes com `strong:true` entram na fun
 
 ---
 
-## PARTE 6 — FIN: O SISTEMA DE DINHEIRO, COMPLETO
+## PARTE 6 — Financeiro: O SISTEMA DE DINHEIRO, COMPLETO
 
 ### 6.1 O que é e os princípios
-O **FIN** é um app **separado** do Núcleo, na pasta `fin/` do mesmo repositório (https://nucleo51.github.io/nucleo/fin/). Organiza **contas do mês, cartões de crédito, dívidas e extratos**, e simula um plano de quitação. O Marcelo escolheu que o dinheiro fique **fora** do Núcleo (e fora de qualquer app de notas): o Núcleo só **envia pendências** ao FIN.
+O **Financeiro** é um app **separado** do Núcleo, na pasta `fin/` do mesmo repositório (https://nucleo51.github.io/nucleo/fin/). Organiza **contas do mês, cartões de crédito, dívidas e extratos**, e simula um plano de quitação. O Marcelo escolheu que o dinheiro fique **fora** do Núcleo (e fora de qualquer app de notas): o Núcleo só **envia pendências** ao Financeiro.
 Princípios que valem sempre:
-1. **O FIN nunca paga, transfere, contrata ou negocia nada.** «Marcar como paga» só registra que o Marcelo pagou no banco.
+1. **O Financeiro nunca paga, transfere, contrata ou negocia nada.** «Marcar como paga» só registra que o Marcelo pagou no banco.
 2. **Valores em centavos inteiros** (R$ 10,50 = `1050`). **Dado que não se sabe = `null`, nunca `0`.** Na tela aparece «Não informado».
 3. **Apagar = lixeira** (`deleted_at`), reversível. Não há DELETE.
 4. **Confirmação antes de salvar** (janela «Confira antes de salvar» com o resumo) e antes de apagar.
@@ -274,11 +274,11 @@ Princípios que valem sempre:
 
 ### 6.2 Acesso, instalação e funcionamento sem internet
 - **Login:** a mesma conta do Núcleo («Entre com o mesmo e-mail e a mesma senha do Núcleo»); sessão guardada no aparelho (`fin-sess`).
-- **Instalação:** PWA própria (nome «FIN», cor verde `#1F7A5C`, ícone próprio). O `fin/sw.js` guarda **só a tela do app**; **os dados não passam pelo service worker**.
+- **Instalação:** PWA própria (nome «Financeiro», cor verde `#1F7A5C`, ícone próprio). O `fin/sw.js` guarda **só a tela do app**; **os dados não passam pelo service worker**.
 - **Dados:** carregados do banco (`fin_records`) e guardados num cache local (`fin-cache`). Sem internet o app **mostra o que está guardado** com o aviso «Sem internet. Mostrando o que está guardado neste aparelho.»; **salvar exige internet**.
 - Ao voltar ao app (aba visível) ele recarrega os dados sozinho (se não houver janela aberta).
 - **Conflito de edição:** cada gravação envia a `version` atual; se o item mudou em outro aparelho, o app recarrega e diz «Este item mudou em outro aparelho. Atualizei a tela. Tente de novo.»
-- O botão flutuante «← Voltar» (para tela ampliada) existe no FIN também.
+- O botão flutuante «← Voltar» (para tela ampliada) existe no Financeiro também.
 
 ### 6.3 Quem é quem: titular e pagador
 - Pessoas: `MARCELO` e `MARLENE` («Marlene (mãe)»). Sem dono = vazio («Não definido»).
@@ -286,18 +286,18 @@ Princípios que valem sempre:
 - **Dívida:** `holder` = **devedor no contrato** (quem assinou); `payer` = **quem paga hoje** (podem ser diferentes). `account` = conta bancária de onde sai o pagamento (texto livre).
 - **Conta do mês e cartão:** `holder` = de quem é.
 
-### 6.4 As telas do FIN
+### 6.4 As telas do Financeiro
 Barra de baixo: **🏠 Início · 🧾 Contas · 💳 Cartões · 📉 Dívidas · 🎯 Quitar**. Extratos e Chat financeiro abrem a partir do Início.
 
 **Início**
-- Cabeçalho «FIN» e o mês («outubro de 2026»), o filtro de pessoa.
+- Cabeçalho «Financeiro» e o mês («outubro de 2026»), o filtro de pessoa.
 - **📥 «N pendente(s) do Núcleo»** (até 20 listados; tocar abre a revisão, 6.7).
 - Cartão «Contas do mês ainda a pagar (valores conhecidos)» com o total, e etiquetas «N sem valor» e «N em atraso».
 - Com o filtro «Todos»: **«Por pessoa»** — dívidas (saldo conhecido), usado nos cartões e contas do mês a pagar de cada um.
 - **Próximos vencimentos (30 dias):** contas do mês, faturas de cartão e parcelas de dívida, ordenados por data, com «Em atraso» quando for o caso.
 - **Cartões:** cada um com barra de uso (a barra fica vermelha a partir de 80% do limite), usado, pode usar, fatura atual e vencimento; total usado.
 - **Dívidas:** saldo conhecido e aviso «Algum saldo está Não informado».
-- Aviso «Projeção parcial não é dinheiro disponível. O FIN só organiza e lembra: quem paga é você.»
+- Aviso «Projeção parcial não é dinheiro disponível. O Financeiro só organiza e lembra: quem paga é você.»
 - Botões: **Carregar / Apagar exemplos de teste**, **📄 Extratos do banco**, **🤝 Chat financeiro**, **💾 Baixar cópia dos dados** (com aviso de dias desde a última), Atualizar, Sair, link «Abrir o Núcleo».
 
 **Contas (do mês)**
@@ -318,7 +318,7 @@ Barra de baixo: **🏠 Início · 🧾 Contas · 💳 Cartões · 📉 Dívidas 
 
 **Extratos** — importação do Mobills (6.8).
 
-### 6.5 Os dados do FIN (`fin_records`)
+### 6.5 Os dados do Financeiro (`fin_records`)
 Tabela `public.fin_records`: `id, owner, kind, data (JSON), version, deleted_at, created_at, updated_at, updated_by`. Tipos aceitos (`kind`): `card, charge, invpay, bill, billmonth, debt, proposal, stmt`.
 
 | kind | para que serve | campos de `data` |
@@ -336,7 +336,7 @@ Tabela `public.fin_records`: `id, owner, kind, data (JSON), version, deleted_at,
 - Qualquer registro de teste carrega `demo:true` e, na maioria, o nome termina com «(teste)».
 - `holder`/`payer`: `"MARCELO"`, `"MARLENE"` ou `""`.
 
-### 6.6 Regras de cálculo (o que o FIN faz de verdade)
+### 6.6 Regras de cálculo (o que o Financeiro faz de verdade)
 **Faturas de cartão**
 - Uma compra entra na fatura do **mês em que o dia da compra é menor ou igual ao dia de fechamento**; se for maior, entra na do **mês seguinte** (`invYmFor`).
 - **Parcelas:** valor da parcela = total dividido por `n` (inteiro); a **1ª parcela leva o resto**. Se houver `firstC`, a 1ª é essa e as outras dividem o que sobra. As parcelas caem nos meses seguintes. **Estorno** (`totalC` negativo) diminui a fatura.
@@ -353,56 +353,56 @@ Tabela `public.fin_records`: `id, owner, kind, data (JSON), version, deleted_at,
 - Entrada: dívidas **não pagas, com saldo**, do filtro atual, e «quanto dá para pagar por mês» (`capacityC`, informado pelo Marcelo; ele pode mudar). Dívida **sem saldo** fica fora; dívida **sem juros informados** entra **sem juros** e o app avisa que o tempo e o custo reais podem ser maiores («custo total: Não informado»).
 - Cada mês: aplica os juros do mês ao saldo (`arredonda(saldo × juros)`), paga as **parcelas mínimas** por ordem de prioridade e usa a sobra na dívida prioritária. Até 600 meses.
 - **Dois cenários:** **Menor saldo primeiro** (quita as pequenas rápido) e **Maior juros primeiro** (costuma custar menos quando os juros são conhecidos). Para cada um: em quanto tempo quita tudo, «por volta de» que mês, total pago (estimado), juros no caminho e a **ordem em que cada dívida some**.
-- Avisos: «**Falta dinheiro**» quando as parcelas somam mais que o valor por mês; «não quita em 50 anos» quando o valor mal cobre os juros; «Isto é só conta. Não inclui desconto de negociação nem multa. Antes de pagar ou renegociar, confira com o banco. O FIN não paga nada.»
+- Avisos: «**Falta dinheiro**» quando as parcelas somam mais que o valor por mês; «não quita em 50 anos» quando o valor mal cobre os juros; «Isto é só conta. Não inclui desconto de negociação nem multa. Antes de pagar ou renegociar, confira com o banco. O Financeiro não paga nada.»
 
-### 6.7 Pendências vindas do Núcleo («Enviar ao FIN»)
-- **No Núcleo:** Hoje › **Enviar ao FIN**. Tela cheia: «Escreva ou cole. **Cada linha** vira um pendente no FIN.» Exemplos que ela mostra: «Mercado 230,50 no cartão Bradesco», «Tênis 6x 349,99 cartão Santander», «Conta de luz vence dia 10», «Dívida Itaú 16000». Até **40 linhas**; pede confirmação («Enviar N itens ao FIN?»); grava cada linha em `fin_records` como `proposal` (`text`, `source:'nucleo'`, `status:'pendente'`, `at`). Exige estar com o login ativo (modo nuvem). Se a tabela do FIN não existir, avisa «O FIN ainda não foi preparado no banco.» Fotos de extrato **ainda não**: por enquanto é texto.
-- **No FIN:** os pendentes aparecem no Início. Tocar abre **«Veio do Núcleo»** com o texto e três escolhas — **💳 Compra no cartão, 🧾 Conta do mês, 📉 Dívida** — mais **Ignorar** e Voltar. O app **sugere** o tipo e **pré-preenche** o formulário lendo o texto (`parseText`): valor (ex.: «230,50»), número de parcelas («6x»), dia («vence dia 10»), data («ontem», «12/10»), cartão (casa o nome com os cartões cadastrados) e descrição. Palavras como «dívida/devo/empréstimo/consignado» sugerem dívida; «cartão/parcelas/fatura» sugerem compra; «conta/boleto/luz/água/gás/internet/aluguel/telefone» sugerem conta. **Nada é cadastrado sozinho**: o Marcelo confere e salva (aí o pendente vira `feito`; «Ignorar» vira `ignorado`).
+### 6.7 Pendências vindas do Núcleo («Enviar ao Financeiro»)
+- **No Núcleo:** Hoje › **Enviar ao Financeiro**. Tela cheia: «Escreva ou cole. **Cada linha** vira um pendente no Financeiro.» Exemplos que ela mostra: «Mercado 230,50 no cartão Bradesco», «Tênis 6x 349,99 cartão Santander», «Conta de luz vence dia 10», «Dívida Itaú 16000». Até **40 linhas**; pede confirmação («Enviar N itens ao Financeiro?»); grava cada linha em `fin_records` como `proposal` (`text`, `source:'nucleo'`, `status:'pendente'`, `at`). Exige estar com o login ativo (modo nuvem). Se a tabela do Financeiro não existir, avisa «O Financeiro ainda não foi preparado no banco.» Fotos de extrato **ainda não**: por enquanto é texto.
+- **No Financeiro:** os pendentes aparecem no Início. Tocar abre **«Veio do Núcleo»** com o texto e três escolhas — **💳 Compra no cartão, 🧾 Conta do mês, 📉 Dívida** — mais **Ignorar** e Voltar. O app **sugere** o tipo e **pré-preenche** o formulário lendo o texto (`parseText`): valor (ex.: «230,50»), número de parcelas («6x»), dia («vence dia 10»), data («ontem», «12/10»), cartão (casa o nome com os cartões cadastrados) e descrição. Palavras como «dívida/devo/empréstimo/consignado» sugerem dívida; «cartão/parcelas/fatura» sugerem compra; «conta/boleto/luz/água/gás/internet/aluguel/telefone» sugerem conta. **Nada é cadastrado sozinho**: o Marcelo confere e salva (aí o pendente vira `feito`; «Ignorar» vira `ignorado`).
 
 ### 6.8 Importar extrato do Mobills (.xlsx)
 - Início › **📄 Extratos do banco** › **📥 Importar arquivo do Mobills (.xlsx)**. No Mobills: *Relatório de transações → exportar em Excel*.
-- O FIN lê o `.xlsx` **no próprio aparelho** (leitor mínimo; precisa do Safari atualizado). Limites: **5 MB** e **10.000 lançamentos**. Colunas exigidas, nesta ordem: **Data (dd/mm/aaaa), Descrição, Valor, Conta, Categoria, Subcategoria, Tags**. Linha inválida (data, valor, conta) **cancela tudo** com a linha do erro.
+- O Financeiro lê o `.xlsx` **no próprio aparelho** (leitor mínimo; precisa do Safari atualizado). Limites: **5 MB** e **10.000 lançamentos**. Colunas exigidas, nesta ordem: **Data (dd/mm/aaaa), Descrição, Valor, Conta, Categoria, Subcategoria, Tags**. Linha inválida (data, valor, conta) **cancela tudo** com a linha do erro.
 - **Classificação** de cada lançamento: valor positivo → **Renda** (categoria Salário ou Renda extra), **Empréstimo recebido** (descrição começa com «crédito liberado») ou **Transferência**; valor negativo → **Transferência** (categoria transferência enviada, pix ou investimento), **Pagou fatura** (descrição contém «fatura») ou **Gasto**.
 - Pergunta **«De quem são estas contas?»** (Marcelo ou Marlene), mostra um resumo e pede confirmação («Nada é pago nem alterado no banco»). Cada **conta** do arquivo vira um registro `stmt` com seus lançamentos.
 - **Importar de novo o mesmo período não duplica:** cada lançamento tem um id (`data-hash-ocorrência`). Se um lançamento já salvo vier **diferente**, a importação para: «Conflito… Nada foi gravado.» Uma conta já salva como de uma pessoa não pode ser importada como de outra.
 - **Tela Extratos:** resumo dos 6 últimos meses (Renda, Gastos, Fatura de cartão paga, Empréstimo recebido, Transferências) e os **40 últimos lançamentos**. Renda, empréstimo, transferência e fatura paga **não** entram em «Gastos».
 
-### 6.9 Chat financeiro (como o ChatGPT mexe nos dados do FIN)
-O FIN foi pensado para um **chat financeiro** (você) ler tudo e propor mudanças, **sempre com o Marcelo conferindo**.
+### 6.9 Chat financeiro (como o ChatGPT mexe nos dados do Financeiro)
+O Financeiro foi pensado para um **chat financeiro** (você) ler tudo e propor mudanças, **sempre com o Marcelo conferindo**.
 **Caminho A — copiar e colar (existe e funciona sem internet para você):**
-1. No FIN: Início › **🤝 Chat financeiro** › **Copiar tudo para o chat**. Copia um JSON `{"fin_snapshot":1, "gerado_em":…, "regras":[…], "registros":[{id,kind,version,data}…]}` com **todos** os registros (sem os apagados). Ele cola isso na conversa com você.
+1. No Financeiro: Início › **🤝 Chat financeiro** › **Copiar tudo para o chat**. Copia um JSON `{"fin_snapshot":1, "gerado_em":…, "regras":[…], "registros":[{id,kind,version,data}…]}` com **todos** os registros (sem os apagados). Ele cola isso na conversa com você.
 2. Você responde com **um único JSON** neste formato:
    `{"fin_ops":1,"ops":[ {"op":"create","kind":"debt","data":{…}}, {"op":"update","id":"UUID","data":{…}}, {"op":"delete","id":"UUID"} ]}`
-3. Ele cola em **Colar mudanças do chat**. O FIN confere o formato e mostra uma lista legível («CRIAR debt: …», «EDITAR debt “…”: …», «APAGAR …») e pede confirmação («Aplicar N mudança(s)?»). Só então grava.
+3. Ele cola em **Colar mudanças do chat**. O Financeiro confere o formato e mostra uma lista legível («CRIAR debt: …», «EDITAR debt “…”: …», «APAGAR …») e pede confirmação («Aplicar N mudança(s)?»). Só então grava.
 - **Regras do pacote:** no máximo **60 operações**; `kind` tem de ser um dos oito tipos; `update` **mescla** os campos enviados nos que já existem (mande só o que muda) e usa o `id` do snapshot; `delete` vai para a lixeira; **o app grava uma a uma e, se uma falhar, para** («Parei no meio») e recarrega.
 - **Exemplo (valores fictícios):**
   `{"fin_ops":1,"ops":[{"op":"create","kind":"debt","data":{"creditor":"Banco Exemplo","balanceC":1200000,"installC":48000,"rateBp":199,"dueDay":5,"status":"ATIVA","kindD":"Consignado","holder":"MARLENE","payer":"MARLENE","account":"","note":""}},{"op":"update","id":"UUID-DO-CARTAO","data":{"limitC":300000}}]}`
 - **Cuidados ao montar o JSON:** centavos inteiros; `null` quando não souber; `holder`/`payer` só `MARCELO` ou `MARLENE`; **um só** registro `proposal` com `cfg:'capacity'` (atualize o existente em vez de criar outro); não invente saldo, juros ou data — pergunte; não crie `demo:true`.
 **Caminho B — chamada HTTP (`fin_chat`): NÃO está ativo.** O contrato existe em `fin/API.md` e em `supabase/006_fin_chat.sql` (função `public.fin_chat(p_token, p_cmd)` com código secreto, «tudo ou nada», 60 ops, edições com `updated_by='chat'`), mas **o SQL 006 nunca foi aplicado** (a função não existe no banco e não há código `fin_chat_token` guardado). **Não tente usar; não peça o código.** Só o Marcelo decide ativar.
 
-### 6.10 O banco do FIN
+### 6.10 O banco do Financeiro
 - Tabela criada pelo `supabase/005_fin.sql`; o tipo `stmt` foi liberado pelo `007_fin_extrato.sql` (**ambos aplicados**: a restrição de tipos do banco inclui `stmt`). O `006_fin_chat.sql` **não** foi aplicado.
 - **Segurança:** RLS (só o dono lê/insere/altera), **sem política de DELETE**, gatilho `fin_guard` (soma versão, atualiza data, protege o dono). Valores ficam como números inteiros dentro do JSON.
 - **Estado em 16/10/2026 (contagens):** 19 registros ativos — 4 `bill`, 4 `billmonth`, 2 `card`, 6 `charge`, 2 `debt`, 1 `proposal`; **18 estão marcados como `demo` (exemplos de teste)** e 1 não está marcado: é um pendente enviado do Núcleo; 0 na lixeira. **Todos os cartões, compras, contas e dívidas cadastrados são exemplos de teste.** Antes de cadastrar os de verdade: Início › **Apagar os exemplos de teste** (só some o que é `demo`).
-- **Cópia de segurança:** Início › **💾 Baixar cópia dos dados** gera `FIN-copia-AAAA-MM-DD.json` (formato `{app:'FIN', formato:1, geradoEm, total, registros}`), **inclui os apagados**, pelo compartilhar do iPhone ou download; avisa quando passam 7 dias. O arquivo tem informação financeira: guardar em lugar seguro. Não existe backup automático do FIN.
+- **Cópia de segurança:** Início › **💾 Baixar cópia dos dados** gera `Financeiro-copia-AAAA-MM-DD.json` (formato `{app:'Financeiro', formato:1, geradoEm, total, registros}`), **inclui os apagados**, pelo compartilhar do iPhone ou download; avisa quando passam 7 dias. O arquivo tem informação financeira: guardar em lugar seguro. Não existe backup automático do Financeiro.
 
-### 6.11 Segurança e limites do FIN
+### 6.11 Segurança e limites do Financeiro
 - Sem conexão com bancos (não usa Open Finance, não guarda senha de banco). Entrada de dados: **digitação, pendentes do Núcleo, extrato .xlsx do Mobills e pacotes do chat**.
-- O FIN **não notifica** (não há alarme de vencimento no FIN; o Núcleo é quem tem alarmes). Hoje o Marcelo vê os vencimentos no Início do FIN.
+- O Financeiro **não notifica** (não há alarme de vencimento no Financeiro; o Núcleo é quem tem alarmes). Hoje o Marcelo vê os vencimentos no Início do Financeiro.
 - Datas e dias de vencimento são do calendário brasileiro (fuso America/Sao_Paulo).
 - Confie nos números só enquanto os dados de entrada estiverem completos: saldo ou juros ausentes são avisados, nunca preenchidos.
 
-### 6.12 Como o ChatGPT deve ajudar com o FIN (roteiros)
+### 6.12 Como o ChatGPT deve ajudar com o Financeiro (roteiros)
 1. **Cadastrar dívidas/contas/cartões de uma lista que o Marcelo ditar:** peça o que falta (saldo, parcela, juros, vencimento, titular, quem paga); monte o pacote `fin_ops`; mostre um **resumo em português** antes; entregue o JSON para ele colar. Nunca invente valores.
 2. **Plano de quitação:** peça o snapshot; confira se há dívidas sem saldo/juros; use os dois cenários do app como referência; explique em palavras simples; **não prometa** economia e lembre que **negociação e pagamento são com o banco**.
 3. **Revisar pendentes do Núcleo:** liste os `proposal` com `status:'pendente'`, sugira o tipo e os campos, e monte as operações (criar o registro e marcar o pendente como `feito`).
 4. **Conferir o mês:** com o snapshot, liste contas em atraso, sem valor e a pagar, faturas a vencer e o total do mês, separando Marcelo e Marlene.
-5. **Extrato:** explique o passo a passo do Mobills (Relatório de transações → Excel → FIN › Extratos); o ChatGPT **não** lê o `.xlsx` pelo FIN, só o Marcelo importa.
+5. **Extrato:** explique o passo a passo do Mobills (Relatório de transações → Excel → Financeiro › Extratos); o ChatGPT **não** lê o `.xlsx` pelo Financeiro, só o Marcelo importa.
 6. **Sempre:** diga o que depende dele conferir no iPhone; **não** peça acesso a banco; **não** guarde dados reais no repositório público nem em arquivos de documentação.
 
-### 6.13 Limitações conhecidas e ideias pendentes do FIN
-- Sem alarme/notificação de vencimento; sem gráfico de evolução; sem categoria por gasto nos cartões; sem foto de extrato; sem backup automático; chat por HTTP desativado; Quitar não considera descontos de negociação nem multa; exemplos de teste ainda carregados. O FIN **não foi mexido** desde 14/10/2026 (v1).
-- Pendências de decisão do Marcelo: apagar os exemplos e começar os dados reais; ativar (ou não) o chat por HTTP; alarmes de vencimento no Núcleo para contas do FIN.
+### 6.13 Limitações conhecidas e ideias pendentes do Financeiro
+- Sem alarme/notificação de vencimento; sem gráfico de evolução; sem categoria por gasto nos cartões; sem foto de extrato; sem backup automático; chat por HTTP desativado; Quitar não considera descontos de negociação nem multa; exemplos de teste ainda carregados. O Financeiro **não foi mexido** desde 14/10/2026 (v1).
+- Pendências de decisão do Marcelo: apagar os exemplos e começar os dados reais; ativar (ou não) o chat por HTTP; alarmes de vencimento no Núcleo para contas do Financeiro.
 
 ---
 
@@ -438,7 +438,7 @@ GitHub Pages serve a `main`. Após o push a página nova leva **1 a 3 minutos**.
 - **SQL no banco:** só o Marcelo executa ou autoriza, **um por um**; SQL que apaga dados exige confirmação explícita. Não use `service_role`.
 - **Dados reais:** só leia ou escreva com ordem dele para aquele ato (4.6).
 - **Nunca** commitar dado pessoal, senha, token, chave ou código (o repositório é público).
-- **FIN:** mexer no código do FIN segue as mesmas regras; **nunca** criar função que pague ou mova dinheiro.
+- **Financeiro:** mexer no código do Financeiro segue as mesmas regras; **nunca** criar função que pague ou mova dinheiro.
 
 ---
 
@@ -446,7 +446,7 @@ GitHub Pages serve a `main`. Após o push a página nova leva **1 a 3 minutos**.
 
 ### 8.1 Até a v38 (resumo)
 - **v9 (13/10):** base do app — lembretes, notas, agenda, desenho, anexos, Siri, avisos.
-- **13–14/10:** FIN (contas, cartões, dívidas, plano de quitação, pendentes do Núcleo, chat financeiro por copiar/colar, extratos do Mobills, cópia de segurança); botão Baixar cópia; **alarmes com o app fechado** (servidor, chaves no banco, relógio por minuto); botão flutuante «← Voltar»; ícone caveira verde neon; Anotar com formulário completo e avisos «antes»; aviso que repete.
+- **13–14/10:** Financeiro (contas, cartões, dívidas, plano de quitação, pendentes do Núcleo, chat financeiro por copiar/colar, extratos do Mobills, cópia de segurança); botão Baixar cópia; **alarmes com o app fechado** (servidor, chaves no banco, relógio por minuto); botão flutuante «← Voltar»; ícone caveira verde neon; Anotar com formulário completo e avisos «antes»; aviso que repete.
 - **v16–v25 (14–15/10):** listas com concluídos, Siri/Atalhos, alarme forte, Relógio (cronômetro/temporizador), fixar no topo, limpeza de caixas e bandeira removida.
 - **v26 (15/10):** auditoria geral e melhorias. **v27–v36:** caixa de entrada única; anexo compartilhado protegido (v36).
 - **v37–v38 (16/10):** Planner em botão e página própria; número nas bolinhas; páginas com dias em lista.
@@ -465,7 +465,7 @@ GitHub Pages serve a `main`. Após o push a página nova leva **1 a 3 minutos**.
 | (docs) | `aaa030e` | guia v1.0 | `antes-20261016-guia-chatgpt` |
 | v47 | `0649dc9` | página de lista: botões no topo, seções logo abaixo e recolhíveis; **número da bolinha neon sempre preto** (corrigido um conflito de nome que deixava cinza) | `antes-20261016-lista-secoes` |
 | v48 | `a79c756` | **Mover** lembrete de lista e nota de pasta; **cores das listas vivas**; ícone escuro sobre cor clara | `antes-20261016-mover-cores` |
-| (docs) | este commit | guia v2.0 (Núcleo + FIN completos) | `antes-20261016-guia-v2` |
+| (docs) | este commit | guia v2.0 (Núcleo + Financeiro completos) | `antes-20261016-guia-v2` |
 - **Testes:** 24 (v38) → 117 (v46) → 130 (v47) → 145 (v48).
 - **Defeitos que os testes e as fotos acharam e foram corrigidos:** fechar a busca de Notas com o teclado aberto não redesenhava; nome da pasta quebrando em três linhas com quatro botões; título «Notas» quebrando com cinco botões; número cinza na bolinha neon (conflito de nome de classe).
 - **Dados criados a pedido do Marcelo (16/10, direto no banco):** 5 listas e 1 lembrete sem data (4.5).
@@ -476,8 +476,8 @@ GitHub Pages serve a `main`. Após o push a página nova leva **1 a 3 minutos**.
 
 **Comprovado no iPhone (relato/print do Marcelo):** captura por Siri; aviso com o app fechado (print de 14/10 19:14); Planner v37 aprovado.
 **Comprovado por testes automáticos, foto de tela simulada e página publicada (não no iPhone):** tudo de v39 a v48.
-**Não confirmado no iPhone:** teclado do «+» (v35) e Planner v38; botão flutuante Voltar; botão Baixar cópia do FIN; importador do Mobills; som do «Ouvir»; repetição do aviso de 2 em 2 minutos; atalhos de alarme do Relógio; **todas as telas novas de hoje (v39–v48)**, as 5 listas novas e o lembrete criado no banco.
-**Nunca testado:** o ChatGPT lendo ou escrevendo no Núcleo ou no FIN; o ChatGPT operando bem só com este guia.
+**Não confirmado no iPhone:** teclado do «+» (v35) e Planner v38; botão flutuante Voltar; botão Baixar cópia do Financeiro; importador do Mobills; som do «Ouvir»; repetição do aviso de 2 em 2 minutos; atalhos de alarme do Relógio; **todas as telas novas de hoje (v39–v48)**, as 5 listas novas e o lembrete criado no banco.
+**Nunca testado:** o ChatGPT lendo ou escrevendo no Núcleo ou no Financeiro; o ChatGPT operando bem só com este guia.
 
 **Pendências do Marcelo / decisões:**
 1. Fechar e abrir o Núcleo no iPhone e conferir as telas novas.
@@ -486,7 +486,7 @@ GitHub Pages serve a `main`. Após o push a página nova leva **1 a 3 minutos**.
 4. Liberar escritas no Supabase para o **backup diário** (SQL 011) e a **limpeza de 2 inscrições push antigas**.
 5. Ajustar os **atalhos de alarme** do Relógio.
 6. **Visão de mês do Planner** (pedido antigo).
-7. FIN: **apagar os exemplos de teste** e começar os dados reais; decidir sobre o chat por HTTP e alarmes de vencimento.
+7. Financeiro: **apagar os exemplos de teste** e começar os dados reais; decidir sobre o chat por HTTP e alarmes de vencimento.
 8. Revisão do GDA512/COM do bloco do NCLD512 no registro global.
 
 ---
@@ -509,14 +509,14 @@ GitHub Pages serve a `main`. Após o push a página nova leva **1 a 3 minutos**.
 - **Botão novo no Núcleo:** HTML com `data-act="meu-botao"` (e `aria-label`); ação `'meu-botao':()=>{…}` no objeto de ações; se mudar a tela sem sair do lugar, `render()`; teste com `clickAct`.
 - **Tela nova de página cheia:** nova aba interna (como `busca`, `caixa`, `relogio`): entrada no mapa de `render()` (`{busca:viewBusca,…}`), uma `viewXxx()`, uma ação de abrir e outra de voltar; zerar o estado ao sair em `tab`.
 - **Campo novo num item:** acrescente ao formulário (`sheetRem`/`sheetNote`), ao `data` (4.2) e ao Resumo/leitura; itens antigos não têm o campo, então trate ausente.
-- **Tipo novo no FIN:** exige alterar a restrição de tipos no banco (SQL, só o Marcelo), `CHAT_KINDS` no FIN e `fin/API.md`.
+- **Tipo novo no Financeiro:** exige alterar a restrição de tipos no banco (SQL, só o Marcelo), `CHAT_KINDS` no Financeiro e `fin/API.md`.
 - **Cor ou texto de uma área só:** use uma classe própria da área (ex.: `.notes-cards .li.note`) para não afetar o resto.
 
 ### 10.3 Perguntas frequentes do Marcelo (respostas curtas)
 - **Onde coloco uma tarefa de dinheiro, sem data, só para lembrar?** Num lembrete **sem data** dentro de uma lista (ex.: «Contas e dinheiro», seção «Atrasadas»). Sem lista, ele aparece na Caixa de entrada.
 - **Como mudo um lembrete de lista?** Abra o lembrete › **Mover para outra lista**. Nota: abra a nota › **Mover para outra pasta**.
 - **Como crio uma lista com seções?** Lembretes › Listas › Nova lista; depois o lápis da lista › Seções.
-- **Como mando algo ao FIN?** Hoje › Enviar ao FIN, uma linha por item; no FIN, toque no pendente e confirme.
+- **Como mando algo ao Financeiro?** Hoje › Enviar ao Financeiro, uma linha por item; no Financeiro, toque no pendente e confirme.
 - **Não apareceu o que criaram no banco/outro aparelho.** Feche e abra o Núcleo; veja Ajustes › Envio para a nuvem.
 - **Quero letra maior só numa área.** Peça ao NCLD512/ChatGPT para mexer só naquela área (como nas notas).
 
@@ -524,3 +524,8 @@ GitHub Pages serve a `main`. Após o push a página nova leva **1 a 3 minutos**.
 **PWA** — página que vira app no iPhone. **Folha (sheet)** — tela que sobe por cima. **Lista / seção** — grupos de lembretes (a seção fica dentro da lista). **Pasta / subpasta** — grupos de notas. **Caixa de entrada** — onde caem anotações soltas. **Planner** — visão da semana. **Tag de volta** — marca no Git que guarda o estado anterior para desfazer. **HV / HVI / EAO** — histórico vivo, índice do histórico e ponteiro de estado do NCLD512 no Drive. **Centavos inteiros** — R$ 10,50 = 1050. **Titular (`holder`)** — de quem é; **pagador (`payer`)** — quem paga hoje.
 
 FIM DO GUIA — v2.0 — 16/10/2026 — NCLD512
+
+## Financeiro: aba Lembretes e Planner (22/10/2026)
+- O app **Financeiro** (pasta `fin/`) tem a aba 🔔 **Lembretes** com 3 visões: lista, **Semana** e **Mês** (planner só do Financeiro).
+- Mostra só os lembretes da lista do Financeiro (`items` com `kind=reminder` e `data.list` = lista `fin:true`). Os de dívidas (`finRef`) são automáticos e só leitura; os manuais podem ser criados, editados, concluídos e apagados (sempre com confirmação). Alarme: `alarms:[{id:'a-fin',min:0}]`, o mesmo backend do Núcleo.
+- Nomes técnicos NÃO mudaram (tabela `fin_records`, `data.fin`, `finRef`, chaves `fin-*`, funções do Supabase). Só o texto visível passou de "FIN" para "Financeiro".

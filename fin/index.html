@@ -8,11 +8,11 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="FIN">
+<meta name="apple-mobile-web-app-title" content="Financeiro">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<title>FIN</title>
+<title>Financeiro</title>
 <style>
-/* FIN: sistema à parte, junto do Núcleo. Letra grande, botões grandes, confirmação antes de salvar. */
+/* Financeiro: sistema à parte, junto do Núcleo. Letra grande, botões grandes, confirmação antes de salvar. */
 :root{
   --bg:#F2F2F7; --surface:#FFFFFF; --surface-2:#EDEDF1; --line:#D9D9DF;
   --fg:#1C1C1E; --muted:#5E5E66;
@@ -31,6 +31,8 @@
     color-scheme:dark;
   }
 }
+.seg{display:flex;gap:.4rem;margin:.4rem 0 .8rem}.seg button{flex:1;min-height:3.2rem;border-radius:1rem;border:1px solid var(--line);background:var(--surface);color:var(--fg);font-weight:700;cursor:pointer}.seg button.on{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+.fcal{display:grid;grid-template-columns:repeat(7,1fr);gap:.25rem}.fcal .fh{text-align:center;color:var(--muted);font-size:.85rem}.fd{min-height:3.4rem;border-radius:.8rem;border:1px solid var(--line);background:var(--surface);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;padding:0}.fd b{font-size:.8rem;color:var(--accent)}.fd b.no{color:var(--muted);font-weight:400}.fd.today{border-color:var(--accent);border-width:2px}.fd.sel{background:var(--accent-soft)}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html{font-size:20px}
 html,body{max-width:100%;overflow-x:hidden}
@@ -210,7 +212,7 @@ function moveOrds(items,id,to){
   return ordsForOrder(items,order);
 }
 
-/* ---------- senha (PIN) para abrir o app: 6 números, guardada só como hash; vale para o Núcleo e para o FIN ---------- */
+/* ---------- senha (PIN) para abrir o app: 6 números, guardada só como hash; vale para o Núcleo e para o Financeiro ---------- */
 const LK_IDLE=2*60*1000,LK_LEN=6;
 const LK={buf:'',mode:'unlock',first:'',onOk:null,open:false,faceOn:false};
 const LKH={app:'Núcleo',toast:()=>{},rerender:()=>{},reload:()=>{location.reload();}};
@@ -304,8 +306,8 @@ async function lkFace(){
 function lkBlock(kind){
   const on=lkOn(),face=!!lkGet('cred');
   const b=(act,txt)=>'<button class="btn'+(kind==='nuc'?' wide':'')+'" data-act="'+act+'">'+txt+'</button>';
-  const body=on?(b('lk-now','Bloquear agora')+b('lk-change','Trocar a senha')+b('lk-face','Face ID: '+(face?'LIGADO':'DESLIGADO'))+b('lk-remove','Tirar a senha'))+'<div class="note-s">Pede a senha ao abrir e depois de 2 minutos fora do app. Vale para o Núcleo e para o FIN.</div>'
-      :b('lk-new','Criar uma senha')+'<div class="note-s">6 números, pedidos ao abrir o app. Vale para o Núcleo e para o FIN.</div>';
+  const body=on?(b('lk-now','Bloquear agora')+b('lk-change','Trocar a senha')+b('lk-face','Face ID: '+(face?'LIGADO':'DESLIGADO'))+b('lk-remove','Tirar a senha'))+'<div class="note-s">Pede a senha ao abrir e depois de 2 minutos fora do app. Vale para o Núcleo e para o Financeiro.</div>'
+      :b('lk-new','Criar uma senha')+'<div class="note-s">6 números, pedidos ao abrir o app. Vale para o Núcleo e para o Financeiro.</div>';
   return kind==='nuc'?'<div class="block"><span class="block-t">Senha para abrir</span>'+body+'</div>':'<div class="card"><div class="row"><b>Senha para abrir</b></div>'+body+'</div>';
 }
 async function lkAct(a){
@@ -817,7 +819,7 @@ const GD={name:d=>d.data.creditor||'',date:d=>{const dt=debtNext(d.data,true);re
 const GC={name:c=>c.data.name||'',date:c=>+c.data.dueDay||0};
 const GB={name:b=>b.data.name||'',date:b=>+b.data.dueDay||0};
 const GM={name:i=>i.name||'',date:i=>+new Date(i.date+'T12:00:00')||0};
-/* os itens do FIN são {id,kind,data}: a ordem manual fica em data.ord */
+/* os itens do Financeiro são {id,kind,data}: a ordem manual fica em data.ord */
 function ordRecs(gk,list,g){
   const w=list.map(r=>({id:r.id,ord:r.data.ord,rec:r}));
   return ordSort(gk,'recs',w,{name:x=>g.name(x.rec),date:x=>g.date(x.rec)},true).map(x=>x.rec);
@@ -835,7 +837,7 @@ function finChoose(title,msg,options){
     m.querySelector('#c0').onclick=()=>{m.remove();res(null);};
   });
 }
-Object.assign(LKH,{app:'FIN',toast:finToast,rerender:()=>render()});
+Object.assign(LKH,{app:'Financeiro',toast:finToast,rerender:()=>render()});
 Object.assign(ROH,{write:roWrite,scroller:()=>window,rerender:()=>render(),toast:finToast,choose:finChoose,
   syncLoad:async()=>S.recs.find(r=>r.kind==='proposal'&&r.data&&r.data.cfg==='sortprefs')||null,
   syncSave:async(rec,data)=>{U.mute++;try{return rec?await Api.update(rec,data):await Api.create('proposal',data);}finally{U.mute--;}}});
@@ -1062,7 +1064,7 @@ const bestDay=c=>c.closeDay>=dim(todayIso().slice(0,7))?1:c.closeDay+1;
 /* ---------- telas ---------- */
 function header(t,extra,cls){return '<header class="hd'+(cls?' '+cls:'')+'"><h1>'+esc(t)+'</h1><div>'+(extra||'')+'</div></header>';}
 function tabs(){
-  const T=[['home','🏠','Início'],['bills','📅','Mês'],['cards','💳','Cartões'],['debts','📉','Dívidas'],['plan','🎯','Quitar']];
+  const T=[['home','🏠','Início'],['bills','📅','Mês'],['cards','💳','Cartões'],['debts','📉','Dívidas'],['rem','🔔','Lembretes'],['plan','🎯','Quitar']];
   return '<nav class="tabs">'+T.map(t=>'<button data-act="tab" data-v="'+t[0]+'" class="'+(S.tab===t[0]?'on':'')+'"><span class="e">'+t[1]+'</span>'+t[2]+'</button>').join('')+'</nav>';
 }
 
@@ -1113,7 +1115,7 @@ function vPlan(){
     h+='</div>';
   });
   if(rs.snow&&rs.aval&&rs.snow.done&&rs.aval.done&&!rs.snow.anyUnk&&!rs.aval.anyUnk){const dif=rs.snow.total-rs.aval.total;h+='<div class="note"><b>Comparando os dois caminhos:</b> '+(dif>0?'escolhendo “Maior juros primeiro” você paga cerca de '+money(dif)+' a menos no total.':(dif<0?'escolhendo “Menor saldo primeiro” você paga cerca de '+money(-dif)+' a menos no total.':'os dois custam o mesmo.'))+'</div>';}
-  h+='<div class="note">Isto é só conta. Não inclui desconto de negociação nem multa. Antes de pagar ou renegociar, confira com o banco. O FIN não paga nada.</div>';
+  h+='<div class="note">Isto é só conta. Não inclui desconto de negociação nem multa. Antes de pagar ou renegociar, confira com o banco. O Financeiro não paga nada.</div>';
   return h+'</div>';
 }
 
@@ -1169,7 +1171,7 @@ async function reviewProp(rec){
   const pr=parseText(rec.data.text),tx=rec.data.text,files=rec.data.files||[];
   const sug=pr.type;
   const m=modal('<h3>Veio do Núcleo</h3><div class="card sum">'+esc(tx)+'</div>'
-    +(files.length?'<p class="mut">Documento anexo. O FIN não lê a foto sozinho: veja o documento, escolha o tipo abaixo e preencha. Dá para compartilhar com o chat.</p>'+files.map((f,i)=>'<button class="btn" data-vf="'+i+'">📎 Ver '+esc(f.name)+(f.size?' · '+sizeTxt(f.size):'')+'</button>').join(''):'')
+    +(files.length?'<p class="mut">Documento anexo. O Financeiro não lê a foto sozinho: veja o documento, escolha o tipo abaixo e preencha. Dá para compartilhar com o chat.</p>'+files.map((f,i)=>'<button class="btn" data-vf="'+i+'">📎 Ver '+esc(f.name)+(f.size?' · '+sizeTxt(f.size):'')+'</button>').join(''):'')
     +'<p class="mut">O que é isso?'+(sug?' Sugestão marcada.':' Escolha.')+'</p>'
     +'<button class="btn'+(sug==='charge'?'':' sec')+'" id="p-ch">💳 Compra no cartão</button>'
     +'<button class="btn'+(sug==='bill'?'':' sec')+'" id="p-bi">🧾 Conta do mês</button>'
@@ -1325,7 +1327,7 @@ async function debtPay(rec,ym){
     const nx=debtPayData(x,ym,paid),lines=['Parcela de '+ymShort(ym)+' · '+money(x.installC)];
     if(x.balanceC!=null&&x.installC)lines.push((rv?'Falta receber: ':'Saldo da dívida: ')+money(x.balanceC)+' → '+money(nx.balanceC));
     if(nx.status!==x.status)lines.push('Situação: '+dstTxt(x)+' → '+dstTxt(nx));
-    lines.push(paid?(rv?'Volta para “a receber”.':'Volta para “a pagar”.'):(rv?'O FIN não recebe nada. Só registra que você recebeu.':'O FIN não paga nada. Só registra que você pagou.'));
+    lines.push(paid?(rv?'Volta para “a receber”.':'Volta para “a pagar”.'):(rv?'O Financeiro não recebe nada. Só registra que você recebeu.':'O Financeiro não paga nada. Só registra que você pagou.'));
     if(await confirmBox(paid?(rv?'Desfazer “recebida”?':'Desfazer “paga”?'):(rv?'Marcar como recebida?':'Marcar como paga?'),lines,'Sim')){
       m.remove();try{await Api.update(rec,nx);S.msg='';if(!paid){try{await bumpFinReminder(rec.id,ym,x);}catch(z){}}}catch(e){S.msg=e.message;}render();
     }
@@ -1348,12 +1350,15 @@ async function itemsPatch(ex,body){
   return r.json();
 }
 async function finListId(create){
-  const l=await itemsGet('kind=eq.list&deleted_at=is.null&data->>fin=eq.true&select=id,data&limit=1');
-  if(l.length)return l[0].data._id||l[0].id;
+  const l=await itemsGet('kind=eq.list&deleted_at=is.null&data->>fin=eq.true&select=id,version,data&limit=1');
+  if(l.length){
+    if(/^FIN\b/.test(l[0].data.name||'')){try{await itemsPatch(l[0],{data:Object.assign({},l[0].data,{name:'Financeiro — vencimentos',updatedAt:Date.now()})});}catch(e){}}
+    return l[0].data._id||l[0].id;
+  }
   if(!create)return null;
   const id=uuid(),now=Date.now();
-  const r=await Api.rest('items',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify({id,kind:'list',data:{_id:id,name:'FIN — vencimentos',color:'#1FC95B',sections:[],fin:true,createdAt:now,updatedAt:now}})});
-  if(!r.ok)throw new Error('lista do FIN '+r.status);
+  const r=await Api.rest('items',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify({id,kind:'list',data:{_id:id,name:'Financeiro — vencimentos',color:'#1FC95B',sections:[],fin:true,createdAt:now,updatedAt:now}})});
+  if(!r.ok)throw new Error('lista do Financeiro '+r.status);
   return id;
 }
 /* o que o lembrete desta dívida deve ser (ou null: sem lembrete) */
@@ -1365,7 +1370,7 @@ function remSpecForDebt(d){
   const val=x.installC!=null?' · '+plain(money(x.installC)):'';
   return {
     title:(rv?'Receber de ':'Pagar parcela — ')+x.creditor+val+' (vence dia '+x.dueDay+')',
-    notes:'Lembrete automático do FIN: 1 dia antes do vencimento, às '+REM_TIME+'. '+(rv?'Depois de receber, marque no FIN: Mês › a parcela › Marcar como recebida.':'Depois de pagar, marque no FIN: Mês › a parcela › Marcar como paga.'),
+    notes:'Lembrete automático do Financeiro: 1 dia antes do vencimento, às '+REM_TIME+'. '+(rv?'Depois de receber, marque no Financeiro: Mês › a parcela › Marcar como recebida.':'Depois de pagar, marque no Financeiro: Mês › a parcela › Marcar como paga.'),
     date,remaining:(x.balanceC!=null&&x.installC)?Math.ceil(x.balanceC/x.installC):0
   };
 }
@@ -1413,6 +1418,7 @@ async function syncFinReminders(){
     S.remMap=map;S.remErr='';
   }catch(e){S.remErr=e.message||'erro';}
   finally{S.syncRem=false;}
+  if(S.tab==='rem'||S.frLoaded){try{await loadFinRems();}catch(e){}}
   try{if(!document.querySelector('.modal'))render();}catch(e){}
 }
 let finSyncT=null;
@@ -1421,7 +1427,7 @@ function finSyncSoon(force){
   if(!force&&Date.now()-(S.remLast||0)<20000)return;
   clearTimeout(finSyncT);finSyncT=setTimeout(()=>{syncFinReminders();},force?300:800);
 }
-/* ao marcar a parcela como paga/recebida no FIN, o lembrete daquele mês também anda (se ainda não andou) */
+/* ao marcar a parcela como paga/recebida no Financeiro, o lembrete daquele mês também anda (se ainda não andou) */
 async function bumpFinReminder(debtId,ym,x){
   const l=await itemsGet('kind=eq.reminder&deleted_at=is.null&data->>finRef=eq.'+debtId+'&select=id,version,data&limit=1');
   const ex=l[0];if(!ex)return;
@@ -1431,6 +1437,131 @@ async function bumpFinReminder(debtId,ym,x){
   if(max&&used>=max){nd.done=true;nd.doneAt=Date.now();}
   else nd.date=dateOf(addMonths(o.date.slice(0,7),1),+o.date.slice(8,10));
   await itemsPatch(ex,{data:nd});
+}
+
+/* ---------- Lembretes do Financeiro + Planner (semana e mês): só os lembretes desta lista ---------- */
+const WD=['segunda','terça','quarta','quinta','sexta','sábado','domingo'];
+const mondayIso=iso=>{const d=new Date(iso+'T12:00:00');d.setDate(d.getDate()-((d.getDay()+6)%7));return isoDate(d);};
+const plusDays=(iso,n)=>{const d=new Date(iso+'T12:00:00');d.setDate(d.getDate()+n);return isoDate(d);};
+const frAuto=r=>r.data&&r.data.finRef!=null;
+async function loadFinRems(){
+  try{
+    const id=await finListId(false);
+    S.frList=id||null;
+    if(!id){S.fr=[];S.frErr='';}
+    else{
+      const l=await itemsGet('kind=eq.reminder&deleted_at=is.null&select=id,version,data&limit=1000');
+      S.fr=l.filter(x=>x.data&&x.data.list===id);S.frErr='';
+    }
+  }catch(e){S.frErr=e.message||'erro';}
+  S.frLoaded=true;
+  try{if(S.tab==='rem'&&!document.querySelector('.modal'))render();}catch(e){}
+}
+const frSort=(a,b)=>((a.data.date||'9999')+(a.data.time||'99:99'))<((b.data.date||'9999')+(b.data.time||'99:99'))?-1:1;
+const frOpen=()=>(S.fr||[]).filter(r=>!r.data.done).sort(frSort);
+const frOn=iso=>frOpen().filter(r=>r.data.date===iso);
+function frRow(r,showDate){
+  const x=r.data,td=todayIso(),late=!x.done&&x.date&&x.date<td;
+  return '<button class="item" data-act="rem-open" data-id="'+esc(r.id)+'"><div class="row"><span class="t">'+(x.done?'✔ ':'')+esc(x.title||'Sem título')+'</span><span class="mut">'
+    +(showDate&&x.date?brDate(x.date).slice(0,5)+' ':'')+esc(x.time||'')+'</span></div>'
+    +'<div class="mut">'+(late?'<span class="tag bad">atrasado</span> ':'')+(frAuto(r)?'<span class="tag">automático</span> ':'')+((x.alarms&&x.alarms.length)?'🔔 alarme':'sem alarme')+(x.repeat==='monthly'?' · todo mês':'')+'</div></button>';
+}
+function vRem(){
+  const m=S.lt||'list',td=todayIso();
+  if(!S.frLoaded&&!S.frBusy){S.frBusy=true;loadFinRems().finally(()=>{S.frBusy=false;});}
+  let h=header('Lembretes',rbtn('rem-new','+','Novo lembrete'),'home')+'<div class="wrap">';
+  h+='<div class="seg" role="group">'+[['list','Lembretes'],['week','Semana'],['month','Mês']].map(a=>'<button data-act="rem-mode" data-v="'+a[0]+'" class="'+(m===a[0]?'on':'')+'" aria-pressed="'+(m===a[0])+'">'+a[1]+'</button>').join('')+'</div>';
+  if(S.frErr)h+='<div class="note"><span class="tag warn">Lembretes</span> Não consegui ler os lembretes agora ('+esc(S.frErr)+').</div>';
+  if(!S.frLoaded)return h+'<p class="mut">Carregando…</p></div>';
+  if(!S.frList&&!S.frErr)h+='<div class="card">Ainda não há lembretes do Financeiro. Toque no + para criar o primeiro. Os de dívidas aparecem aqui sozinhos.</div>';
+  h+='<div class="hint">🔔 O alarme toca na hora marcada, mesmo com o app fechado. Regra das dívidas: 1 dia antes do vencimento, às '+REM_TIME+'.</div>';
+  if(m==='week')h+=frWeek(td);else if(m==='month')h+=frMonth(td);else h+=frList(td);
+  return h+'</div>';
+}
+function frList(td){
+  const open=frOpen(),done=(S.fr||[]).filter(r=>r.data.done).sort(frSort).reverse().slice(0,10),lim=plusDays(td,7);
+  const G=[['Atrasados',open.filter(r=>r.data.date&&r.data.date<td)],['Hoje',open.filter(r=>r.data.date===td)],['Próximos 7 dias',open.filter(r=>r.data.date>td&&r.data.date<=lim)],['Mais adiante',open.filter(r=>r.data.date>lim)],['Sem data',open.filter(r=>!r.data.date)],['Concluídos (últimos 10)',done]];
+  let h='';
+  G.forEach(g=>{if(g[1].length)h+='<h2>'+g[0]+' <span class="cnt">'+g[1].length+'</span></h2>'+g[1].map(r=>frRow(r,true)).join('');});
+  return h||'<div class="card">Nenhum lembrete do Financeiro.</div>';
+}
+function frNav(prev,today,next,label,lp,ln){
+  return '<div class="seg"><button data-act="'+prev+'" aria-label="'+lp+'">←</button><button data-act="'+today+'">'+label+'</button><button data-act="'+next+'" aria-label="'+ln+'">→</button></div>';
+}
+function frWeek(td){
+  const ws=S.wk||mondayIso(td);
+  let h='<p class="sub" style="margin:0 0 .4rem">'+brDate(ws).slice(0,5)+' a '+brDate(plusDays(ws,6)).slice(0,5)+'</p>'+frNav('wk-prev','wk-today','wk-next',ws===mondayIso(td)?'Esta semana':'Ir para esta semana','Semana anterior','Próxima semana');
+  for(let i=0;i<7;i++){
+    const iso=plusDays(ws,i),L=frOn(iso);
+    h+='<h2>'+WD[i][0].toUpperCase()+WD[i].slice(1)+' '+brDate(iso).slice(0,5)+(iso===td?' · hoje':'')+(L.length?' <span class="cnt">'+L.length+'</span>':'')+'</h2>'+(L.length?L.map(r=>frRow(r,false)).join(''):'<div class="mut" style="margin:0 .4rem .4rem">Nada marcado.</div>');
+  }
+  return h;
+}
+function frMonth(td){
+  const ym=S.pmY||td.slice(0,7),[y,mo]=ym.split('-').map(Number),days=dim(ym),lead=(new Date(y,mo-1,1).getDay()+6)%7;
+  let h='<p class="sub" style="margin:0 0 .4rem">'+esc(ymLabel(ym))+'</p>'+frNav('pm-prev','pm-today','pm-next',ym===td.slice(0,7)?'Este mês':'Ir para este mês','Mês anterior','Próximo mês');
+  let g='<div class="fcal">'+['S','T','Q','Q','S','S','D'].map(x=>'<div class="fh" aria-hidden="true">'+x+'</div>').join(''),total=0;
+  for(let i=0;i<lead;i++)g+='<div></div>';
+  for(let d=1;d<=days;d++){
+    const iso=ym+'-'+pad(d),c=frOn(iso).length;total+=c;
+    g+='<button class="fd'+(iso===td?' today':'')+(S.pday===iso?' sel':'')+'" data-act="pm-day" data-v="'+iso+'" aria-label="'+d+' de '+MES[mo-1]+(c?', '+c+(c===1?' lembrete':' lembretes'):', nada marcado')+'"><span>'+d+'</span><b class="'+(c?'':'no')+'">'+(c>9?'9+':c)+'</b></button>';
+  }
+  h+=g+'</div><p class="mut">'+(total?total+(total===1?' lembrete':' lembretes')+' neste mês. Toque num dia para ver.':'Nada marcado neste mês.')+'</p>';
+  if(S.pday&&S.pday.slice(0,7)===ym){const L=frOn(S.pday);h+='<h2>'+brDate(S.pday)+'</h2>'+(L.length?L.map(r=>frRow(r,false)).join(''):'<div class="mut">Nada marcado neste dia.</div>');}
+  return h;
+}
+function frData(o,old){
+  const t=Date.now();
+  return Object.assign({},old||{},{
+    title:o.title,notes:(old&&old.notes)||'',date:o.date,time:o.time||REM_TIME,
+    repeat:o.repeat,repN:1,repU:'week',repDays:[],repUntil:'',repTimes:0,repDone:(old&&old.repDone)||0,
+    agenda:false,list:S.frList,section:'',flag:false,priority:(old&&old.priority)||2,
+    alarms:o.alarm?[{id:'a-fin',min:0}]:[],subtasks:(old&&old.subtasks)||[],images:(old&&old.images)||[],done:false,
+    createdAt:(old&&old.createdAt)||t,updatedAt:t
+  });
+}
+async function frForm(rec){
+  const x=rec?rec.data:{},isAuto=false;
+  await form(rec?'Editar lembrete':'Novo lembrete do Financeiro',[
+    {k:'title',label:'O que lembrar',type:'text',req:true},
+    {k:'date',label:'Dia',type:'date',req:true},
+    {k:'time',label:'Hora (HH:MM)',type:'text',hint:'Deixe vazio para '+REM_TIME+'.'},
+    {k:'repeat',label:'Repetir',type:'select',opts:[['none','Não repetir'],['monthly','Todo mês']]},
+    {k:'alarm',label:'Tocar alarme na hora',type:'check'}
+  ],{title:x.title||'',date:x.date||S.pday||todayIso(),time:x.time||'',repeat:x.repeat==='monthly'?'monthly':'none',alarm:rec?!!(x.alarms&&x.alarms.length):true},{
+    validate:o=>{if(!/^\d{4}-\d\d-\d\d$/.test(o.date))return 'Escolha o dia.';if(o.time&&!/^([01]\d|2[0-3]):[0-5]\d$/.test(o.time))return 'Hora inválida. Exemplo: 09:30';return '';},
+    summary:o=>['Lembrete: '+o.title,'Dia: '+brDate(o.date)+' às '+(o.time||REM_TIME),o.repeat==='monthly'?'Repete todo mês':'Não repete',o.alarm?'Com alarme':'Sem alarme'],
+    save:async o=>{
+      if(!S.frList)S.frList=await finListId(true);
+      if(rec){const r=await itemsPatch(rec,{data:frData(o,rec.data)});if(!r.length)throw new Error('Este lembrete mudou em outro aparelho. Abra de novo.');}
+      else{
+        const id=uuid(),data=Object.assign(frData(o,null),{_id:id});
+        const r=await Api.rest('items',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify({id,kind:'reminder',data})});
+        if(!r.ok)throw new Error('lembretes '+r.status);
+      }
+      await loadFinRems();
+    }
+  });
+}
+function frActions(rec){
+  const x=rec.data,auto=frAuto(rec);
+  const m=modal('<h3>'+esc(x.title||'Lembrete')+'</h3><div class="card sum">'+esc([ (x.date?brDate(x.date)+' às '+(x.time||REM_TIME):'Sem data'),((x.alarms&&x.alarms.length)?'Com alarme':'Sem alarme')+(x.repeat==='monthly'?' · todo mês':''),(auto?'Automático: segue a dívida. Para avançar o mês, marque a parcela como paga na aba Dívidas.':'')].filter(Boolean).join('\n'))+'</div>'
+    +(auto?'':'<button class="btn" id="ra-done">'+(x.done?'Reabrir':'Marcar como feito')+'</button><button class="btn sec" id="ra-edit">Editar</button><button class="btn bad" id="ra-del">Apagar</button>')
+    +'<button class="btn sec" id="ra-no">Voltar</button>');
+  const q=s=>m.querySelector(s);
+  q('#ra-no').onclick=()=>m.remove();
+  if(auto)return;
+  q('#ra-edit').onclick=()=>{m.remove();frForm(rec);};
+  q('#ra-done').onclick=async()=>{
+    m.remove();
+    if(!await confirmBox(x.done?'Reabrir este lembrete?':'Marcar como feito?',[x.title],'Sim'))return;
+    try{const nd=Object.assign({},x,{done:!x.done,doneAt:x.done?null:Date.now(),updatedAt:Date.now()});const r=await itemsPatch(rec,{data:nd});if(!r.length)throw new Error('Mudou em outro aparelho. Abra de novo.');S.msg='';await loadFinRems();}catch(e){S.msg=e.message;}render();
+  };
+  q('#ra-del').onclick=async()=>{
+    m.remove();
+    if(!await confirmBox('Apagar este lembrete?',[x.title,'Vai para a lixeira do Núcleo (30 dias).'],'Sim, apagar',true))return;
+    try{const r=await itemsPatch(rec,{deleted_at:new Date().toISOString()});if(!r.length)throw new Error('Mudou em outro aparelho. Abra de novo.');S.msg='';await loadFinRems();}catch(e){S.msg=e.message;}render();
+  };
 }
 
 /* ---------- a planilha do mês: tudo que vence, com data, valor e situação ---------- */
@@ -1556,7 +1687,7 @@ function vCard(){
     h+='<button class="item" data-act="charge-edit" data-id="'+it.rec.id+'"><div class="row"><span class="t">'+esc(it.desc)+(it.n>1?' '+it.parcela+'/'+it.n:'')+'</span><b>'+money(it.amountC)+'</b></div><div class="mut">Compra em '+brDate(it.date)+(it.by?' · '+esc(it.by):'')+(it.amountC<0?' · estorno':'')+'</div></button>';
   });
   h+='<button class="btn sec" data-act="inv-pay" data-ym="'+S.invYm+'">'+(v.paid?'Desfazer “fatura paga”':'Marcar esta fatura como paga')+'</button>';
-  h+='<p class="hint">Marcar como paga só avisa o FIN. O pagamento você faz no banco.</p>';
+  h+='<p class="hint">Marcar como paga só avisa o Financeiro. O pagamento você faz no banco.</p>';
   const mn=byKind('charge').filter(x=>x.data.cardId===cr.id).length;
   h+='<p class="hint">'+mn+' compra(s) neste cartão.</p>';
   return h+'</div>';
@@ -1745,14 +1876,14 @@ function vStmt(){
 const CHAT_KINDS=['card','charge','invpay','bill','billmonth','debt','proposal','stmt'];
 function chatSnapshot(){
   return JSON.stringify({fin_snapshot:1,gerado_em:new Date().toISOString(),
-    regras:['debt.dir = PAGAR (padrão: eu devo) ou RECEBER (me devem); debt.paidYm = meses AAAA-MM já pagos ou recebidos; debt.firstDue = data da 1ª parcela.','Valores em centavos inteiros (R$ 10,50 = 1050). Dado ausente = null, nunca 0.','Para mudar algo, devolva JSON {"fin_ops":1,"ops":[...]} com op create (kind,data), update (id,data = campos a mudar) ou delete (id). Máximo 60 ops.','Marcelo confere e confirma antes de salvar. O FIN nunca paga nem move dinheiro.','kinds: card, charge, invpay, bill, billmonth, debt, proposal (proposal com data.cfg=capacity guarda quanto dá para pagar por mês: capacityC).'],
+    regras:['debt.dir = PAGAR (padrão: eu devo) ou RECEBER (me devem); debt.paidYm = meses AAAA-MM já pagos ou recebidos; debt.firstDue = data da 1ª parcela.','Valores em centavos inteiros (R$ 10,50 = 1050). Dado ausente = null, nunca 0.','Para mudar algo, devolva JSON {"fin_ops":1,"ops":[...]} com op create (kind,data), update (id,data = campos a mudar) ou delete (id). Máximo 60 ops.','Marcelo confere e confirma antes de salvar. O Financeiro nunca paga nem move dinheiro.','kinds: card, charge, invpay, bill, billmonth, debt, proposal (proposal com data.cfg=capacity guarda quanto dá para pagar por mês: capacityC).'],
     registros:S.recs.map(r=>({id:r.id,kind:r.kind,version:r.version,data:r.data}))},null,1);
 }
 function chatParse(txt){
   let t=String(txt||'').trim();const a=t.indexOf('{'),b=t.lastIndexOf('}');
   if(a<0||b<a)throw new Error('Não achei o JSON no texto colado.');
   let j;try{j=JSON.parse(t.slice(a,b+1));}catch(e){throw new Error('O JSON colado está quebrado.');}
-  if(!j||j.fin_ops!==1||!Array.isArray(j.ops)||!j.ops.length)throw new Error('Não é um pacote de mudanças do FIN.');
+  if(!j||j.fin_ops!==1||!Array.isArray(j.ops)||!j.ops.length)throw new Error('Não é um pacote de mudanças do Financeiro.');
   if(j.ops.length>60)throw new Error('Mudanças demais de uma vez (máximo 60).');
   return j.ops.map(o=>{
     if(!o||typeof o!=='object')throw new Error('Mudança inválida.');
@@ -1781,7 +1912,7 @@ async function chatApply(ops){
 /* ---------- cópia de segurança (arquivo no aparelho; não envia dados para lugar nenhum) ---------- */
 const BKP_KEY='fin-last-backup';
 function backupJson(recs,now){
-  return JSON.stringify({app:'FIN',formato:1,geradoEm:now.toISOString(),total:recs.length,registros:recs},null,1);
+  return JSON.stringify({app:'Financeiro',formato:1,geradoEm:now.toISOString(),total:recs.length,registros:recs},null,1);
 }
 function backupDays(){
   const t=lsGet(BKP_KEY); if(!t)return null;
@@ -1808,7 +1939,7 @@ async function bkNow(){
   }catch(e){finToast('Não consegui fazer o backup agora.');}
 }
 async function bkDown(){
-  if(!await confirmBox('Baixar o último backup?',['Vai salvar um arquivo com os seus dados do Núcleo e do FIN.','Ele tem informação financeira: guarde em lugar seguro.'],'Sim, baixar'))return;
+  if(!await confirmBox('Baixar o último backup?',['Vai salvar um arquivo com os seus dados do Núcleo e do Financeiro.','Ele tem informação financeira: guarde em lugar seguro.'],'Sim, baixar'))return;
   let b;
   try{
     const r=await Api.rest('backups?select=data,taken_at&order=taken_at.desc&limit=1');
@@ -1816,7 +1947,7 @@ async function bkDown(){
     b=(await r.json())[0];
   }catch(e){await info('Não consegui baixar','Sem internet ou o banco não respondeu. Nada foi alterado.');return;}
   if(!b){await info('Ainda não há backup','O primeiro backup automático é feito de madrugada. Você pode tocar em Fazer backup agora.');return;}
-  const text=JSON.stringify(b.data,null,1),nome='FIN-Nucleo-backup-automatico-'+isoDate(new Date(b.taken_at))+'.json';
+  const text=JSON.stringify(b.data,null,1),nome='Financeiro-Nucleo-backup-automatico-'+isoDate(new Date(b.taken_at))+'.json';
   try{
     const file=new File([text],nome,{type:'application/json'});
     if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title:nome});}
@@ -1839,7 +1970,7 @@ function backupBlock(){
     +'<p class="hint" style="text-align:center" id="bkAuto">'+esc(BK.msg)+'</p><button class="btn" data-act="bk-now">Fazer backup agora</button><button class="btn" data-act="bk-down">Baixar o último backup automático</button>';
 }
 async function baixarCopia(){
-  if(!await confirmBox('Baixar uma cópia?',['Vai salvar um arquivo com todos os seus dados do FIN, inclusive os apagados.','Ele tem informação financeira: guarde em lugar seguro.'],'Sim, baixar'))return;
+  if(!await confirmBox('Baixar uma cópia?',['Vai salvar um arquivo com todos os seus dados do Financeiro, inclusive os apagados.','Ele tem informação financeira: guarde em lugar seguro.'],'Sim, baixar'))return;
   let recs;
   try{
     const r=await Api.rest('fin_records?select=*&order=created_at.asc&limit=5000');
@@ -1847,7 +1978,7 @@ async function baixarCopia(){
     recs=await r.json();
   }catch(e){await info('Não consegui baixar','Sem internet ou o banco não respondeu. Tente de novo. Nada foi alterado.');return;}
   const now=new Date();
-  const nome='FIN-copia-'+isoDate(now)+'.json';
+  const nome='Financeiro-copia-'+isoDate(now)+'.json';
   const txt=backupJson(recs,now);
   try{
     const file=new File([txt],nome,{type:'application/json'});
@@ -1891,7 +2022,7 @@ function render(){
   if(!S.sess||!S.ready){return;}
   RO.reg={};
   let body;
-  if(S.tab==='home')body=vHome();else if(S.tab==='bills')body=vMonth();else if(S.tab==='cards')body=S.cardId?vCard():vCards();else if(S.tab==='debts')body=vDebts();else if(S.tab==='plan')body=vPlan();else if(S.tab==='stmt')body=vStmt();else if(S.tab==='spend')body=vGastos();else if(S.tab==='cfg')body=vCfg();else body=vHome();
+  if(S.tab==='home')body=vHome();else if(S.tab==='bills')body=vMonth();else if(S.tab==='cards')body=S.cardId?vCard():vCards();else if(S.tab==='debts')body=vDebts();else if(S.tab==='rem')body=vRem();else if(S.tab==='plan')body=vPlan();else if(S.tab==='stmt')body=vStmt();else if(S.tab==='spend')body=vGastos();else if(S.tab==='cfg')body=vCfg();else body=vHome();
   a.innerHTML=body+(S.msg?'<div class="wrap"><div class="err">'+esc(S.msg)+'</div></div>':'')+tabs();
   roAfterRender();
 }
@@ -1936,7 +2067,7 @@ async function billMonthForm(row){
   m.querySelector('#b-pay').onclick=async()=>{
     const to=d.paidAt?null:todayIso();
     if(!d.paidAt&&d.amountC==null){m.remove();await info('Falta o valor','Informe o valor da conta antes de marcar como paga.');return;}
-    if(await confirmBox(d.paidAt?'Desfazer “paga”?':'Marcar como paga?',[b.name+' · '+ymShort(d.ym),'Valor: '+money(d.amountC),d.paidAt?'Volta para “a pagar”.':'O FIN não paga nada. Só registra que você pagou.'],'Sim')){
+    if(await confirmBox(d.paidAt?'Desfazer “paga”?':'Marcar como paga?',[b.name+' · '+ymShort(d.ym),'Valor: '+money(d.amountC),d.paidAt?'Volta para “a pagar”.':'O Financeiro não paga nada. Só registra que você pagou.'],'Sim')){
       m.remove();try{await Api.update(row.r,Object.assign({},d,{paidAt:to}));S.msg='';}catch(e){S.msg=e.message;}render();}
   };
 }
@@ -2006,8 +2137,14 @@ document.addEventListener('click',async ev=>{
   const act=b.dataset.act,id=b.dataset.id,get=i=>S.recs.find(r=>r.id===i);
   S.msg='';
   if(act==='tab'){S.tab=b.dataset.v;if(S.tab!=='cards')S.cardId=null;if(S.tab==='cards'&&b.dataset.v==='cards')S.cardId=null;render();window.scrollTo(0,0);}
-  else if(act==='refresh'){try{await Api.load();await ensureMonth();}catch(e){S.msg='Sem internet.';}render();}
-  else if(act==='logout'){if(await confirmBox('Sair do FIN?',['Você terá que entrar de novo.'],'Sim, sair')){Api.saveSess(null);lsSet('fin-cache','');location.reload();}}
+  else if(act==='rem-mode'){S.lt=b.dataset.v;render();}
+  else if(act==='rem-new')frForm(null);
+  else if(act==='rem-open'){const r=(S.fr||[]).find(x=>x.id===id);if(r)frActions(r);}
+  else if(act==='wk-prev'||act==='wk-next'||act==='wk-today'){const w=S.wk||mondayIso(todayIso());S.wk=act==='wk-today'?null:plusDays(w,act==='wk-prev'?-7:7);render();}
+  else if(act==='pm-prev'||act==='pm-next'||act==='pm-today'){const y=S.pmY||todayIso().slice(0,7);S.pmY=act==='pm-today'?null:addMonths(y,act==='pm-prev'?-1:1);S.pday=null;render();}
+  else if(act==='pm-day'){S.pday=b.dataset.v;render();}
+  else if(act==='refresh'){try{await Api.load();await ensureMonth();if(S.tab==='rem')await loadFinRems();}catch(e){S.msg='Sem internet.';}render();}
+  else if(act==='logout'){if(await confirmBox('Sair do Financeiro?',['Você terá que entrar de novo.'],'Sim, sair')){Api.saveSess(null);lsSet('fin-cache','');location.reload();}}
   else if(act==='demo-on'){
     if(await confirmBox('Carregar exemplos de teste?',['Cria 2 cartões, 6 compras, 4 contas e 2 dívidas FALSOS.','Todos têm “(teste)” no nome.','Dá para apagar tudo de uma vez depois.'],'Sim, carregar')){
       b.disabled=true;b.textContent='Carregando…';
@@ -2058,7 +2195,7 @@ document.addEventListener('click',async ev=>{
   else if(act==='inv-pay'){
     const cr=get(S.cardId),ym=b.dataset.ym,ex=byKind('invpay').find(x=>x.data.cardId===cr.id&&x.data.ym===ym);
     const k=cardCalc(cr).inv[ym];
-    if(await confirmBox(ex?'Desfazer “fatura paga”?':'Marcar fatura como paga?',[cr.data.name+' · '+ymLabel(ym),'Total: '+money(k.totalC),ex?'O valor volta a ocupar o limite.':'O valor sai do limite usado. O FIN não paga nada.'],'Sim')){
+    if(await confirmBox(ex?'Desfazer “fatura paga”?':'Marcar fatura como paga?',[cr.data.name+' · '+ymLabel(ym),'Total: '+money(k.totalC),ex?'O valor volta a ocupar o limite.':'O valor sai do limite usado. O Financeiro não paga nada.'],'Sim')){
       try{if(ex)await Api.remove(ex);else await Api.create('invpay',{cardId:cr.id,ym});}catch(e){S.msg=e.message;}render();}
   }
   else if(act==='debt-new')debtForm(null);
@@ -2069,7 +2206,7 @@ document.addEventListener('click',async ev=>{
 function loginScreen(msg){
   let el=$('lg');if(!el){el=document.createElement('div');el.id='lg';document.body.appendChild(el);}
   el.style.cssText='position:fixed;inset:0;z-index:99999;background:var(--bg);display:flex;flex-direction:column;justify-content:center;padding:1.5rem;overflow:auto';
-  el.innerHTML='<div style="max-width:28rem;width:100%;margin:0 auto"><h1>FIN</h1><p>Entre com o mesmo e-mail e a mesma senha do Núcleo.</p>'
+  el.innerHTML='<div style="max-width:28rem;width:100%;margin:0 auto"><h1>Financeiro</h1><p>Entre com o mesmo e-mail e a mesma senha do Núcleo.</p>'
     +'<label class="f" for="lg-mail">E-mail</label><input class="in" id="lg-mail" type="email" autocomplete="username" autocapitalize="off">'
     +'<label class="f" for="lg-pass">Senha</label><input class="in" id="lg-pass" type="password" autocomplete="current-password">'
     +'<div class="err" id="lg-err" role="alert">'+esc(msg||'')+'</div><button class="btn" id="lg-go">Entrar</button></div>';
@@ -2081,7 +2218,7 @@ function loginScreen(msg){
   $('lg-go').onclick=go;$('lg-pass').onkeydown=e=>{if(e.key==='Enter')go();};
 }
 function setupMissing(){
-  $('app').innerHTML=header('FIN')+'<div class="wrap"><div class="card"><b>Falta uma preparação única no banco.</b><p>A tabela do FIN ainda não existe no Supabase. Rode o arquivo <b>supabase/005_fin.sql</b> no SQL Editor (uma vez só) e abra o FIN de novo.</p></div><button class="btn" onclick="location.reload()">Tentar de novo</button></div>';
+  $('app').innerHTML=header('Financeiro')+'<div class="wrap"><div class="card"><b>Falta uma preparação única no banco.</b><p>A tabela do Financeiro ainda não existe no Supabase. Rode o arquivo <b>supabase/005_fin.sql</b> no SQL Editor (uma vez só) e abra o Financeiro de novo.</p></div><button class="btn" onclick="location.reload()">Tentar de novo</button></div>';
 }
 async function start(){
   try{S.sess=JSON.parse(lsGet('fin-sess')||'null');}catch(e){S.sess=null;}

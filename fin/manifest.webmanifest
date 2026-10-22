@@ -1,6 +1,6 @@
 {
-  "name": "FIN",
-  "short_name": "FIN",
+  "name": "Financeiro",
+  "short_name": "Financeiro",
   "description": "Contas do mês, cartões e dívidas.",
   "lang": "pt-BR",
   "start_url": "./",

@@ -939,7 +939,7 @@ applyLook();
 
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-/* ---------- senha (PIN) para abrir o app: 6 números, guardada só como hash; vale para o Núcleo e para o FIN ---------- */
+/* ---------- senha (PIN) para abrir o app: 6 números, guardada só como hash; vale para o Núcleo e para o Financeiro ---------- */
 const LK_IDLE=2*60*1000,LK_LEN=6;
 const LK={buf:'',mode:'unlock',first:'',onOk:null,open:false,faceOn:false};
 const LKH={app:'Núcleo',toast:()=>{},rerender:()=>{},reload:()=>{location.reload();}};
@@ -1033,8 +1033,8 @@ async function lkFace(){
 function lkBlock(kind){
   const on=lkOn(),face=!!lkGet('cred');
   const b=(act,txt)=>'<button class="btn'+(kind==='nuc'?' wide':'')+'" data-act="'+act+'">'+txt+'</button>';
-  const body=on?(b('lk-now','Bloquear agora')+b('lk-change','Trocar a senha')+b('lk-face','Face ID: '+(face?'LIGADO':'DESLIGADO'))+b('lk-remove','Tirar a senha'))+'<div class="note-s">Pede a senha ao abrir e depois de 2 minutos fora do app. Vale para o Núcleo e para o FIN.</div>'
-      :b('lk-new','Criar uma senha')+'<div class="note-s">6 números, pedidos ao abrir o app. Vale para o Núcleo e para o FIN.</div>';
+  const body=on?(b('lk-now','Bloquear agora')+b('lk-change','Trocar a senha')+b('lk-face','Face ID: '+(face?'LIGADO':'DESLIGADO'))+b('lk-remove','Tirar a senha'))+'<div class="note-s">Pede a senha ao abrir e depois de 2 minutos fora do app. Vale para o Núcleo e para o Financeiro.</div>'
+      :b('lk-new','Criar uma senha')+'<div class="note-s">6 números, pedidos ao abrir o app. Vale para o Núcleo e para o Financeiro.</div>';
   return kind==='nuc'?'<div class="block"><span class="block-t">Senha para abrir</span>'+body+'</div>':'<div class="card"><div class="row"><b>Senha para abrir</b></div>'+body+'</div>';
 }
 async function lkAct(a){
@@ -1752,7 +1752,7 @@ function snoozeChips(){return '<div class="chips">'+Object.keys(SNZ).map(k=>'<bu
 
 /* ---------- confirmação ---------- */
 let askDone=null;
-/* Envio ao FIN: cada linha vira um pendente lá (o FIN pede a sua confirmação antes de cadastrar). */
+/* Envio ao Financeiro: cada linha vira um pendente lá (o Financeiro pede a sua confirmação antes de cadastrar). */
 function finSend(){
   if(!Supa.sess){toast('Entre na conta primeiro (modo nuvem).');return;}
   let el=document.getElementById('finSend');if(el)el.remove();
@@ -1760,16 +1760,16 @@ function finSend(){
   el.style.cssText='position:fixed;inset:0;z-index:80;background:var(--bg);color:var(--fg);display:flex;flex-direction:column;gap:.8rem;padding:calc(1rem + env(safe-area-inset-top,0px)) 1rem calc(1rem + env(safe-area-inset-bottom,0px));overflow:auto;font-size:1rem';
   const B='font:inherit;font-weight:800;border:0;border-radius:1rem;cursor:pointer;';
   el.innerHTML='<div style="display:flex;gap:.6rem;align-items:center;justify-content:space-between"><button id="finTop" type="button" style="'+B+'font-size:1.2rem;min-height:3.2rem;padding:0 1.2rem;background:var(--surface-2);color:var(--fg)">← Voltar</button><button id="finGoTop" type="button" style="'+B+'font-size:1.2rem;min-height:3.2rem;padding:0 1.4rem;background:var(--accent);color:var(--accent-fg)">Enviar</button></div>'
-    +'<h1 style="font-size:1.9rem;margin:0">Enviar ao FIN</h1>'
-    +'<p style="margin:0;font-size:1.1rem">Escreva, cole, tire uma foto ou anexe um documento. <b>Cada linha e cada arquivo</b> vira um pendente no FIN.</p>'
+    +'<h1 style="font-size:1.9rem;margin:0">Enviar ao Financeiro</h1>'
+    +'<p style="margin:0;font-size:1.1rem">Escreva, cole, tire uma foto ou anexe um documento. <b>Cada linha e cada arquivo</b> vira um pendente no Financeiro.</p>'
     +'<textarea id="finTx" rows="4" placeholder="Escreva ou cole aqui (texto ou imagem)" style="font:inherit;font-size:1.15rem;padding:.9rem;border-radius:.8rem;border:2px solid var(--line);background:var(--surface);color:var(--fg);width:100%;box-sizing:border-box"></textarea>'
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:.6rem"><button id="finCam" type="button" style="'+B+'font-size:1.1rem;min-height:3.6rem;background:var(--surface-2);color:var(--fg)">📷 Tirar foto</button><button id="finLib" type="button" style="'+B+'font-size:1.1rem;min-height:3.6rem;background:var(--surface-2);color:var(--fg)">🖼️ Fotos</button><button id="finScan" type="button" style="'+B+'font-size:1.1rem;min-height:3.6rem;background:var(--accent);color:var(--accent-fg);grid-column:1/-1">📄 Escanear documento</button><button id="finDoc" type="button" style="'+B+'font-size:1.1rem;min-height:3.6rem;background:var(--surface-2);color:var(--fg);grid-column:1/-1">📎 Arquivo (PDF, imagem…)</button></div><div style="font-size:.95rem;color:var(--muted)">“Escanear documento” acha as bordas do papel, endireita, melhora a leitura e cria um PDF (várias páginas). Já digitalizou no app Arquivos? Use “Arquivo”.</div>'
     +'<div id="finFiles"></div>'
     +'<div id="finErr" role="alert" style="min-height:1.4rem;font-weight:700;color:var(--danger)"></div>'
-    +'<button id="finGo" type="button" style="'+B+'font-size:1.2rem;min-height:3.8rem;background:var(--accent);color:var(--accent-fg)">Enviar ao FIN</button>'
+    +'<button id="finGo" type="button" style="'+B+'font-size:1.2rem;min-height:3.8rem;background:var(--accent);color:var(--accent-fg)">Enviar ao Financeiro</button>'
     +'<button id="finNo" type="button" style="'+B+'font-size:1.1rem;min-height:3.4rem;background:var(--surface-2);color:var(--fg)">Voltar</button>'
     +'<div style="background:var(--surface);border-radius:.8rem;padding:.7rem .9rem;font-size:1rem;line-height:1.5"><b>Exemplos de texto:</b><br>Mercado 230,50 no cartão Bradesco<br>Tênis 6x 349,99 cartão Santander<br>Conta de luz vence dia 10<br>Dívida Itaú 16000</div>'
-    +'<p style="margin:0;font-size:.95rem;color:var(--muted)">Nada é cadastrado sozinho: no FIN você confere e confirma. O FIN <b>não lê a foto sozinho</b>: o documento fica junto do pendente para você ver ao cadastrar e dá para compartilhar com o chat.</p>'
+    +'<p style="margin:0;font-size:.95rem;color:var(--muted)">Nada é cadastrado sozinho: no Financeiro você confere e confirma. O Financeiro <b>não lê a foto sozinho</b>: o documento fica junto do pendente para você ver ao cadastrar e dá para compartilhar com o chat.</p>'
     +'<input type="file" id="finFcam" accept="image/*" capture="environment" hidden><input type="file" id="finFlib" accept="image/*" multiple hidden><input type="file" id="finFdoc" multiple hidden>';
   document.body.appendChild(el);
   const files=[],MAXF=10,MAXB=20*1048576;
@@ -1799,7 +1799,7 @@ function finSend(){
   el.querySelector('#finTop').onclick=()=>el.remove();
   const post=async data=>{
     const r=await Supa.rest('fin_records',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify({kind:'proposal',data:Object.assign({source:'nucleo',status:'pendente',at:new Date().toISOString()},data)})});
-    if(!r.ok)throw new Error(r.status===404?'O FIN ainda não foi preparado no banco.':'Erro '+r.status);
+    if(!r.ok)throw new Error(r.status===404?'O Financeiro ainda não foi preparado no banco.':'Erro '+r.status);
   };
   const go=async()=>{
     const lines=tx.value.split(/\n+/).map(x=>x.trim()).filter(Boolean).slice(0,40);
@@ -1807,7 +1807,7 @@ function finSend(){
     if(!lines.length&&!files.length){err.textContent='Escreva uma linha ou anexe um arquivo.';return;}
     const total=lines.length+files.length;
     const resumo=lines.slice(0,3).concat(files.slice(0,3).map(f=>'📎 '+f.name)).join(' • ')+(total>6?' …':'');
-    const ok=await ask({title:'Enviar '+total+(total>1?' itens':' item')+' ao FIN?',msg:resumo,ok:'Sim, enviar',cancel:'Voltar'});
+    const ok=await ask({title:'Enviar '+total+(total>1?' itens':' item')+' ao Financeiro?',msg:resumo,ok:'Sim, enviar',cancel:'Voltar'});
     if(!ok)return;
     const g1=el.querySelector('#finGo'),g2=el.querySelector('#finGoTop');g1.disabled=g2.disabled=true;g1.textContent='Enviando…';
     let sent=0,restoL=lines.slice();
@@ -1820,8 +1820,8 @@ function finSend(){
         await post({text:'📎 '+f.name,files:[{id:up.id,name:f.name,size:blob.size,type}]});
         sent++;files.splice(files.indexOf(f),1);paint();
       }
-      el.remove();toast('Enviado ao FIN: '+sent+(sent>1?' itens':' item')+'. Abra o FIN para conferir.');
-    }catch(e){g1.disabled=g2.disabled=false;g1.textContent='Enviar ao FIN';err.textContent=(sent?'Enviei '+sent+' e parei: ':'Não enviou: ')+(e.message||'sem internet')+(sent?' O que já foi está no FIN: tente de novo só com o resto.':'');}
+      el.remove();toast('Enviado ao Financeiro: '+sent+(sent>1?' itens':' item')+'. Abra o Financeiro para conferir.');
+    }catch(e){g1.disabled=g2.disabled=false;g1.textContent='Enviar ao Financeiro';err.textContent=(sent?'Enviei '+sent+' e parei: ':'Não enviou: ')+(e.message||'sem internet')+(sent?' O que já foi está no Financeiro: tente de novo só com o resto.':'');}
   };
   el.querySelector('#finGo').onclick=go;
   el.querySelector('#finGoTop').onclick=go;
@@ -1920,7 +1920,7 @@ function dayItems(iso){
 const dayCount=iso=>{const ids=finIds();return S.reminders.filter(r=>r.date===iso&&!r.done&&!isFinR(r,ids)).length+S.events.filter(e=>occursOn(e,iso)).length;};
 function lmap(){const m={};S.lists.forEach(l=>{m[l.id]=l;});return m;}
 const remList=(r,lm)=>r.list&&lm[r.list]?r.list:'';
-/* listas marcadas como "do FIN": os lembretes delas ficam numa área própria e NÃO entram nas listas gerais, no Planner nem nas contagens */
+/* listas marcadas como "do Financeiro": os lembretes delas ficam numa área própria e NÃO entram nas listas gerais, no Planner nem nas contagens */
 const finIds=()=>new Set(S.lists.filter(l=>l.fin).map(l=>l.id));
 const isFinR=(r,ids)=>!!(r.list&&(ids||finIds()).has(r.list));
 const overdueR=(r,now)=>!!(r.date&&(r.time?dtOf(r.date,r.time)<now:r.date<isoDate(now)));
@@ -2089,7 +2089,7 @@ function viewHoje(){
     tile('go-rem','s:late','alert',nLate?'t-red t-late':'t-red',nLate,'Atrasados')+
     tile('go-caixa','','inbox','t-orange',inboxCount(),'Caixa de entrada')+'</div>';
   const fc=finCounts();
-  h+='<div class="tiles">'+tile('go-rem','fin','bell',fc.late?'t-red t-late':'t-green',fc.late+fc.hoje,'Lembretes do FIN')+tile('fin-send','','inbox','t-green','+','Enviar ao FIN')+tile('fin-open','','calgrid','t-cyan','→','Abrir o FIN')+'</div>';
+  h+='<div class="tiles">'+tile('go-rem','fin','bell',fc.late?'t-red t-late':'t-green',fc.late+fc.hoje,'Lembretes do Financeiro')+tile('fin-send','','inbox','t-green','+','Enviar ao Financeiro')+tile('fin-open','','calgrid','t-cyan','→','Abrir o Financeiro')+'</div>';
   return h;
 }
 function inboxHtml(){
@@ -2206,21 +2206,21 @@ function remHomeBody(sm,lm,today,ws,cur){
 }
 function finBanner(){
   const c=finCounts();
-  if(!c.has)return '<button class="finban" data-act="fin-area-create"><span class="fb-i">💰</span><span class="fb-t"><b>Lembretes do FIN</b><i>Área separada para vencimentos de dívidas, contas e cartões, com alarme. Toque para criar.</i></span></button>';
-  return '<button class="finban" data-act="rview" data-v="fin"><span class="fb-i">💰</span><span class="fb-t"><b>Lembretes do FIN</b><i>'+(c.late?c.late+(c.late===1?' atrasado · ':' atrasados · '):'')+c.hoje+' hoje · '+c.total+' no total</i></span>'+cnt(c.late+c.hoje)+'</button>';
+  if(!c.has)return '<button class="finban" data-act="fin-area-create"><span class="fb-i">💰</span><span class="fb-t"><b>Lembretes do Financeiro</b><i>Área separada para vencimentos de dívidas, contas e cartões, com alarme. Toque para criar.</i></span></button>';
+  return '<button class="finban" data-act="rview" data-v="fin"><span class="fb-i">💰</span><span class="fb-t"><b>Lembretes do Financeiro</b><i>'+(c.late?c.late+(c.late===1?' atrasado · ':' atrasados · '):'')+c.hoje+' hoje · '+c.total+' no total</i></span>'+cnt(c.late+c.hoje)+'</button>';
 }
-/* a área própria dos lembretes do FIN, separada por prazo */
+/* a área própria dos lembretes do Financeiro, separada por prazo */
 function finRemView(){
   const ids=finIds(),today=isoDate(new Date()),now=new Date(),fl=S.lists.find(l=>l.fin);
-  let h=S.rfromHoje?subHdr('Hoje','hj-back','Vencimentos do FIN','Lembretes do FIN','',fl?lcol(fl.color):''):subHdr('Lembretes','rview-back','Vencimentos do FIN','Lembretes do FIN','',fl?lcol(fl.color):'');
-  if(!fl)return h+'<div class="card" style="margin-top:1rem">Ainda não existe a área do FIN. Ela guarda só os lembretes de vencimento (parcelas, contas, faturas), separados dos outros, com alarme.</div><button class="btn" data-act="fin-area-create">Criar a área do FIN</button>';
-  h+='<div class="notes-tools"><button class="iconbtn" data-act="fin-new" aria-label="Novo lembrete do FIN">'+ic('plus',1.2,2.4)+'</button><button class="iconbtn" data-act="edit-list" data-id="'+esc(fl.id)+'" aria-label="Editar a lista do FIN">'+ic('edit',1.1,2.2)+'</button></div>';
+  let h=S.rfromHoje?subHdr('Hoje','hj-back','Vencimentos do Financeiro','Lembretes do Financeiro','',fl?lcol(fl.color):''):subHdr('Lembretes','rview-back','Vencimentos do Financeiro','Lembretes do Financeiro','',fl?lcol(fl.color):'');
+  if(!fl)return h+'<div class="card" style="margin-top:1rem">Ainda não existe a área do Financeiro. Ela guarda só os lembretes de vencimento (parcelas, contas, faturas), separados dos outros, com alarme.</div><button class="btn" data-act="fin-area-create">Criar a área do Financeiro</button>';
+  h+='<div class="notes-tools"><button class="iconbtn" data-act="fin-new" aria-label="Novo lembrete do Financeiro">'+ic('plus',1.2,2.4)+'</button><button class="iconbtn" data-act="edit-list" data-id="'+esc(fl.id)+'" aria-label="Editar a lista do Financeiro">'+ic('edit',1.1,2.2)+'</button></div>';
   h+='<div class="hint" style="margin:.2rem .3rem .6rem">🔔 O aviso toca na hora marcada, mesmo com o app fechado. Regra: lembrar 1 dia antes do vencimento, às 09:00.</div>';
   const all=S.reminders.filter(r=>isFinR(r,ids)).sort(byDT),open=all.filter(r=>!r.done),done=all.filter(r=>r.done);
   const lim=isoDate(addDays(new Date(),7));
   const late=open.filter(r=>overdueR(r,now)),hoje=open.filter(r=>r.date===today&&!overdueR(r,now)),prox=open.filter(r=>r.date>today&&r.date<=lim),depois=open.filter(r=>r.date>lim),sem=open.filter(r=>!r.date);
   const groups=[['late','Atrasados',late],['hoje','Hoje',hoje],['prox','Próximos 7 dias',prox],['depois','Mais adiante',depois],['sem','Sem data',sem],['done','Concluídos',done]].filter(g=>g[2].length);
-  if(!groups.length)return h+'<div class="group">'+emptyRow('Nenhum lembrete do FIN.','Toque no + lá em cima para criar um vencimento.')+'</div>';
+  if(!groups.length)return h+'<div class="group">'+emptyRow('Nenhum lembrete do Financeiro.','Toque no + lá em cima para criar um vencimento.')+'</div>';
   groups.forEach(g=>{
     const key='fin:'+g[0],o=!S.lc[key];
     h+='<div class="sec-h"><button class="sec-tog'+(o?' open':'')+'" data-act="lc-toggle" data-id="'+key+'" aria-expanded="'+o+'" aria-label="'+(o?'Recolher ':'Abrir ')+g[1]+'">'+ic('right',1.05,2.6)+'<h2>'+g[1]+' '+cnt(g[2].length,1)+'</h2></button></div>';
@@ -3248,7 +3248,7 @@ function sheetList(){
   let h='<div class="sheet"><div class="sheet-in">'+head(sh.isNew?'Nova lista':'Lista','Salvar')+'<div class="sheet-body" id="sheetBody">';
   h+='<div><label class="lbl" for="f-title">Nome da lista</label><input class="inp" id="f-title" data-bind="name" value="'+esc(d.name)+'" placeholder="Ex.: Tarefas" autocomplete="off"></div>';
   h+='<div><span class="lbl">Cor</span><div class="swatches">'+LCOL.map(c=>'<button class="sw'+(d.color===c?' on':'')+'" style="background:'+c+'" data-act="set-color" data-v="'+c+'" aria-label="Cor" aria-pressed="'+(d.color===c)+'">'+(d.color===c?ic('check',1,3):'')+'</button>').join('')+'</div></div>';
-  h+='<label class="check"><input type="checkbox" id="f-fin" data-bind="fin" '+(d.fin?'checked':'')+'>Lista do FIN: fica separada dos outros lembretes, na área “Lembretes do FIN”</label>';
+  h+='<label class="check"><input type="checkbox" id="f-fin" data-bind="fin" '+(d.fin?'checked':'')+'>Lista do Financeiro: fica separada dos outros lembretes, na área “Lembretes do Financeiro”</label>';
   h+='<div class="block"><span class="block-t">Seções (opcional)</span><div class="note-s">Dividem a lista em partes, como “Novo” e “Outros”.</div>'+(d.sections||[]).map((x,i)=>'<div class="sub"><input class="inp" data-sub-k="sections" data-sub-text="'+i+'" value="'+esc(x.t)+'" aria-label="Nome da seção"><button class="iconbtn" style="background:transparent;color:var(--muted)" data-act="rm-sub" data-k="sections" data-i="'+i+'" aria-label="Remover seção">'+ic('close',.9)+'</button></div>').join('')+'<div style="display:flex;gap:.4rem"><input class="inp" id="newSub" data-k="sections" placeholder="Ex.: Novo" autocomplete="off"><button class="btn sm" data-act="add-sub" data-k="sections">Adicionar</button></div></div>';
   if(!sh.isNew)h+='<div class="note-s">Se apagar a lista, os lembretes dela vão para “Lembretes”. Nenhum lembrete é apagado.</div>';
   h+='</div>'+footer(sh,'Apagar lista')+'</div></div>';
@@ -3335,7 +3335,7 @@ function sheetSet(){
     h+='<div class="block"><span class="block-t">Avisos de alarme (com o app fechado)</span><div class="note-s"'+(ps.bad?' style="color:var(--danger);font-weight:700"':'')+'>'+esc(ps.t)+'</div>'+(ps.on?'':'<button class="btn primary wide" data-act="push-on">Ligar avisos neste aparelho</button>')+(ps.on?'<button class="btn wide" data-act="push-test">Testar aviso (feche o app e espere 1 minuto)</button>':'')+(Supa.alarmErr?'<div class="note-s">Servidor de alarmes: '+esc(Supa.alarmErr)+'</div>':'')+'</div>';
   }else h+='<div class="block"><span class="block-t">Alarmes</span><div class="note-s">Os alarmes tocam enquanto este sistema está aberto.</div></div>';
   h+=sheetSaude();
-  h+='<div class="block"><span class="block-t">FIN (dinheiro)</span><div class="note-s">Sistema à parte: contas do mês, cartões e dívidas.</div><a class="btn primary wide" href="fin/" style="display:flex;align-items:center;justify-content:center;text-decoration:none">Abrir o FIN</a></div>';
+  h+='<div class="block"><span class="block-t">Financeiro (dinheiro)</span><div class="note-s">Sistema à parte: contas do mês, cartões e dívidas.</div><a class="btn primary wide" href="fin/" style="display:flex;align-items:center;justify-content:center;text-decoration:none">Abrir o Financeiro</a></div>';
   if(S.dlOk||Store.mode==='supa')h+='<button class="btn wide" data-act="export">Exportar backup (arquivo)</button>';
   if(Store.mode==='supa'){h+='<button class="btn wide" data-act="import">Importar backup (arquivo)</button><input type="file" id="impFile" accept=".json,application/json" hidden>';h+='<button class="btn wide danger" data-act="logout">Sair da conta</button>';}
   if(ex)h+='<button class="btn wide danger" data-act="rm-examples">Remover os '+ex+' exemplos</button>';
@@ -3924,11 +3924,11 @@ const A={
   'bk-down':()=>bkDown(),
   'sort-open':()=>sortOpenPage(),
   'fin-area-create':async()=>{
-    await Store.put('lists',{name:'FIN — vencimentos',color:LCOL[3],sections:[],fin:true,createdAt:Date.now()});
-    toast('Área do FIN criada.');go(()=>{S.tab='lembretes';S.rview='fin';S.rq='';});
+    await Store.put('lists',{name:'Financeiro — vencimentos',color:LCOL[3],sections:[],fin:true,createdAt:Date.now()});
+    toast('Área do Financeiro criada.');go(()=>{S.tab='lembretes';S.rview='fin';S.rq='';});
   },
   'fin-new':()=>{
-    const l=S.lists.find(x=>x.fin);if(!l){toast('Crie a área do FIN primeiro.');return;}
+    const l=S.lists.find(x=>x.fin);if(!l){toast('Crie a área do Financeiro primeiro.');return;}
     const r=newRem('',l.id);r.time='09:00';r.priority=2;r.alarms=[{id:uid(),min:0}];
     openSheet('rem',r);
   },

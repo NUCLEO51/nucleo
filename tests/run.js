@@ -133,7 +133,7 @@ ev(`__NUCLEO_TEST__.S.gq='';__NUCLEO_TEST__.S.tab='hoje';`);
     S.inbox=[{id:'i1',text:'pagar IPVA',source:'siri',createdAt:1}];`);
   const hoje = TT.viewHoje();
   t('hoje: não mostra mais as listas de baixo', !/Lembretes de hoje<\/h2>/.test(hoje) && !/Agenda de hoje/.test(hoje) && !/inb-card/.test(hoje) && !/sec-today|sec-inbox|sec-late/.test(hoje), true);
-  t('hoje: tem os 4 botões + FIN', ['s:hojeso', 'go-agenda', 's:late', 'go-caixa', 'fin-send', 'fin-open'].every(k => hoje.indexOf(k) > 0), true);
+  t('hoje: tem os 4 botões + Financeiro', ['s:hojeso', 'go-agenda', 's:late', 'go-caixa', 'fin-send', 'fin-open'].every(k => hoje.indexOf(k) > 0), true);
   t('hoje: o cronômetro é um botão redondo no topo, antes de Ajustes, e o botão largo de baixo saiu', /class="iconbtn" data-act="rl-open"/.test(hoje) && hoje.indexOf('rl-open') < hoje.indexOf('data-act="settings"') && hoje.indexOf('rl-open') < hoje.indexOf('go-rem') && !/⏱ Cronômetro/.test(hoje) && !/class="btn grow" data-act="rl-open"/.test(hoje), true);
   t('hoje: data grande (dia da semana e data em linhas próprias)', /class="dateW"/.test(hoje) && /class="dateD"/.test(hoje) && /\.dateW\{font-size:1\.9rem/.test(html) && /\.dateD\{font-size:1\.5rem/.test(html), true);
   t('hoje: continua com busca, ouvir e ajustes', hoje.indexOf('gs-open') > 0 && hoje.indexOf('gs-open') < hoje.indexOf('speak-day') && hoje.indexOf('speak-day') < hoje.indexOf('data-act="settings"'), true);
@@ -551,10 +551,10 @@ global.__pend.push((async () => {
   t('arrastar: 200 reordenações completas aleatórias sempre resultam na ordem pedida', perm, true);
 }
 
-// --- Enviar ao FIN: Voltar também no topo (v49) ---
-t('Enviar ao FIN: tem botão Voltar no topo, além do de baixo', /id="finTop"/.test(html) && /querySelector\('#finTop'\)\.onclick/.test(html) && /id="finNo"/.test(html), true);
+// --- Enviar ao Financeiro: Voltar também no topo (v49) ---
+t('Enviar ao Financeiro: tem botão Voltar no topo, além do de baixo', /id="finTop"/.test(html) && /querySelector\('#finTop'\)\.onclick/.test(html) && /id="finNo"/.test(html), true);
 
-// --- Enviar ao FIN com fotos, escanear, arquivos e colar (v50) ---
+// --- Enviar ao Financeiro com fotos, escanear, arquivos e colar (v50) ---
 const __prevP = Promise.all((global.__pend || []).slice());   /* espera os testes assíncronos anteriores (usam a mesma janela de confirmação) */
 global.__pend.push((async () => {
   await __prevP;
@@ -564,10 +564,10 @@ global.__pend.push((async () => {
   TT.Supa.rest = async (path, opt) => { posts.push({ path, body: JSON.parse(opt.body) }); return { ok: true, status: 201 }; };
   TT.SupaAssets.upload = async (blob, o) => { ups.push(o); return { id: 'uid/' + ups.length + '.pdf' }; };
   TT.finSend();
-  t('Enviar ao FIN: Voltar e Enviar no topo (aparecem mesmo com o teclado aberto)', !!q('#finSend #finTop') && !!q('#finSend #finGoTop') && q('#finSend').firstElementChild.contains(q('#finGoTop')), true);
-  t('Enviar ao FIN: botões Tirar foto, Fotos, Escanear documento e Arquivo', !!q('#finCam') && !!q('#finLib') && !!q('#finDoc') && !!q('#finScan') && /Tirar foto/.test(q('#finCam').textContent) && /Escanear documento/.test(q('#finScan').textContent) && /Arquivo/.test(q('#finDoc').textContent), true);
-  t('Enviar ao FIN: Escanear usa a câmera traseira e Fotos aceita várias imagens', q('#finFcam').getAttribute('capture') === 'environment' && q('#finFcam').accept === 'image/*' && q('#finFlib').multiple === true, true);
-  t('Enviar ao FIN: avisa que o FIN não lê a foto sozinho', /não lê a foto sozinho/.test(q('#finSend').textContent), true);
+  t('Enviar ao Financeiro: Voltar e Enviar no topo (aparecem mesmo com o teclado aberto)', !!q('#finSend #finTop') && !!q('#finSend #finGoTop') && q('#finSend').firstElementChild.contains(q('#finGoTop')), true);
+  t('Enviar ao Financeiro: botões Tirar foto, Fotos, Escanear documento e Arquivo', !!q('#finCam') && !!q('#finLib') && !!q('#finDoc') && !!q('#finScan') && /Tirar foto/.test(q('#finCam').textContent) && /Escanear documento/.test(q('#finScan').textContent) && /Arquivo/.test(q('#finDoc').textContent), true);
+  t('Enviar ao Financeiro: Escanear usa a câmera traseira e Fotos aceita várias imagens', q('#finFcam').getAttribute('capture') === 'environment' && q('#finFcam').accept === 'image/*' && q('#finFlib').multiple === true, true);
+  t('Enviar ao Financeiro: avisa que o Financeiro não lê a foto sozinho', /não lê a foto sozinho/.test(q('#finSend').textContent), true);
   const f = new w.File(['conteudo'], 'boleto.pdf', { type: 'application/pdf' });
   const pe = new w.Event('paste', { bubbles: true, cancelable: true }); pe.clipboardData = { files: [f] };
   q('#finTx').dispatchEvent(pe);
@@ -577,7 +577,7 @@ global.__pend.push((async () => {
   q('#finTx').dispatchEvent(Object.assign(new w.Event('paste', { bubbles: true, cancelable: true }), { clipboardData: { files: [f] } }));
   q('#finTx').value = 'Conta de luz vence dia 10';
   q('#finGoTop').click(); await wait(40);
-  t('enviar: pede confirmação com o resumo (texto e arquivo)', /Enviar 2 itens ao FIN\?/.test(doc.body.textContent) && /boleto\.pdf/.test(doc.querySelector('#askRoot').textContent), true);
+  t('enviar: pede confirmação com o resumo (texto e arquivo)', /Enviar 2 itens ao Financeiro\?/.test(doc.body.textContent) && /boleto\.pdf/.test(doc.querySelector('#askRoot').textContent), true);
   await wait(600);
   doc.querySelector('#askRoot [data-ask="1"]').click(); await wait(120);
   t('enviar: 2 pendentes, um do texto e outro do arquivo com o anexo', posts.length === 2 && posts[0].body.data.text === 'Conta de luz vence dia 10' && posts[1].body.data.text === '📎 boleto.pdf' && posts[1].body.data.files[0].id === 'uid/1.pdf' && posts[1].body.data.files[0].name === 'boleto.pdf' && posts[1].body.data.files[0].type === 'application/pdf', true);
@@ -589,7 +589,7 @@ global.__pend.push((async () => {
   TT.Supa.rest = async () => ({ ok: false, status: 404 });
   q('#finTx').value = 'Dívida Itaú 16000'; q('#finGo').click(); await wait(40); await wait(600);
   doc.querySelector('#askRoot [data-ask="1"]').click(); await wait(100);
-  t('erro ao enviar: mostra o motivo, mantém o texto e não fecha', /O FIN ainda não foi preparado no banco/.test(q('#finErr').textContent) && q('#finTx').value === 'Dívida Itaú 16000' && !!q('#finSend'), true);
+  t('erro ao enviar: mostra o motivo, mantém o texto e não fecha', /O Financeiro ainda não foi preparado no banco/.test(q('#finErr').textContent) && q('#finTx').value === 'Dívida Itaú 16000' && !!q('#finSend'), true);
   q('#finTop').click();
   t('Voltar do topo fecha a tela', !q('#finSend'), true);
 })());
@@ -616,7 +616,7 @@ global.__pend.push((async () => {
   ev(`__NUCLEO_TEST__.S.tab='hoje';__NUCLEO_TEST__.S.rview=null;__NUCLEO_TEST__.S.conf='all';`);
 })());
 
-// --- Área "Lembretes do FIN": separada dos outros, com alarme (v52) ---
+// --- Área "Lembretes do Financeiro": separada dos outros, com alarme (v52) ---
 const __prevP3 = Promise.all((global.__pend || []).slice());
 global.__pend.push((async () => {
   await __prevP3;
@@ -626,67 +626,67 @@ global.__pend.push((async () => {
   const seed = (lists, rems) => ev(`const S=__NUCLEO_TEST__.S;S.ready=true;S.tab='hoje';S.sheet=null;S.conf='del';S.rview=null;S.rq='';S.rfromHoje=0;S.rfromPlan=0;S.lc={};
     S.lists=${JSON.stringify(lists)};S.reminders=${JSON.stringify(rems)};S.folders=[];S.notes=[];S.events=[];S.inbox=[];
     S.raw={reminders:S.reminders.slice(),lists:S.lists.slice(),notes:[],folders:[],events:[],inbox:[]};`);
-  const L = [{ id: 'lf', name: 'FIN — vencimentos', color: '#1FC95B', sections: [], fin: true }, { id: 'lc', name: 'Casa', color: '#5E8F6B', sections: [] }];
+  const L = [{ id: 'lf', name: 'Financeiro — vencimentos', color: '#1FC95B', sections: [], fin: true }, { id: 'lc', name: 'Casa', color: '#5E8F6B', sections: [] }];
   const R = [
     mk('f1', 'Parcela atrasada da Elisa', '2020-01-15', '09:00', 'lf', { alarms: [{ id: 'a1', min: 0 }] }),
-    mk('f2', 'Conta do FIN hoje à noite', hoje, '23:59', 'lf', { alarms: [{ id: 'a2', min: 0 }] }),
+    mk('f2', 'Conta do Financeiro hoje à noite', hoje, '23:59', 'lf', { alarms: [{ id: 'a2', min: 0 }] }),
     mk('f3', 'Parcela distante', '2099-01-15', '09:00', 'lf', { alarms: [{ id: 'a3', min: 0 }] }),
     mk('c1', 'Consertar a torneira', '2020-01-10', '10:00', 'lc'),
     mk('c2', 'Comprar pilhas', '2099-02-01', '', '')];
   seed(L, R);
   const sm = TT.smart();
-  t('separação: os atalhos gerais não contam os lembretes do FIN (Todos, Hoje, Atrasados, Programados)', sm.todos.length === 2 && sm.late.length === 1 && sm.late[0].id === 'c1' && sm.prog.length === 2 && !sm.hoje.some(r => r.list === 'lf'), true);
-  t('separação: o Planner e a contagem do dia não contam os do FIN', ev(`__NUCLEO_TEST__.dayCount('${hoje}')`) === 0 && !/class="cnt num">1</.test(TT.planView()), true);
-  t('FIN: contagem própria (atrasado, hoje e total)', JSON.stringify(TT.finCounts()) === JSON.stringify({ has: true, late: 1, hoje: 1, total: 3 }), true);
+  t('separação: os atalhos gerais não contam os lembretes do Financeiro (Todos, Hoje, Atrasados, Programados)', sm.todos.length === 2 && sm.late.length === 1 && sm.late[0].id === 'c1' && sm.prog.length === 2 && !sm.hoje.some(r => r.list === 'lf'), true);
+  t('separação: o Planner e a contagem do dia não contam os do Financeiro', ev(`__NUCLEO_TEST__.dayCount('${hoje}')`) === 0 && !/class="cnt num">1</.test(TT.planView()), true);
+  t('Financeiro: contagem própria (atrasado, hoje e total)', JSON.stringify(TT.finCounts()) === JSON.stringify({ has: true, late: 1, hoje: 1, total: 3 }), true);
   const home = TT.viewLembretes();
-  t('Lembretes: banner "Lembretes do FIN" com atrasados e hoje, e a lista do FIN some de "Minhas listas"', /class="finban" data-act="rview" data-v="fin"/.test(home) && home.indexOf('finban') < home.indexOf('Planner') && /1 atrasado · 1 hoje · 3 no total/.test(home) && !/FIN — vencimentos<\/div>/.test(home) && /Casa<\/div>/.test(home), true);
+  t('Lembretes: banner "Lembretes do Financeiro" com atrasados e hoje, e a lista do Financeiro some de "Minhas listas"', /class="finban" data-act="rview" data-v="fin"/.test(home) && home.indexOf('finban') < home.indexOf('Planner') && /1 atrasado · 1 hoje · 3 no total/.test(home) && !/Financeiro — vencimentos<\/div>/.test(home) && /Casa<\/div>/.test(home), true);
   const hv = TT.viewHoje();
-  t('Hoje: atalho "Lembretes do FIN" (vermelho quando há atrasado) abre a área', /data-act="go-rem" data-v="fin"/.test(hv) && /Lembretes do FIN/.test(hv) && /t-red t-late/.test(hv.slice(hv.indexOf('data-v="fin"') - 80, hv.indexOf('data-v="fin"') + 160)), true);
+  t('Hoje: atalho "Lembretes do Financeiro" (vermelho quando há atrasado) abre a área', /data-act="go-rem" data-v="fin"/.test(hv) && /Lembretes do Financeiro/.test(hv) && /t-red t-late/.test(hv.slice(hv.indexOf('data-v="fin"') - 80, hv.indexOf('data-v="fin"') + 160)), true);
   ev(`__NUCLEO_TEST__.S.rview='fin';`);
   const pg = TT.viewLembretes();
-  t('área do FIN: só os lembretes do FIN, separados em Atrasados, Hoje e Mais adiante', /Parcela atrasada da Elisa/.test(pg) && /Conta do FIN hoje à noite/.test(pg) && /Parcela distante/.test(pg) && !/Consertar a torneira/.test(pg) && !/Comprar pilhas/.test(pg) && pg.indexOf('Atrasados') < pg.indexOf('Hoje <') && pg.indexOf('Hoje <') < pg.indexOf('Mais adiante'), true);
-  t('área do FIN: botão + (novo lembrete do FIN), lápis da lista e aviso do alarme com a regra de 1 dia antes', /data-act="fin-new"/.test(pg) && /data-act="edit-list" data-id="lf"/.test(pg) && /mesmo com o app fechado/.test(pg) && /1 dia antes do vencimento, às 09:00/.test(pg), true);
+  t('área do Financeiro: só os lembretes do Financeiro, separados em Atrasados, Hoje e Mais adiante', /Parcela atrasada da Elisa/.test(pg) && /Conta do Financeiro hoje à noite/.test(pg) && /Parcela distante/.test(pg) && !/Consertar a torneira/.test(pg) && !/Comprar pilhas/.test(pg) && pg.indexOf('Atrasados') < pg.indexOf('Hoje <') && pg.indexOf('Hoje <') < pg.indexOf('Mais adiante'), true);
+  t('área do Financeiro: botão + (novo lembrete do Financeiro), lápis da lista e aviso do alarme com a regra de 1 dia antes', /data-act="fin-new"/.test(pg) && /data-act="edit-list" data-id="lf"/.test(pg) && /mesmo com o app fechado/.test(pg) && /1 dia antes do vencimento, às 09:00/.test(pg), true);
   // fluxo: Hoje → tile → área → Voltar para Hoje
   seed(L, R);
   q('#tab-hoje').click(); await wait(10);
   q('#main [data-act="go-rem"][data-v="fin"]').click(); await wait(20);
-  t('fluxo: tocar no atalho do Hoje abre a área do FIN, com Voltar para Hoje', ev('__NUCLEO_TEST__.S.tab') === 'lembretes' && ev('__NUCLEO_TEST__.S.rview') === 'fin' && !!q('#main [data-act="hj-back"]') && /Lembretes do FIN/.test(q('#main').textContent), true);
+  t('fluxo: tocar no atalho do Hoje abre a área do Financeiro, com Voltar para Hoje', ev('__NUCLEO_TEST__.S.tab') === 'lembretes' && ev('__NUCLEO_TEST__.S.rview') === 'fin' && !!q('#main [data-act="hj-back"]') && /Lembretes do Financeiro/.test(q('#main').textContent), true);
   q('#main [data-act="fin-new"]').click(); await wait(20);
-  t('novo lembrete do FIN: abre já na lista do FIN, às 09:00, prioridade média e com alarme na hora', ev(`(function(){const d=__NUCLEO_TEST__.S.sheet&&__NUCLEO_TEST__.S.sheet.draft;return !!d&&d.list==='lf'&&d.time==='09:00'&&d.priority===2&&d.alarms.length===1&&d.alarms[0].min===0;})()`), true);
+  t('novo lembrete do Financeiro: abre já na lista do Financeiro, às 09:00, prioridade média e com alarme na hora', ev(`(function(){const d=__NUCLEO_TEST__.S.sheet&&__NUCLEO_TEST__.S.sheet.draft;return !!d&&d.list==='lf'&&d.time==='09:00'&&d.priority===2&&d.alarms.length===1&&d.alarms[0].min===0;})()`), true);
   ev(`__NUCLEO_TEST__.S.sheet=null;`);
   q('#main [data-act="hj-back"]').click(); await wait(10);
   t('fluxo: Voltar leva para Hoje', ev('__NUCLEO_TEST__.S.tab') === 'hoje' && ev('__NUCLEO_TEST__.S.rview') === null, true);
-  // formulário da lista: caixa "Lista do FIN"
+  // formulário da lista: caixa "Lista do Financeiro"
   seed(L, R);
   ev(`__NUCLEO_TEST__.S.tab='hoje';`); q('#tab-lembretes').click(); await wait(10);
   ev(`__NUCLEO_TEST__.S.rview='fin';`); q('#tab-hoje').click(); q('#tab-lembretes').click(); await wait(10);
   ev(`__NUCLEO_TEST__.S.rview='fin';`);
   q('#tab-hoje').click(); ev(`__NUCLEO_TEST__.S.rview='fin';`); q('#tab-lembretes').click(); await wait(10);
   q('#main [data-act="edit-list"][data-id="lf"]').click(); await wait(20);
-  t('formulário da lista: caixa "Lista do FIN" marcada para a lista do FIN', !!q('#sheetRoot #f-fin') && q('#sheetRoot #f-fin').checked === true && /Lista do FIN: fica separada/.test(q('#sheetRoot').textContent), true);
+  t('formulário da lista: caixa "Lista do Financeiro" marcada para a lista do Financeiro', !!q('#sheetRoot #f-fin') && q('#sheetRoot #f-fin').checked === true && /Lista do Financeiro: fica separada/.test(q('#sheetRoot').textContent), true);
   ev(`__NUCLEO_TEST__.S.sheet=null;`);
   // sem a área: banner para criar
   seed([{ id: 'lc', name: 'Casa', color: '#5E8F6B', sections: [] }], [mk('c2', 'Comprar pilhas', '2099-02-01', '', '')]);
   const sem = TT.viewLembretes();
-  t('sem a área do FIN: o banner convida a criar', /data-act="fin-area-create"/.test(sem) && /Toque para criar/.test(sem), true);
+  t('sem a área do Financeiro: o banner convida a criar', /data-act="fin-area-create"/.test(sem) && /Toque para criar/.test(sem), true);
   ev(`__NUCLEO_TEST__.S.tab='hoje';`); q('#tab-lembretes').click(); await wait(10);
   q('#main [data-act="fin-area-create"]').click(); await wait(80);
-  t('criar a área: nasce a lista "FIN — vencimentos" marcada como do FIN e abre a área', ev(`__NUCLEO_TEST__.S.lists.some(l=>l.fin&&/FIN/.test(l.name))`) === true && ev('__NUCLEO_TEST__.S.rview') === 'fin', true);
+  t('criar a área: nasce a lista "Financeiro — vencimentos" marcada como do Financeiro e abre a área', ev(`__NUCLEO_TEST__.S.lists.some(l=>l.fin&&/Financeiro/.test(l.name))`) === true && ev('__NUCLEO_TEST__.S.rview') === 'fin', true);
   ev(`const S=__NUCLEO_TEST__.S;S.tab='hoje';S.rview=null;S.lists=[];S.reminders=[];S.raw={reminders:[],lists:[],notes:[],folders:[],events:[],inbox:[]};S.conf='all';`);
 })());
 
-// --- Scanner dentro do app: tela, páginas, PDF, Notas e Enviar ao FIN (v54) ---
+// --- Scanner dentro do app: tela, páginas, PDF, Notas e Enviar ao Financeiro (v54) ---
 const __prevP4 = Promise.all((global.__pend || []).slice());
 global.__pend.push((async () => {
   await __prevP4;
   const doc = w.document, q = s => doc.querySelector(s), wait = ms => new Promise(r => setTimeout(r, ms)), TT = w.__NUCLEO_TEST__;
   t('entrada de arquivo já digitalizado: aceita PDF e imagem e NÃO força a câmera', !!q('#fileScan') && q('#fileScan').accept === 'application/pdf,image/*' && !q('#fileScan').hasAttribute('capture'), true);
-  // Enviar ao FIN
+  // Enviar ao Financeiro
   TT.Supa.sess = { access: 'a.b.c', refresh: 'r', exp: Date.now() + 3600000 };
   TT.finSend();
-  t('Enviar ao FIN: botão Escanear documento (em destaque) com a explicação, e o botão Arquivo continua', /Escanear documento/.test(q('#finScan').textContent) && /acha as bordas do papel/.test(q('#finSend').textContent) && !q('#finFscan') && !!q('#finDoc'), true);
+  t('Enviar ao Financeiro: botão Escanear documento (em destaque) com a explicação, e o botão Arquivo continua', /Escanear documento/.test(q('#finScan').textContent) && /acha as bordas do papel/.test(q('#finSend').textContent) && !q('#finFscan') && !!q('#finDoc'), true);
   q('#finScan').click(); await wait(10);
-  t('Enviar ao FIN: Escanear documento abre a tela do scanner por cima (câmera traseira ou foto da galeria)', !!q('#scanUI') && !!q('#scCam') && !!q('#scLib') && /Escanear documento/.test(q('#scanUI').textContent) && q('#scFcam').getAttribute('capture') === 'environment' && q('#scFlib').accept === 'image/*' && !q('#scFlib').hasAttribute('capture'), true);
+  t('Enviar ao Financeiro: Escanear documento abre a tela do scanner por cima (câmera traseira ou foto da galeria)', !!q('#scanUI') && !!q('#scCam') && !!q('#scLib') && /Escanear documento/.test(q('#scanUI').textContent) && q('#scFcam').getAttribute('capture') === 'environment' && q('#scFlib').accept === 'image/*' && !q('#scFlib').hasAttribute('capture'), true);
   q('#scBack').click(); await wait(10);
   t('scanner: Voltar sem páginas fecha direto', !q('#scanUI'), true);
   const jp = ev(`(function(){const a=new Uint8Array(200);a[0]=0xFF;a[1]=0xD8;a[198]=0xFF;a[199]=0xD9;return a;})()`);
@@ -1080,7 +1080,7 @@ global.__pend.push((async () => {
   t('esqueci a senha: Voltar volta ao teclado sem apagar nada', doc.getElementById('lkFg').style.display === 'none' && TT.lkOn() === true, true);
   w.localStorage.setItem('nucleo-sess', '{"a":1}'); w.localStorage.setItem('fin-sess', '{"b":2}'); w.localStorage.setItem('nucleo-cache', 'dados'); w.localStorage.setItem('fin-cache', 'dados');
   await TT.lkKey('forgot'); await TT.lkKey('forgot-ok');
-  t('esqueci a senha: apaga a senha e as duas sessões (Núcleo e FIN) e as cópias guardadas, e recarrega', !TT.lkOn() && w.localStorage.getItem('nucleo-sess') === '' && w.localStorage.getItem('fin-sess') === '' && w.localStorage.getItem('nucleo-cache') === '' && w.localStorage.getItem('fin-cache') === '' && ev('window.__reloads') === 1, true);
+  t('esqueci a senha: apaga a senha e as duas sessões (Núcleo e Financeiro) e as cópias guardadas, e recarrega', !TT.lkOn() && w.localStorage.getItem('nucleo-sess') === '' && w.localStorage.getItem('fin-sess') === '' && w.localStorage.getItem('nucleo-cache') === '' && w.localStorage.getItem('fin-cache') === '' && ev('window.__reloads') === 1, true);
   // voltar do segundo plano
   limpa(); await TT.lkSetPin('123456'); TT.lkOpen('unlock'); await keys('123456');
   const realNow = w.Date.now;

@@ -1,4 +1,4 @@
-/* Testes do FIN (fin/index.html) em navegador simulado. Rodar: node run_fin.js (ou npm test) */
+/* Testes do Financeiro (fin/index.html) em navegador simulado. Rodar: node run_fin.js (ou npm test) */
 const fs = require('fs'), path = require('path');
 const { JSDOM, VirtualConsole } = require('jsdom');
 const html = fs.readFileSync(path.join(__dirname, '..', 'fin', 'index.html'), 'utf8');
@@ -175,7 +175,7 @@ const count = (h, s) => h.split(s).length - 1;
   t('pendente só de texto: não mostra área de documento', !doc.querySelector('.modal [data-vf]') && !/não lê a foto sozinho/.test(doc.querySelector('.modal').textContent), true);
   click(doc.querySelector('.modal .mback'));
   ev(`reviewProp(S.recs.find(r=>r.id==='p1'))`);
-  t('pendente com documento: um botão Ver para cada arquivo e o aviso de que o FIN não lê sozinho', doc.querySelectorAll('.modal [data-vf]').length === 2 && /não lê a foto sozinho/.test(doc.querySelector('.modal').textContent) && /Ver boleto\.pdf/.test(doc.querySelector('.modal').textContent), true);
+  t('pendente com documento: um botão Ver para cada arquivo e o aviso de que o Financeiro não lê sozinho', doc.querySelectorAll('.modal [data-vf]').length === 2 && /não lê a foto sozinho/.test(doc.querySelector('.modal').textContent) && /Ver boleto\.pdf/.test(doc.querySelector('.modal').textContent), true);
   click(doc.querySelector('.modal [data-vf="0"]')); await wait(30);
   const vmods = doc.querySelectorAll('.modal');
   t('ver documento PDF: abre outra janela com Abrir em tela cheia e Voltar no topo', vmods.length === 2 && /Abrir em tela cheia/.test(vmods[1].textContent) && !vmods[1].querySelector('img.vf-img') && !!vmods[1].querySelector('.mback'), true);
@@ -221,12 +221,12 @@ const count = (h, s) => h.split(s).length - 1;
       R2('dd','debt',{creditor:'Sem dia de vencimento',balanceC:5000,installC:1000,status:'ATIVA',holder:'MARCELO',payer:'MARCELO'})];`);
   await ev('syncFinReminders()');
   const lists = items.filter(i => i.kind === 'list'), rems = items.filter(i => i.kind === 'reminder');
-  t('lembretes automáticos: cria a lista do FIN (marcada fin) e 1 lembrete por dívida com vencimento (a pagar e a receber), nenhum para a quitada nem para a sem dia', lists.length === 1 && lists[0].data.fin === true && rems.length === 2 && !!remOf('da') && !!remOf('db') && !remOf('dc') && !remOf('dd'), true);
+  t('lembretes automáticos: cria a lista do Financeiro (marcada fin) e 1 lembrete por dívida com vencimento (a pagar e a receber), nenhum para a quitada nem para a sem dia', lists.length === 1 && lists[0].data.fin === true && rems.length === 2 && !!remOf('da') && !!remOf('db') && !remOf('dc') && !remOf('dd'), true);
   const ra = remOf('da').data;
-  t('lembrete da dívida a pagar: 1 dia antes do vencimento, às 09:00, todo mês, 12 vezes, alarme na hora, na lista do FIN', ra.date === ev(`isoMinus1('${dd(16)}')`) && ra.time === '09:00' && ra.repeat === 'monthly' && ra.repTimes === 12 && ra.alarms.length === 1 && ra.alarms[0].min === 0 && ra.list === lists[0].data._id && ra.finRef === 'da' && ra.priority === 2, true);
+  t('lembrete da dívida a pagar: 1 dia antes do vencimento, às 09:00, todo mês, 12 vezes, alarme na hora, na lista do Financeiro', ra.date === ev(`isoMinus1('${dd(16)}')`) && ra.time === '09:00' && ra.repeat === 'monthly' && ra.repTimes === 12 && ra.alarms.length === 1 && ra.alarms[0].min === 0 && ra.list === lists[0].data._id && ra.finRef === 'da' && ra.priority === 2, true);
   t('lembrete da dívida a pagar: título com o credor, o valor da parcela e o dia', /^Pagar parcela — Banco A · R\$ 100,00 \(vence dia 16\)$/.test(ra.title) && /1 dia antes do vencimento/.test(ra.notes), true);
   const rb = remOf('db').data;
-  t('lembrete da dívida a receber: "Receber de…", mesma regra (1 dia antes, 09:00, alarme)', /^Receber de Fulano devolve · R\$ 100,00 \(vence dia 20\)$/.test(rb.title) && rb.time === '09:00' && rb.alarms[0].min === 0 && rb.date === ev(`remSpecForDebt(S.recs.find(r=>r.id==='db')).date`) && /marque no FIN: Mês › a parcela › Marcar como recebida/.test(rb.notes), true);
+  t('lembrete da dívida a receber: "Receber de…", mesma regra (1 dia antes, 09:00, alarme)', /^Receber de Fulano devolve · R\$ 100,00 \(vence dia 20\)$/.test(rb.title) && rb.time === '09:00' && rb.alarms[0].min === 0 && rb.date === ev(`remSpecForDebt(S.recs.find(r=>r.id==='db')).date`) && /marque no Financeiro: Mês › a parcela › Marcar como recebida/.test(rb.notes), true);
   const m0 = mut(); await ev('syncFinReminders()');
   t('conferir de novo não cria nem muda nada (sem duplicar)', mut() === m0 && items.filter(i => i.kind === 'reminder').length === 2, true);
   t('a dívida mostra que tem lembrete no Núcleo', /Lembrete no Núcleo: 1 dia antes/.test(ev('vDebts()')), true);
@@ -239,13 +239,13 @@ const count = (h, s) => h.split(s).length - 1;
   ev(`S.recs.find(r=>r.id==='da').data.dueDay=10`);
   await ev('syncFinReminders()');
   t('mudou o dia do vencimento: o lembrete vai para 1 dia antes do novo dia', remOf('da').data.date === ev(`isoMinus1('${dd(10)}')`) && /vence dia 10/.test(remOf('da').data.title), true);
-  // avançar com a parcela paga no FIN
+  // avançar com a parcela paga no Financeiro
   ev(`S.recs.find(r=>r.id==='da').data.firstDue='';S.recs.find(r=>r.id==='da').data.dueDay=16`);
   await ev('syncFinReminders()');
   const dtAntes = remOf('da').data.date;
   await ev(`bumpFinReminder('da','${dtAntes.slice(0, 7)}',S.recs.find(r=>r.id==='da').data)`);
   const dep = remOf('da').data;
-  t('parcela marcada como paga no FIN: o lembrete anda um mês e conta 1', dep.repDone === 1 && dep.date === ev(`dateOf(addMonths('${dtAntes.slice(0, 7)}',1),${+dtAntes.slice(8, 10)})`), true);
+  t('parcela marcada como paga no Financeiro: o lembrete anda um mês e conta 1', dep.repDone === 1 && dep.date === ev(`dateOf(addMonths('${dtAntes.slice(0, 7)}',1),${+dtAntes.slice(8, 10)})`), true);
   await ev(`bumpFinReminder('da','${dtAntes.slice(0, 7)}',S.recs.find(r=>r.id==='da').data)`);
   t('marcar de novo o mesmo mês não faz o lembrete andar duas vezes', remOf('da').data.repDone === 1, true);
   // dívida quitada ou apagada: o lembrete sai
@@ -258,14 +258,14 @@ const count = (h, s) => h.split(s).length - 1;
   await ev('syncFinReminders()');
   remOf('de').data.done = true;
   await ev('syncFinReminders()');
-  t('lembrete concluído mas a dívida ainda deve: o FIN reabre com a data certa', remOf('de').data.done === false && remOf('de').data.repDone === 0, true);
+  t('lembrete concluído mas a dívida ainda deve: o Financeiro reabre com a data certa', remOf('de').data.done === false && remOf('de').data.repDone === 0, true);
   // sem internet / erro: não quebra e avisa no Início
   w.__restFail = true; ev(`S.remErr='';`);
   await ev('syncFinReminders()');
   t('erro ao falar com o Núcleo: não quebra e o Início avisa', /Não consegui conferir os lembretes no Núcleo/.test(ev('vHome()')), true);
   w.__restFail = false; ev(`S.remErr='';`);
   t('as gravações de dívida e o carregamento chamam a conferência (ganchos no Api)', /if\(kind==='debt'\)finSyncSoon\(true\)/.test(html) && /if\(rec\.kind==='debt'\)finSyncSoon\(true\)/.test(html) && /finSyncSoon\(false\)/.test(html) && /bumpFinReminder\(rec\.id,ym,x\)/.test(html), true);
-  // ---- desfazer discreto no FIN
+  // ---- desfazer discreto no Financeiro
   ev(`window.__srv=[{id:'u1',kind:'debt',version:1,data:{creditor:'Banco Teste',balanceC:100000,installC:10000,dueDay:10,status:'ATIVA',holder:'MARCELO',payer:'MARCELO',paidYm:[]}}];
     Api.rest=async(p,o)=>{
       const m=/fin_records\\?id=eq\\.([^&]+)/.exec(p);
@@ -276,35 +276,35 @@ const count = (h, s) => h.split(s).length - 1;
   const tapU = () => doc.body.dispatchEvent(new w.MouseEvent('click', { bubbles: true }));
   const srv = () => ev('window.__srv[0]');
   ev('U.stack.length=0;U.userAt=0');
-  t('FIN desfazer: o botão ↶ existe no cabeçalho, escondido enquanto não há o que desfazer', !!doc.querySelector('#app header.hd [data-undobtn]') && doc.querySelector('#app [data-undobtn]').style.display === 'none', true);
+  t('Financeiro desfazer: o botão ↶ existe no cabeçalho, escondido enquanto não há o que desfazer', !!doc.querySelector('#app header.hd [data-undobtn]') && doc.querySelector('#app [data-undobtn]').style.display === 'none', true);
   ev('U.userAt=0');
   await ev(`Api.update(S.recs[0],Object.assign({},S.recs[0].data,{notas:'auto'}))`); await wait(450);
-  t('FIN desfazer: mudança que não veio de um toque seu não entra na lista', ev('U.stack.length'), 0);
+  t('Financeiro desfazer: mudança que não veio de um toque seu não entra na lista', ev('U.stack.length'), 0);
   tapU();
   await ev(`Api.update(S.recs[0],Object.assign({},S.recs[0].data,{paidYm:['2030-01']}))`); await wait(450);
   ev('render()');
-  t('FIN desfazer: marcar uma parcela como paga entra com o nome da dívida', ev('U.stack.length') === 1 && ev('U.stack[0].label') === 'Marcar parcela como paga «Banco Teste»', true);
+  t('Financeiro desfazer: marcar uma parcela como paga entra com o nome da dívida', ev('U.stack.length') === 1 && ev('U.stack[0].label') === 'Marcar parcela como paga «Banco Teste»', true);
   const ub = doc.querySelector('#app [data-undobtn]');
-  t('FIN desfazer: o botão aparece, redondo, e diz o que desfaz', ub.style.display === '' && ub.classList.contains('ibtn') && /Desfazer: Marcar parcela como paga/.test(ub.getAttribute('aria-label')), true);
+  t('Financeiro desfazer: o botão aparece, redondo, e diz o que desfaz', ub.style.display === '' && ub.classList.contains('ibtn') && /Desfazer: Marcar parcela como paga/.test(ub.getAttribute('aria-label')), true);
   click(ub); await wait(30);
-  t('FIN desfazer: tocar abre a pergunta com o que será desfeito, sem desfazer ainda', !!doc.querySelector('.modal #cf-ok') && /Marcar parcela como paga/.test(doc.querySelector('.modal').textContent) && srv().data.paidYm.length === 1, true);
+  t('Financeiro desfazer: tocar abre a pergunta com o que será desfeito, sem desfazer ainda', !!doc.querySelector('.modal #cf-ok') && /Marcar parcela como paga/.test(doc.querySelector('.modal').textContent) && srv().data.paidYm.length === 1, true);
   click(doc.querySelector('.modal #cf-no')); await wait(30);
-  t('FIN desfazer: Voltar não desfaz nada', srv().data.paidYm.length === 1 && ev('U.stack.length') === 1, true);
+  t('Financeiro desfazer: Voltar não desfaz nada', srv().data.paidYm.length === 1 && ev('U.stack.length') === 1, true);
   click(doc.querySelector('#app [data-undobtn]')); await wait(30); click(doc.querySelector('.modal #cf-ok')); await wait(80);
-  t('FIN desfazer: confirmando, a parcela volta a não paga e a fila esvazia (botão some)', srv().data.paidYm.length === 0 && ev('U.stack.length') === 0 && doc.querySelector('#app [data-undobtn]').style.display === 'none', true);
+  t('Financeiro desfazer: confirmando, a parcela volta a não paga e a fila esvazia (botão some)', srv().data.paidYm.length === 0 && ev('U.stack.length') === 0 && doc.querySelector('#app [data-undobtn]').style.display === 'none', true);
   tapU();
   await ev(`Api.update(S.recs[0],Object.assign({},S.recs[0].data,{ord:1000}))`); await wait(450);
-  t('FIN desfazer: mudar só a ordem entra como "Mudar a ordem"', ev('U.stack[0].label'), 'Mudar a ordem');
+  t('Financeiro desfazer: mudar só a ordem entra como "Mudar a ordem"', ev('U.stack[0].label'), 'Mudar a ordem');
   ev('U.stack.length=0');
   tapU();
   await ev(`Api.remove(S.recs[0])`); await wait(450);
-  t('FIN desfazer: apagar entra como "Apagar dívida" com o nome', ev('U.stack.length') === 1 && ev('U.stack[0].label') === 'Apagar dívida «Banco Teste»' && !!srv().deleted_at && ev('S.recs.length') === 0, true);
+  t('Financeiro desfazer: apagar entra como "Apagar dívida" com o nome', ev('U.stack.length') === 1 && ev('U.stack[0].label') === 'Apagar dívida «Banco Teste»' && !!srv().deleted_at && ev('S.recs.length') === 0, true);
   ev('render()');
   click(doc.querySelector('#app [data-undobtn]')); await wait(30); click(doc.querySelector('.modal #cf-ok')); await wait(80);
-  t('FIN desfazer: desfazer o apagar traz a dívida de volta (no servidor e na tela), com os dados de antes', !srv().deleted_at && ev('S.recs.length') === 1 && ev('S.recs[0].data.creditor') === 'Banco Teste' && ev('S.recs[0].data.balanceC') === 100000, true);
+  t('Financeiro desfazer: desfazer o apagar traz a dívida de volta (no servidor e na tela), com os dados de antes', !srv().deleted_at && ev('S.recs.length') === 1 && ev('S.recs[0].data.creditor') === 'Banco Teste' && ev('S.recs[0].data.balanceC') === 100000, true);
   ev('U.stack.length=0;U.userAt=0');
   ev(`Api.rest=Api.rest;S.tab='home';render();`);
-  // ---- ordenar e arrastar no FIN
+  // ---- ordenar e arrastar no Financeiro
   ev(`Api.update=async(rec,data)=>{rec.data=data;return rec;}`);
   try { w.localStorage.removeItem('ord-sort'); } catch (e) {}
   ev(`const R2=(id,kind,data)=>({id,kind,version:1,data});
@@ -317,27 +317,27 @@ const count = (h, s) => h.split(s).length - 1;
       R2('c2','card',{name:'Cartão Alfa',last4:'2222',limitC:100000,closeDay:10,dueDay:17,holder:'MARCELO'})];
     S.remErr='';render();`);
   const drows = (gk) => Array.from(doc.querySelectorAll('#app [data-rgroup="' + gk + '"] > [data-rid]')).map(e => e.getAttribute('data-rid')).join('');
-  t('FIN dívidas: cada seção é um grupo arrastável (a pagar, a receber) com a barra "Ordem" e as linhas marcadas', drows('debts:pagar') === 'x1x2x3' && drows('debts:receber') === 'x4' && doc.querySelectorAll('#app [data-sortbtn]').length === 1 && !doc.querySelector('#app .sortbar'), true);
+  t('Financeiro dívidas: cada seção é um grupo arrastável (a pagar, a receber) com a barra "Ordem" e as linhas marcadas', drows('debts:pagar') === 'x1x2x3' && drows('debts:receber') === 'x4' && doc.querySelectorAll('#app [data-sortbtn]').length === 1 && !doc.querySelector('#app .sortbar'), true);
   click(doc.querySelector('#app [data-sortbtn]')); await wait(20);
   const oc = (txt) => Array.from(doc.querySelectorAll('.modal [data-opt]')).find(b => b.textContent.indexOf(txt) >= 0);
-  t('FIN: a barra abre a escolha com Padrão, datas, A→Z, Z→A e Minha ordem, com Voltar no topo', ['Padrão', 'Data: mais recentes', 'Data: mais antigas', 'A → Z', 'Z → A', 'Minha ordem'].every(x => !!oc(x)) && !!doc.querySelector('.modal .mback'), true);
+  t('Financeiro: a barra abre a escolha com Padrão, datas, A→Z, Z→A e Minha ordem, com Voltar no topo', ['Padrão', 'Data: mais recentes', 'Data: mais antigas', 'A → Z', 'Z → A', 'Minha ordem'].every(x => !!oc(x)) && !!doc.querySelector('.modal .mback'), true);
   click(oc('A → Z')); await wait(30);
-  t('FIN dívidas: A → Z (Alfa, Banco, Zeta)', drows('debts:pagar') === 'x2x1x3' && !doc.querySelector('#app [data-sortbtn]').classList.contains('on'), true);
+  t('Financeiro dívidas: A → Z (Alfa, Banco, Zeta)', drows('debts:pagar') === 'x2x1x3' && !doc.querySelector('#app [data-sortbtn]').classList.contains('on'), true);
   click(doc.querySelector('#app [data-sortbtn]')); await wait(20); click(oc('Data: mais antigas')); await wait(30);
   const ordemData = drows('debts:pagar');
-  t('FIN dívidas: por data usa o próximo vencimento (mais antigas = vence antes primeiro)', ['x2', 'x3', 'x1'].every(id => ordemData.indexOf(id) >= 0) && ordemData.indexOf('x2') < ordemData.indexOf('x1') && ordemData.indexOf('x3') < ordemData.indexOf('x1') || ordemData.length === 6, true);
+  t('Financeiro dívidas: por data usa o próximo vencimento (mais antigas = vence antes primeiro)', ['x2', 'x3', 'x1'].every(id => ordemData.indexOf(id) >= 0) && ordemData.indexOf('x2') < ordemData.indexOf('x1') && ordemData.indexOf('x3') < ordemData.indexOf('x1') || ordemData.length === 6, true);
   click(doc.querySelector('#app [data-sortbtn]')); await wait(20); click(oc('Minha ordem')); await wait(80);
-  t('FIN: Minha ordem dá número de ordem a todas as dívidas do grupo, sem perder nenhum dado', ev(`S.recs.filter(r=>r.id==='x1'||r.id==='x2'||r.id==='x3').every(r=>typeof r.data.ord==='number'&&r.data.creditor&&r.data.balanceC)`) === true, true);
+  t('Financeiro: Minha ordem dá número de ordem a todas as dívidas do grupo, sem perder nenhum dado', ev(`S.recs.filter(r=>r.id==='x1'||r.id==='x2'||r.id==='x3').every(r=>typeof r.data.ord==='number'&&r.data.creditor&&r.data.balanceC)`) === true, true);
   const sel = ev(`roFind(document.querySelector('#app [data-rgroup="debts:pagar"] [data-rid="x3"]'))`);
   ev(`roBegin(roFind(document.querySelector('#app [data-rgroup="debts:pagar"] [data-rid="x3"]')))`); await ev('roEnd()');
-  t('FIN: segurar sem arrastar mostra a barra de botões e destaca a dívida', !!doc.querySelector('#roBar') && doc.querySelector('#app [data-rid="x3"]').classList.contains('ro-sel'), true);
+  t('Financeiro: segurar sem arrastar mostra a barra de botões e destaca a dívida', !!doc.querySelector('#roBar') && doc.querySelector('#app [data-rid="x3"]').classList.contains('ro-sel'), true);
   const antes = drows('debts:pagar');
   await ev(`roBtn('first')`); await wait(60);
-  t('FIN: botão Primeiro leva a dívida para o começo e grava a ordem em data.ord', drows('debts:pagar')[1] !== undefined && drows('debts:pagar').slice(0, 2) === 'x3' && ev(`S.recs.find(r=>r.id==='x3').data.ord`) < ev(`Math.min(S.recs.find(r=>r.id==='x1').data.ord,S.recs.find(r=>r.id==='x2').data.ord)`), true);
+  t('Financeiro: botão Primeiro leva a dívida para o começo e grava a ordem em data.ord', drows('debts:pagar')[1] !== undefined && drows('debts:pagar').slice(0, 2) === 'x3' && ev(`S.recs.find(r=>r.id==='x3').data.ord`) < ev(`Math.min(S.recs.find(r=>r.id==='x1').data.ord,S.recs.find(r=>r.id==='x2').data.ord)`), true);
   await ev(`roBtn('last')`); await wait(60);
-  t('FIN: botão Último leva para o fim', drows('debts:pagar').slice(-2) === 'x3', true);
+  t('Financeiro: botão Último leva para o fim', drows('debts:pagar').slice(-2) === 'x3', true);
   await ev(`roBtn('done')`);
-  t('FIN: Pronto fecha a barra', !doc.querySelector('#roBar'), true);
+  t('Financeiro: Pronto fecha a barra', !doc.querySelector('#roBar'), true);
   // arrastar com posições simuladas
   const g = doc.querySelector('#app [data-rgroup="debts:pagar"]');
   Array.from(g.children).forEach(c => { c.getBoundingClientRect = () => { const i = Array.from(g.children).indexOf(c); return { top: i * 100, height: 100, bottom: i * 100 + 100, left: 0, right: 300, width: 300 }; }; });
@@ -345,37 +345,37 @@ const count = (h, s) => h.split(s).length - 1;
   ev(`roBegin(roFind(document.querySelector('#app [data-rgroup="debts:pagar"] [data-rid="${primeiro}"]')))`);
   ev(`roMove(260)`);
   await ev('roEnd()'); await wait(80);
-  t('FIN: arrastar a primeira dívida para o fim muda a ordem e grava', drows('debts:pagar') !== ini && drows('debts:pagar').slice(-2) === primeiro, true);
+  t('Financeiro: arrastar a primeira dívida para o fim muda a ordem e grava', drows('debts:pagar') !== ini && drows('debts:pagar').slice(-2) === primeiro, true);
   await wait(700); await ev(`roBtn('done')`);
   // cartões
   ev(`S.tab='cards';S.cardId=null;render();`);
-  t('FIN cartões: grupo arrastável com a barra "Ordem"', drows('cards') === 'c1c2' && !!doc.querySelector('#app [data-sortbtn]'), true);
+  t('Financeiro cartões: grupo arrastável com a barra "Ordem"', drows('cards') === 'c1c2' && !!doc.querySelector('#app [data-sortbtn]'), true);
   click(doc.querySelector('#app [data-sortbtn]')); await wait(20); click(oc('A → Z')); await wait(30);
-  t('FIN cartões: A → Z (Cartão Alfa antes de Cartão Zeta)', drows('cards') === 'c2c1', true);
+  t('Financeiro cartões: A → Z (Cartão Alfa antes de Cartão Zeta)', drows('cards') === 'c2c1', true);
   // planilha do mês: ordenar a tabela (sem arrastar)
   ev(`const ymx=ymOf(todayIso());const R3=(id,kind,data)=>({id,kind,version:1,data});S.tab='bills';S.mm=null;S.mf='all';
     S.recs=[R3('b1','bill',{name:'Zeta conta',dueDay:3,variable:false,amountC:1000,recurring:false,holder:'MARCELO',account:'',startYm:ymx}),R3('m1','billmonth',{billId:'b1',ym:ymx,amountC:1000,paidAt:null}),
       R3('b2','bill',{name:'Alfa conta',dueDay:28,variable:false,amountC:2000,recurring:false,holder:'MARCELO',account:'',startYm:ymx}),R3('m2','billmonth',{billId:'b2',ym:ymx,amountC:2000,paidAt:null})];render();`);
   const mrows = () => Array.from(doc.querySelectorAll('#app .tbl button.tr')).map(e => /Alfa/.test(e.textContent) ? 'A' : 'Z').join('');
-  t('FIN mês: por padrão a tabela vai por data; a barra "Ordem" aparece e a tabela não é arrastável', mrows() === 'ZA' && !!doc.querySelector('#app [data-sortbtn]') && !doc.querySelector('#app .tbl [data-rid]'), true);
+  t('Financeiro mês: por padrão a tabela vai por data; a barra "Ordem" aparece e a tabela não é arrastável', mrows() === 'ZA' && !!doc.querySelector('#app [data-sortbtn]') && !doc.querySelector('#app .tbl [data-rid]'), true);
   click(doc.querySelector('#app [data-sortbtn]')); await wait(20);
-  t('FIN mês: a escolha de ordem não oferece "Minha ordem" (a tabela mistura contas, faturas e parcelas)', !oc('Minha ordem') && !!oc('A → Z'), true);
+  t('Financeiro mês: a escolha de ordem não oferece "Minha ordem" (a tabela mistura contas, faturas e parcelas)', !oc('Minha ordem') && !!oc('A → Z'), true);
   click(oc('A → Z')); await wait(30);
-  t('FIN mês: A → Z põe "Alfa conta" primeiro', mrows() === 'AZ', true);
-  t('FIN: o botão Ordenar é redondo e fica no canto do título (↕), sempre na cor padrão', !!doc.querySelector('#app header.hd .ibtn[data-sortbtn]') && doc.querySelector('#app header.hd .ibtn[data-sortbtn]').textContent === '↕' && !doc.querySelector('#app header.hd .ibtn[data-sortbtn]').classList.contains('on') && !doc.querySelector('#app .sortbar'), true);
+  t('Financeiro mês: A → Z põe "Alfa conta" primeiro', mrows() === 'AZ', true);
+  t('Financeiro: o botão Ordenar é redondo e fica no canto do título (↕), sempre na cor padrão', !!doc.querySelector('#app header.hd .ibtn[data-sortbtn]') && doc.querySelector('#app header.hd .ibtn[data-sortbtn]').textContent === '↕' && !doc.querySelector('#app header.hd .ibtn[data-sortbtn]').classList.contains('on') && !doc.querySelector('#app .sortbar'), true);
   try { w.localStorage.removeItem('ord-sort'); } catch (e) {}
-  // ---- backup automático e ordem sincronizada no FIN
+  // ---- backup automático e ordem sincronizada no Financeiro
   ev(`window.__rest=[];Api.rest=async(p,o)=>{window.__rest.push([p,(o&&o.method)||'GET']);
     if(/backups\\?select=id/.test(p))return {ok:true,json:async()=>[{id:'b1',taken_at:new Date().toISOString(),n_items:78,motivo:'diario'}]};
     if(/rpc\\/backup_agora/.test(p))return {ok:true,json:async()=>'x'};
     return {ok:true,json:async()=>[]};};`);
   const bb = ev('backupBlock()');
-  t('FIN: o bloco de cópia tem o status do backup automático e os botões Fazer backup agora e Baixar o último', /id="bkAuto"/.test(bb) && /data-act="bk-now"/.test(bb) && /data-act="bk-down"/.test(bb), true);
+  t('Financeiro: o bloco de cópia tem o status do backup automático e os botões Fazer backup agora e Baixar o último', /id="bkAuto"/.test(bb) && /data-act="bk-now"/.test(bb) && /data-act="bk-down"/.test(bb), true);
   const holder = doc.createElement('p'); holder.id = 'bkAuto'; doc.body.appendChild(holder);
   await ev('bkRefresh()');
-  t('FIN: o status mostra a hora do último backup automático e quantos itens', /Último backup automático: hoje às \d\d:\d\d \(78 itens\)\./.test(holder.textContent), true);
+  t('Financeiro: o status mostra a hora do último backup automático e quantos itens', /Último backup automático: hoje às \d\d:\d\d \(78 itens\)\./.test(holder.textContent), true);
   await ev('bkNow()'); await wait(30);
-  t('FIN: Fazer backup agora chama o servidor', ev(`window.__rest.some(x=>/rpc\\/backup_agora/.test(x[0])&&x[1]==='POST')`), true);
+  t('Financeiro: Fazer backup agora chama o servidor', ev(`window.__rest.some(x=>/rpc\\/backup_agora/.test(x[0])&&x[1]==='POST')`), true);
   holder.remove();
   try { w.localStorage.removeItem('ord-sort'); w.localStorage.removeItem('ord-sort-t'); } catch (e) {}
   ev(`window.__criou=[];window.__atual=[];Api.create=async(kind,data)=>{window.__criou.push([kind,data]);const r={id:'cfg9',kind,version:1,data};S.recs.push(r);return r;};
@@ -384,46 +384,46 @@ const count = (h, s) => h.split(s).length - 1;
   ev(`roSetPref('debts:pagar','za')`);
   await wait(1700);
   const cr = ev('window.__criou[0]');
-  t('FIN: escolher uma ordem cria o registro de configuração na nuvem (com a data da escolha)', cr && cr[0] === 'proposal' && cr[1].cfg === 'sortprefs' && cr[1].prefs['debts:pagar'].m === 'za', true);
+  t('Financeiro: escolher uma ordem cria o registro de configuração na nuvem (com a data da escolha)', cr && cr[0] === 'proposal' && cr[1].cfg === 'sortprefs' && cr[1].prefs['debts:pagar'].m === 'za', true);
   ev(`roSetPref('cards','az')`);
   await wait(1700);
-  t('FIN: a segunda escolha atualiza o mesmo registro (não cria outro)', ev('window.__criou.length') === 1 && ev('window.__atual.length') >= 1 && ev(`window.__atual[window.__atual.length-1].prefs.cards.m`) === 'az', true);
+  t('Financeiro: a segunda escolha atualiza o mesmo registro (não cria outro)', ev('window.__criou.length') === 1 && ev('window.__atual.length') >= 1 && ev(`window.__atual[window.__atual.length-1].prefs.cards.m`) === 'az', true);
   try { w.localStorage.removeItem('ord-sort'); w.localStorage.removeItem('ord-sort-t'); } catch (e) {}
   ev(`S.recs=[{id:'cfg9',kind:'proposal',version:5,data:{cfg:'sortprefs',prefs:{'cards':{m:'za',t:Date.now()+9000}}}}];`);
   await ev('ordPull()');
-  t('FIN: em outro aparelho a escolha vinda da nuvem passa a valer', ev(`roPrefs()['cards']`), 'za');
+  t('Financeiro: em outro aparelho a escolha vinda da nuvem passa a valer', ev(`roPrefs()['cards']`), 'za');
   try { w.localStorage.removeItem('ord-sort'); w.localStorage.removeItem('ord-sort-t'); } catch (e) {}
-  // ---- tamanho do texto no FIN
+  // ---- tamanho do texto no Financeiro
   try { w.localStorage.removeItem('fin-fs'); } catch (e) {}
   ev(`fsApply()`);
   const fb = ev('fsBlock()');
-  t('FIN: bloco Tamanho do texto com Normal, Grande, Maior e Máximo, e Grande marcado por padrão', ['Normal', 'Grande', 'Maior', 'Máximo'].every(x => fb.indexOf('>' + x + '<') >= 0) && /data-v="20" aria-pressed="true"/.test(fb) && doc.documentElement.style.fontSize === '20px', true);
+  t('Financeiro: bloco Tamanho do texto com Normal, Grande, Maior e Máximo, e Grande marcado por padrão', ['Normal', 'Grande', 'Maior', 'Máximo'].every(x => fb.indexOf('>' + x + '<') >= 0) && /data-v="20" aria-pressed="true"/.test(fb) && doc.documentElement.style.fontSize === '20px', true);
   ev(`S.tab='cfg';render();`);
   click(doc.querySelector('#app [data-act="set-fs"][data-v="26"]')); await wait(20);
-  t('FIN: tocar em Máximo aumenta a letra do app inteiro (26 px) e guarda a escolha', doc.documentElement.style.fontSize === '26px' && w.localStorage.getItem('fin-fs') === '26' && /data-v="26" aria-pressed="true"/.test(doc.querySelector('#app').innerHTML), true);
+  t('Financeiro: tocar em Máximo aumenta a letra do app inteiro (26 px) e guarda a escolha', doc.documentElement.style.fontSize === '26px' && w.localStorage.getItem('fin-fs') === '26' && /data-v="26" aria-pressed="true"/.test(doc.querySelector('#app').innerHTML), true);
   try { w.localStorage.setItem('fin-fs', 'abc'); } catch (e) {}
   ev(`fsApply()`);
-  t('FIN: valor estranho guardado volta para Grande (20 px)', doc.documentElement.style.fontSize === '20px', true);
+  t('Financeiro: valor estranho guardado volta para Grande (20 px)', doc.documentElement.style.fontSize === '20px', true);
   try { w.localStorage.removeItem('fin-fs'); } catch (e) {}
   ev(`fsApply()`);
-  // ---- senha (PIN) no FIN
+  // ---- senha (PIN) no Financeiro
   try { Object.defineProperty(w, 'crypto', { value: require('crypto').webcrypto, configurable: true }); } catch (e) {}
   w.TextEncoder = require('util').TextEncoder;
   const limpaPin = () => { ['hash', 'salt', 'at', 'fails', 'until', 'cred'].forEach(k => w.localStorage.removeItem('lock-' + k)); };
   limpaPin();
   ev(`S.tab='cfg';render();`);
-  t('FIN: a tela Ajustes tem o bloco "Senha para abrir" com o botão Criar uma senha', /Senha para abrir/.test(doc.querySelector('#app').innerHTML) && !!doc.querySelector('#app [data-act="lk-new"]'), true);
+  t('Financeiro: a tela Ajustes tem o bloco "Senha para abrir" com o botão Criar uma senha', /Senha para abrir/.test(doc.querySelector('#app').innerHTML) && !!doc.querySelector('#app [data-act="lk-new"]'), true);
   click(doc.querySelector('#app [data-act="lk-new"]')); await wait(20);
   const lkf = doc.getElementById('lock');
-  t('FIN: Criar uma senha abre a tela de senha grande por cima do app', lkf.style.display === 'flex' && /Crie uma senha/.test(lkf.textContent), true);
+  t('Financeiro: Criar uma senha abre a tela de senha grande por cima do app', lkf.style.display === 'flex' && /Crie uma senha/.test(lkf.textContent), true);
   for (const c of '246810246810') await ev(`lkKey('${c}')`);
-  t('FIN: criou a senha (hash guardado) e fechou a tela', !!w.localStorage.getItem('lock-hash') && lkf.style.display === 'none', true);
-  t('FIN: com senha o bloco passa a oferecer Bloquear agora e Trocar a senha', /lk-now/.test(ev('lkBlock("fin")')) && /lk-change/.test(ev('lkBlock("fin")')), true);
+  t('Financeiro: criou a senha (hash guardado) e fechou a tela', !!w.localStorage.getItem('lock-hash') && lkf.style.display === 'none', true);
+  t('Financeiro: com senha o bloco passa a oferecer Bloquear agora e Trocar a senha', /lk-now/.test(ev('lkBlock("fin")')) && /lk-change/.test(ev('lkBlock("fin")')), true);
   w.localStorage.setItem('lock-at', String(Date.now() - 5 * 60000));
   ev(`lkInit()`);
-  t('FIN: ao abrir depois de mais de 2 minutos parado, pede a senha', lkf.style.display === 'flex' && /Digite a senha/.test(lkf.textContent), true);
+  t('Financeiro: ao abrir depois de mais de 2 minutos parado, pede a senha', lkf.style.display === 'flex' && /Digite a senha/.test(lkf.textContent), true);
   for (const c of '246810') await ev(`lkKey('${c}')`);
-  t('FIN: a senha certa abre o app', lkf.style.display === 'none', true);
+  t('Financeiro: a senha certa abre o app', lkf.style.display === 'none', true);
   limpaPin();
   // ---- ler boleto e fatura (v13)
   const lun = (s) => { let tt = 0; s.split('').reverse().map(Number).forEach((d, i) => { const p = d * (i % 2 === 0 ? 2 : 1); tt += p > 9 ? p - 9 : p; }); return (10 - tt % 10) % 10; };
@@ -469,7 +469,7 @@ const count = (h, s) => h.split(s).length - 1;
   t('sem nada legível: não inventa valor nem data', rn.valorC === null && rn.venc === null && rn.linha === '', true);
   // tela
   ev(`S.tab='bills';render();`);
-  t('FIN Mês: tem o botão Ler boleto ou fatura', !!doc.querySelector('#app [data-act="bill-read"]'), true);
+  t('Financeiro Mês: tem o botão Ler boleto ou fatura', !!doc.querySelector('#app [data-act="bill-read"]'), true);
   click(doc.querySelector('#app [data-act="bill-read"]')); await wait(20);
   t('janela: tem onde colar o código, o botão da foto e o Voltar', !!doc.querySelector('.modal #bl-code') && !!doc.querySelector('.modal #bl-foto') && !!doc.querySelector('.modal #bl-file') && !!doc.querySelector('.modal #c0'), true);
   doc.querySelector('.modal #bl-code').value = bonito(P);
@@ -625,8 +625,8 @@ const count = (h, s) => h.split(s).length - 1;
   const demoTxt = ev(`JSON.stringify(S.recs.map(r=>r.data))`);
   t('exemplos de teste: carregam sem erro e não citam Marlene, mãe nem guardam titular/pagador', [demoErro, /Marlene|MARLENE|mãe|holder|payer/.test(demoTxt), ev(`S.recs.length`) > 8], ['', false, true]);
   ev(`S.recs=[];S.tab='home';render();`);
-  t('FIN: versão do cache subiu para v16', /fin-app-v17/.test(fs.readFileSync(path.join(__dirname, '..', 'fin', 'sw.js'), 'utf8')), true);
+  t('Financeiro: versão do cache subiu para v18', /fin-app-v18/.test(fs.readFileSync(path.join(__dirname, '..', 'fin', 'sw.js'), 'utf8')), true);
 
-  console.log(ok + ' ok, ' + bad + ' falhas (FIN)');
+  console.log(ok + ' ok, ' + bad + ' falhas (Financeiro)');
   process.exit(bad ? 1 : 0);
 })();

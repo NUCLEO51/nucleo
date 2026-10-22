@@ -1,7 +1,7 @@
-# FIN — contrato para o chat financeiro
+# Financeiro — contrato para o chat financeiro
 
-O FIN guarda tudo na tabela `fin_records` (kind + data JSON). Valores em **centavos inteiros**; dado ausente = `null`, nunca 0.
-O FIN nunca paga nem move dinheiro. Apagar = lixeira (reversível).
+O Financeiro guarda tudo na tabela `fin_records` (kind + data JSON). Valores em **centavos inteiros**; dado ausente = `null`, nunca 0.
+O Financeiro nunca paga nem move dinheiro. Apagar = lixeira (reversível).
 
 ## Tipos (kind) e campos principais de `data`
 - `card`: nome/apelido, closeDay, dueDay, limitC
@@ -12,7 +12,7 @@ O FIN nunca paga nem move dinheiro. Apagar = lixeira (reversível).
 - `proposal`: pendências vindas do Núcleo (text, status) e `cfg:'capacity'` com `capacityC` (quanto dá por mês para dívidas)
 
 ## Como usar
-**A) Sem acesso à internet:** no FIN, 🤝 Chat financeiro → “Copiar tudo para o chat”. O chat devolve
+**A) Sem acesso à internet:** no Financeiro, 🤝 Chat financeiro → “Copiar tudo para o chat”. O chat devolve
 `{"fin_ops":1,"ops":[{"op":"create","kind":"debt","data":{...}},{"op":"update","id":"...","data":{...}},{"op":"delete","id":"..."}]}`
 e Marcelo cola em “Colar mudanças do chat” e confirma.
 
