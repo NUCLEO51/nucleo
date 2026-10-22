@@ -3412,7 +3412,7 @@ async function toggleDone(id){
   if(confirmAll()&&!(await ask(r.done?{title:'Reabrir este lembrete?',msg:r.title,ok:'Reabrir'}:{title:'Marcar como feito?',msg:r.title,ok:'Feito'})))return;
   const today=isoDate(new Date());
   const used=(parseInt(r.repDone,10)||0)+1,maxT=parseInt(r.repTimes,10)||0;
-  const nx=(!r.done&&repSpec(r)&&r.date&&(!maxT||used<maxT))?repNext(r,new Date()):null;
+  const nx=(!r.done&&repSpec(r)&&r.date&&(!maxT||used<maxT))?repNext(r,(repSpec(r).u==='hour')?new Date():dtOf(r.date,'00:00')):null;
   if(nx){
     await Store.put('reminders',Object.assign({},r,{repDone:used,repAnchor:(r.repAnchor&&r.repAnchorFor===r.date)?r.repAnchor:r.date,repAnchorFor:nx.date,date:nx.date,time:nx.time,subtasks:(r.subtasks||[]).map(s=>Object.assign({},s,{done:false}))}));
     okToast('Feito. Próxima vez: '+relDay(nx.date,today)+(nx.time?' às '+nx.time:''),'Desfazer',()=>Store.put('reminders',r));
