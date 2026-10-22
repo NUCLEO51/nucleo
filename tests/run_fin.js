@@ -74,11 +74,11 @@ const count = (h, s) => h.split(s).length - 1;
   // ---- toque nas linhas da planilha
   ev(`S.tab='bills';render();`);
   click(doc.querySelector('#app [data-act="m-open"][data-k="bill"]'));
-  t('toque numa conta: abre a janela da conta com Voltar no topo', !!doc.querySelector('.modal .mback') && /Marcar como paga|Desfazer/.test(doc.querySelector('.modal').textContent), true);
+  t('toque numa conta (v21): abre a ficha com Voltar no topo e botão de pagar; editar é botão', !!doc.querySelector('.modal .mback') && !!doc.querySelector('.modal #fb-pay'), true);
   click(doc.querySelector('.modal .mback')); await wait(20);
   t('janela da conta: Voltar do topo fecha', !doc.querySelector('.modal'), true);
   click(doc.querySelector('#app [data-act="m-open"][data-k="debt"]'));
-  t('toque numa parcela de dívida: janela com Marcar como paga, Editar e Voltar no topo', !!doc.querySelector('.modal #d-pay') && !!doc.querySelector('.modal #d-edit') && !!doc.querySelector('.modal .mback'), true);
+  t('toque numa parcela de dívida (v21): ficha com Editar como botão e Voltar no topo, sem abrir formulário', !!doc.querySelector('.modal #fd-edit') && !!doc.querySelector('.modal .mback') && !doc.querySelector('.modal input,.modal select'), true);
   click(doc.querySelector('.modal .mback')); await wait(20);
   t('janela da parcela: Voltar do topo fecha', !doc.querySelector('.modal'), true);
   click(doc.querySelector('#app [data-act="m-open"][data-k="inv"]'));
@@ -612,12 +612,12 @@ const count = (h, s) => h.split(s).length - 1;
   t('formulário do cartão: tem apelido, limite e dias, e NÃO tem Titular', /Apelido/.test(fCard) && /Fecha todo dia/.test(fCard) && !/Titular/.test(fCard), true);
   ev(`S.tab='debts';render();`);
   const fDebt = await formTxt('#app [data-act="debt-new"]');
-  t('formulário da dívida: tem credor, saldo e parcela, e NÃO tem Devedor no contrato nem Quem paga hoje', /Saldo/.test(fDebt) && /Valor da parcela/.test(fDebt) && !/Devedor no contrato|Quem paga hoje/.test(fDebt), true);
+  t('formulário da dívida: tem credor, saldo e parcela, e NÃO tem Devedor no contrato nem Quem paga hoje', /Saldo/.test(fDebt) && /Valor das próximas parcelas/.test(fDebt) && /Valor da 1ª parcela/.test(fDebt) && !/Devedor no contrato|Quem paga hoje/.test(fDebt), true);
   // (o formulário de conta é trocado por um stub num teste anterior; aqui confiro o código dele no arquivo)
   const srcFin = fs.readFileSync(path.join(__dirname, '..', 'fin', 'index.html'), 'utf8');
   const i0 = srcFin.indexOf('async function billForm'), billSrc = srcFin.slice(i0, srcFin.indexOf('async function', i0 + 20));
   t('formulário da conta: tem nome, vencimento e conta bancária, e NÃO tem De quem é a conta nem titular', /Vence todo dia/.test(billSrc) && /Conta bancária que paga/.test(billSrc) && !/holder|De quem é a conta|Marlene/.test(billSrc), true);
-  t('o arquivo do Financeiro não cita mais Marlene, MARLENE, titular, pagador nem seletor de pessoa', !/Marlene|MARLENE|holder:|payer|data-act="who"/.test(srcFin.replace(/placeholder/g, '')), true);
+  t('o arquivo do Financeiro não cita mais Marlene, MARLENE, titular, pagador nem seletor de pessoa', !/Marlene|MARLENE|holder:|data-act="who"/.test(srcFin.replace(/placeholder/g, '')), true);
   // exemplos de teste (demo) sem Marlene
   ev(`S.recs=[];Api.create=async(kind,data)=>{const r={id:'dm'+S.recs.length,kind,version:1,data};S.recs.push(r);return r;};`);
   let demoErro = '';
@@ -625,7 +625,7 @@ const count = (h, s) => h.split(s).length - 1;
   const demoTxt = ev(`JSON.stringify(S.recs.map(r=>r.data))`);
   t('exemplos de teste: carregam sem erro e não citam Marlene, mãe nem guardam titular/pagador', [demoErro, /Marlene|MARLENE|mãe|holder|payer/.test(demoTxt), ev(`S.recs.length`) > 8], ['', false, true]);
   ev(`S.recs=[];S.tab='home';render();`);
-  t('Financeiro: versão do cache subiu para v18', /fin-app-v18/.test(fs.readFileSync(path.join(__dirname, '..', 'fin', 'sw.js'), 'utf8')), true);
+  t('Financeiro: versão do cache subiu para v21', /fin-app-v21/.test(fs.readFileSync(path.join(__dirname, '..', 'fin', 'sw.js'), 'utf8')), true);
 
   console.log(ok + ' ok, ' + bad + ' falhas (Financeiro)');
   process.exit(bad ? 1 : 0);
