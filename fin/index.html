@@ -1120,6 +1120,15 @@ function vPlan(){
     h+='</div>';
   });
   if(rs.snow&&rs.aval&&rs.snow.done&&rs.aval.done&&!rs.snow.anyUnk&&!rs.aval.anyUnk){const dif=rs.snow.total-rs.aval.total;h+='<div class="note"><b>Comparando os dois caminhos:</b> '+(dif>0?'escolhendo “Maior juros primeiro” você paga cerca de '+money(dif)+' a menos no total.':(dif<0?'escolhendo “Menor saldo primeiro” você paga cerca de '+money(-dif)+' a menos no total.':'os dois custam o mesmo.'))+'</div>';}
+  {const ord=(rs.aval&&rs.aval.done&&!rs.aval.anyUnk)?'aval':'snow',base=rs[ord];
+   if(base&&base.done){
+     h+='<h2 style="margin-left:0">E se pagar um pouco mais por mês?</h2><div class="card"><div class="mut">Usando o caminho “'+(ord==='aval'?'Maior juros primeiro':'Menor saldo primeiro')+'”. Hoje: quita em '+monthsTxt(base.months)+'.</div>';
+     [10000,20000,50000].forEach(ex=>{const r=simulate(ok,cap+ex,ord);
+       h+='<div class="row" style="margin-top:.5rem"><span>+ '+money(ex)+' por mês</span><b>'+(r.done?monthsTxt(r.months):'—')+'</b></div>';
+       if(r.done){const gm=base.months-r.months;h+='<div class="mut">'+(gm>0?'Quita '+monthsTxt(gm)+' antes':'Sem ganho de prazo')+(!r.anyUnk&&!base.anyUnk&&base.interest-r.interest>0?' e economiza cerca de '+money(base.interest-r.interest)+' de juros':'')+'.</div>';}
+     });
+     h+='</div>';
+   }}
   h+='<div class="note">Isto é só conta. Não inclui desconto de negociação nem multa. Antes de pagar ou renegociar, confira com o banco. O Financeiro não paga nada.</div>';
   return h+'</div>';
 }
@@ -1268,6 +1277,12 @@ function vHome(){
     const pct=Math.round(paidN/totN*100),st=late?'bad':(sem?'warn':'ok');
     h+='<button class="hero '+st+'" data-act="tab" data-v="bills" aria-label="Ver as contas do mês"><span class="hl">Falta pagar neste mês</span><span class="hv">'+money(known)+'</span><span class="hbar"><i style="width:'+pct+'%"></i></span><span class="hs">'+paidN+' de '+totN+' contas pagas'+(paidC?' · '+money(paidC)+' já pago':'')+(late?' · '+late+(late===1?' atrasada':' atrasadas'):'')+(sem?' · '+sem+' sem valor':'')+'</span></button>';
   }
+  {const mi=monthItems(ym),isR=i=>i.dir==='RECEBER',sm=l=>l.reduce((a,i)=>a+(i.amountC||0),0);
+   const tRc=sm(mi.filter(isR)),tPg=sm(mi.filter(i=>!isR(i)));
+   if(tRc>0){const sob=tRc-tPg;
+     h+='<div class="card"><div class="row"><span class="mut">Previsto a receber no mês</span><b class="rc">'+money(tRc)+'</b></div><div class="row"><span class="mut">Contas e parcelas do mês</span><b>'+money(tPg)+'</b></div><div class="row"><span class="mut">Sobra depois das contas</span><b'+(sob<0?' style="color:var(--danger)"':' class="rc"')+'>'+(sob<0?'Falta '+money(-sob):money(sob))+'</b></div><div class="hint">É previsão: só conta o que tem valor informado. Não é dinheiro disponível.</div></div>';}
+  }
+  if(g.semN>0)h+='<button class="note bkn" data-act="tab" data-v="spend">📝 '+g.semN+(g.semN===1?' gasto sem categoria':' gastos sem categoria')+'. Toque para revisar.</button>';
   h+='<div class="up s2">'
     +srow('bills','A pagar no mês',money(known),(late?'<span class="tag bad">'+late+(late===1?' atrasada':' atrasadas')+'</span> ':'')+(sem?'<span class="tag warn">'+sem+' sem valor</span>':'')+(!rows.length?'Nenhuma conta cadastrada':'')+((rows.length&&!late&&!sem)?'Valores conhecidos':''))
     +srow('cards','Cartões',cardsH.length?money(totH):'—',cardsH.length?cardsH.length+(cardsH.length===1?' cartão · total usado':' cartões · total usado'):'Nenhum cartão')
