@@ -625,7 +625,7 @@ const count = (h, s) => h.split(s).length - 1;
   const demoTxt = ev(`JSON.stringify(S.recs.map(r=>r.data))`);
   t('exemplos de teste: carregam sem erro e não citam Marlene, mãe nem guardam titular/pagador', [demoErro, /Marlene|MARLENE|mãe|holder|payer/.test(demoTxt), ev(`S.recs.length`) > 8], ['', false, true]);
   ev(`S.recs=[];S.tab='home';render();`);
-  t('Financeiro: versão do cache subiu para v21', /fin-app-v27/.test(fs.readFileSync(path.join(__dirname, '..', 'fin', 'sw.js'), 'utf8')), true);
+  t('Financeiro: versão do cache subiu para v21', /fin-app-v28/.test(fs.readFileSync(path.join(__dirname, '..', 'fin', 'sw.js'), 'utf8')), true);
 
   console.log(ok + ' ok, ' + bad + ' falhas (Financeiro)');
   process.exit(bad ? 1 : 0);
