@@ -1763,7 +1763,7 @@ function fichaBill(bill,row){
     const paid=ms.filter(r=>r.data.paidAt);
     h+='<div class="card">'+frow('Meses pagos',paid.length+' de '+ms.length)+frow('Total já pago',money(paid.reduce((a,r)=>a+(r.data.amountC||0),0)))+'</div>';
   }
-  const m=modal(h+(row?'<button class="btn" id="fb-pay">Pagar, informar valor ou desfazer</button>':'')+'<button class="btn sec" id="fb-edit">Editar a conta</button><button class="btn sec" id="fb-no">Voltar</button>');
+  const m=modal(h+(row?'<button class="btn" id="fb-pay">'+(row.r.data.paidAt?'Desfazer o pagamento ou mudar o valor':(row.r.data.amountC==null?'Informar o valor e pagar':'Pagar esta conta'))+'</button>':'')+'<button class="btn sec" id="fb-edit">Editar a conta</button><button class="btn sec" id="fb-no">Voltar</button>');
   m.querySelector('#fb-no').onclick=()=>m.remove();
   m.querySelector('#fb-edit').onclick=()=>{m.remove();billForm(bill);};
   const pb=m.querySelector('#fb-pay');if(pb)pb.onclick=()=>{m.remove();billMonthForm(row);};
