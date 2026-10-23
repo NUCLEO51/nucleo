@@ -39,3 +39,8 @@ Duas chamadas de `apply_migration` (nome `fin_apply_v1_idempotencia_historico`, 
 ## Próximo passo (item 9)
 1. Revisar estes arquivos e a causa dos cancelamentos. 2. Definir implantação, testes reais e reversão. 3. Só então o Marcelo executa.
 Função de borda: ALTERNATIVA a avaliar, não aprovada. A definir: autenticação, expiração/revogação e onde cada componente guarda a credencial (cofre do Supabase; nunca em chat/Drive/GitHub).
+
+---
+## CORREÇÃO (FCLD512, 23/10/2026 noite)
+1. A contagem "42 testes" da v2.1 estava ERRADA: a contagem incluía a linha final `TODOS_PASSARAM`. O número correto é **41**.
+2. A AUD512 emitiu **NO-GO** para a v2.1. Os problemas foram reproduzidos (`tests/fin_apply/run_auditoria.sh` contra a v2.1: 24 falhas) e corrigidos na **v2.2**. Ver `FIN-APPLY-V2_2-PLANO.md`. A v2.1 NÃO deve ser usada.
