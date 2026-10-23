@@ -71,6 +71,7 @@ html.lk-on body>*:not(#lock){visibility:hidden}
 .tbl .tr{border-radius:0;transition:background .15s ease}.tbl .tr:active{background:var(--accent-soft)}.tbl button.tr:nth-child(even){background:transparent}.tbl .tr:has(.tag.bad){box-shadow:inset .32rem 0 0 var(--danger)}.tbl .tr:has(.tag.warn){box-shadow:inset .32rem 0 0 var(--warn)}.tbl .tr:has(.tag.ok){box-shadow:inset .32rem 0 0 var(--accent)}.tbl .tr.pg .w,.tbl .tr.pg .d{opacity:.6}.tbl .v b{font-variant-numeric:tabular-nums}
 .bar{height:.8rem}.bar i{transition:width .5s ease;border-radius:.4rem}.item:has(.bar i.hi),.item:has(.tag.bad){box-shadow:inset .32rem 0 0 var(--danger)}.item:has(.bar):not(:has(.bar i.hi)){box-shadow:inset .32rem 0 0 var(--accent)}.item:has(.tag.ok){opacity:.7}.item:active{background:var(--accent-soft)}.item .row b{font-variant-numeric:tabular-nums}@media (prefers-reduced-motion:reduce){.bar i{transition:none}}
 .card .row>span:nth-child(2):not(.mut){white-space:nowrap}.card .row>b{white-space:nowrap}.card .row>span:first-child{min-width:0}
+.note.bkn{display:block;width:100%;text-align:left;border:0;font:inherit;font-weight:700;min-height:3.2rem;cursor:pointer}
 .plan-bar{height:.5rem;border-radius:.3rem;background:var(--surface-2);margin:.15rem 0 .5rem;overflow:hidden}
 .plan-bar i{display:block;height:100%;background:var(--accent);border-radius:.3rem}
 .spnav{display:flex;align-items:center;justify-content:space-between;gap:.6rem;margin:.6rem 0}
@@ -1260,6 +1261,8 @@ function vHome(){
   const dsum=debts.reduce((a,d)=>a+(d.data.balanceC||0),0),dmiss=debts.some(d=>d.data.balanceC==null);
   const nxD=debts.map(d=>{const dt=debtNext(d.data,true);return {c:(dt&&debtAmt(d.data,dt.slice(0,7)))||0,dt};}).filter(x=>x.dt).sort((a,b)=>a.dt<b.dt?-1:1)[0];
   const g=gastosMes(ym);
+  {const bd=backupDays();
+   if(bd===null||bd>=7)h+='<button class="note bkn" data-act="backup" aria-label="Baixar uma cópia dos dados">💾 '+(bd===null?'Você ainda não baixou uma cópia dos seus dados.':'Faz '+bd+' dias desde a última cópia dos seus dados.')+' Toque para baixar.</button>';}
   const paidN=rows.filter(x=>x.r.data.paidAt).length,totN=rows.length,paidC=rows.filter(x=>x.r.data.paidAt&&x.r.data.amountC!=null).reduce((a,x)=>a+x.r.data.amountC,0);
   if(totN){
     const pct=Math.round(paidN/totN*100),st=late?'bad':(sem?'warn':'ok');
