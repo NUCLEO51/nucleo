@@ -1,0 +1,201 @@
+-- FINANCEIRO — fin_apply v2 (substitui a v1; NÃO rodar a v1)
+-- O que muda em relação à v1, a pedido da revisão do GPT:
+--  * o dono NUNCA vem do chat: vem do login (auth.uid()) ou da tabela fin_canal_dono (canal -> dono), preenchida no servidor
+--  * sem UNIQUE(owner, capture_id) nos registros: o vínculo é por ITEM da captura (capture_id + item_id), em tabela própria
+--  * item que foi para a lixeira NÃO é recriado por reenvio
+--  * a gravação do vínculo e do registro ocorrem na mesma transação; duas chamadas simultâneas aplicam só uma
+--  * referências (cardId, billId) precisam existir e ser do mesmo dono; datas e tamanhos validados
+--  * histórico com estado anterior e posterior, canal, ator e op_id; protegido contra alteração
+--  * fin_op_result(): recupera o recibo de uma operação sem repetir (timeout não é falha)
+-- NÃO faz conciliação automática entre fontes (isso é a etapa 4). Só guarda a evidência da fonte (data.src).
+-- Só cria coisas novas; não altera nem apaga dados existentes. Para desfazer: fin_apply_v2_rollback.sql
+
+create table if not exists public.fin_canal_dono(
+  canal text primary key, owner uuid not null, criado_em timestamptz not null default now());
+alter table public.fin_canal_dono enable row level security;
+insert into public.fin_canal_dono(canal, owner)
+  select c.canal, d.owner
+  from (values ('gpt'),('claude'),('box'),('mobills'),('importador')) c(canal),
+       (select distinct owner from public.fin_records) d
+  where (select count(distinct owner) from public.fin_records) = 1
+  on conflict (canal) do nothing;
+
+create table if not exists public.fin_ops_log(
+  owner uuid not null, op_id text not null, source text not null, actor text, hash text not null, result jsonb,
+  created_at timestamptz not null default now(), primary key(owner, op_id));
+alter table public.fin_ops_log enable row level security;
+
+create table if not exists public.fin_capture_items(
+  owner uuid not null, capture_id text not null, item_id text not null, rec_id uuid not null, hash text not null,
+  created_at timestamptz not null default now(), primary key(owner, capture_id, item_id));
+alter table public.fin_capture_items enable row level security;
+
+create table if not exists public.fin_records_hist(
+  hid bigserial primary key, id uuid not null, owner uuid not null, kind text not null, version int not null,
+  data jsonb not null, deleted_at timestamptz,
+  new_version int, new_data jsonb, new_deleted_at timestamptz,
+  canal text, actor text, op_id text, changed_at timestamptz not null default now());
+create index if not exists fin_hist_id on public.fin_records_hist(id, hid desc);
+alter table public.fin_records_hist enable row level security;
+
+create or replace function public.fin_hist() returns trigger language plpgsql security definer set search_path=public as $f$
+begin
+  insert into public.fin_records_hist(id,owner,kind,version,data,deleted_at,new_version,new_data,new_deleted_at,canal,actor,op_id)
+  values(old.id,old.owner,old.kind,old.version,old.data,old.deleted_at,new.version,new.data,new.deleted_at,
+         new.updated_by, coalesce(auth.uid()::text,'servico'), nullif(current_setting('fin.op_id',true),''));
+  return null;
+end $f$;
+drop trigger if exists fin_hist_trg on public.fin_records;
+create trigger fin_hist_trg after update on public.fin_records for each row execute function public.fin_hist();
+
+create or replace function public.fin_owner_for(p_source text) returns uuid language sql stable security definer set search_path=public as $f$
+  select coalesce(auth.uid(), (select owner from public.fin_canal_dono where canal=p_source));
+$f$;
+
+create or replace function public.fin_validate(p_kind text, p_data jsonb, p_create boolean) returns void
+language plpgsql immutable set search_path=public as $f$
+declare k text; v jsonb; n numeric; s text; d date;
+begin
+  if p_kind is null or p_kind not in ('card','charge','invpay','bill','billmonth','debt','proposal','stmt') then
+    raise exception 'kind inválido: %', p_kind; end if;
+  if p_data is null or jsonb_typeof(p_data)<>'object' then raise exception 'data deve ser um objeto'; end if;
+  if octet_length(p_data::text) > 20000 then raise exception 'data grande demais (máx. 20000 bytes)'; end if;
+  for k,v in select key,value from jsonb_each(p_data) loop
+    if k ~ '^[A-Za-z]+C$' or k in ('rateBp','nInst') then
+      if jsonb_typeof(v) not in ('null','number') then raise exception '% deve ser número inteiro (centavos) ou null', k; end if;
+      if jsonb_typeof(v)='number' then n:=(v#>>'{}')::numeric; if n<>trunc(n) then raise exception '% deve ser inteiro (centavos), recebi %', k, n; end if; end if;
+    elsif k in ('dueDay','closeDay') then
+      if jsonb_typeof(v) not in ('null','number') then raise exception '% deve ser dia 1..31 ou null', k; end if;
+      if jsonb_typeof(v)='number' then n:=(v#>>'{}')::numeric; if n<>trunc(n) or n<1 or n>31 then raise exception '% fora de 1..31', k; end if; end if;
+    elsif k='dir' then
+      if v#>>'{}' is null or (v#>>'{}') not in ('PAGAR','RECEBER') then raise exception 'dir deve ser PAGAR ou RECEBER'; end if;
+    elsif k in ('paidYm') then
+      if jsonb_typeof(v)<>'array' then raise exception 'paidYm deve ser lista'; end if;
+      for s in select jsonb_array_elements_text(v) loop
+        if s !~ '^\d{4}-(0[1-9]|1[0-2])$' then raise exception 'paidYm: mês inválido %', s; end if; end loop;
+    elsif k in ('date','firstDue','paidAt') and jsonb_typeof(v)='string' then
+      s := v#>>'{}';
+      if s !~ '^\d{4}-\d{2}-\d{2}$' then raise exception '%: data deve ser AAAA-MM-DD', k; end if;
+      begin d := s::date; exception when others then raise exception '%: data inexistente (%)', k, s; end;
+      if to_char(d,'YYYY-MM-DD')<>s then raise exception '%: data inexistente (%)', k, s; end if;
+    end if;
+  end loop;
+  if p_create then
+    if p_kind='debt' and coalesce(p_data->>'creditor','')='' then raise exception 'debt exige creditor'; end if;
+    if p_kind in ('bill','card') and coalesce(p_data->>'name','')='' then raise exception '% exige name', p_kind; end if;
+    if p_kind='charge' and coalesce(p_data->>'cardId','')='' then raise exception 'charge exige cardId'; end if;
+    if p_kind='billmonth' and (coalesce(p_data->>'billId','')='' or coalesce(p_data->>'ym','')='') then raise exception 'billmonth exige billId e ym'; end if;
+  end if;
+end $f$;
+
+create or replace function public.fin_check_refs(p_owner uuid, p_kind text, p_data jsonb) returns void
+language plpgsql stable security definer set search_path=public as $f$
+begin
+  if p_data ? 'cardId' and p_kind in ('charge','invpay') and p_data->>'cardId' is not null then
+    if not exists(select 1 from public.fin_records where owner=p_owner and kind='card' and deleted_at is null and id::text=p_data->>'cardId') then
+      raise exception 'cardId % não existe (ou está na lixeira) para este dono', p_data->>'cardId'; end if;
+  end if;
+  if p_data ? 'billId' and p_kind='billmonth' and p_data->>'billId' is not null then
+    if not exists(select 1 from public.fin_records where owner=p_owner and kind='bill' and deleted_at is null and id::text=p_data->>'billId') then
+      raise exception 'billId % não existe (ou está na lixeira) para este dono', p_data->>'billId'; end if;
+  end if;
+end $f$;
+
+create or replace function public.fin_op_result(p_op_id text, p_source text) returns jsonb
+language sql stable security definer set search_path=public as $f$
+  select result || jsonb_build_object('repetida',true) from public.fin_ops_log
+  where owner=public.fin_owner_for(p_source) and op_id=p_op_id;
+$f$;
+
+create or replace function public.fin_apply(p_op_id text, p_source text, p_ops jsonb)
+returns jsonb language plpgsql security definer set search_path=public as $f$
+declare
+  v_owner uuid := public.fin_owner_for(p_source);
+  v_hash text; v_log public.fin_ops_log; v_op jsonb; v_res jsonb := '[]'::jsonb; v_row public.fin_records;
+  v_cid text; v_item text; v_ih text; v_cap public.fin_capture_items;
+  v_kind text; v_data jsonb; v_id uuid; v_ev int; v_t text; v_out jsonb; i int := 0;
+begin
+  if p_source is null or p_source not in ('gpt','claude','box','mobills','fin','importador') then raise exception 'source inválida'; end if;
+  if v_owner is null then raise exception 'dono não identificado: sem login e canal % não cadastrado em fin_canal_dono', p_source; end if;
+  if coalesce(length(p_op_id),0) not between 8 and 120 then raise exception 'op_id deve ter de 8 a 120 caracteres'; end if;
+  if p_ops is null or jsonb_typeof(p_ops)<>'array' or jsonb_array_length(p_ops) not between 1 and 60 then raise exception 'ops deve ser lista de 1 a 60'; end if;
+  v_hash := md5(p_ops::text);
+  perform pg_advisory_xact_lock(hashtext(v_owner::text||'|op|'||p_op_id));
+  select * into v_log from public.fin_ops_log where owner=v_owner and op_id=p_op_id;
+  if found then
+    if v_log.hash=v_hash then return v_log.result || jsonb_build_object('repetida',true); end if;
+    raise exception 'conflito: op_id já usado com conteúdo diferente';
+  end if;
+  perform set_config('fin.op_id', p_op_id, true);
+  for v_op in select * from jsonb_array_elements(p_ops) loop
+    i := i+1; v_t := v_op->>'op';
+    if v_t='create' then
+      v_kind := v_op->>'kind'; v_data := coalesce(v_op->'data','{}'::jsonb);
+      perform public.fin_validate(v_kind, v_data, true);
+      perform public.fin_check_refs(v_owner, v_kind, v_data);
+      v_cid := coalesce(v_op->>'capture_id', v_data->>'capture_id');
+      v_item := coalesce(v_op->>'item_id', v_data->>'item_id', 'unico');
+      if v_cid is not null then
+        v_ih := md5(v_kind||'|'||(v_data - 'src' - 'capture_id' - 'item_id')::text);
+        perform pg_advisory_xact_lock(hashtext(v_owner::text||'|cap|'||v_cid||'|'||v_item));
+        select * into v_cap from public.fin_capture_items where owner=v_owner and capture_id=v_cid and item_id=v_item;
+        if found then
+          select * into v_row from public.fin_records where id=v_cap.rec_id;
+          v_res := v_res || jsonb_build_array(jsonb_build_object('i',i,'op','create','reutilizado',true,
+            'na_lixeira',(v_row.deleted_at is not null),'conteudo_diferente',(v_cap.hash<>v_ih),'registro',to_jsonb(v_row)));
+          continue;
+        end if;
+        v_data := v_data || jsonb_build_object('capture_id', v_cid, 'item_id', v_item);
+      end if;
+      if not (v_data ? 'src') then
+        v_data := v_data || jsonb_build_object('src', jsonb_build_array(jsonb_build_object('fonte',p_source,'op',p_op_id,'em',now())));
+      end if;
+      insert into public.fin_records(owner,kind,data,updated_by) values (v_owner,v_kind,v_data,p_source) returning * into v_row;
+      if v_cid is not null then
+        insert into public.fin_capture_items(owner,capture_id,item_id,rec_id,hash) values (v_owner,v_cid,v_item,v_row.id,v_ih);
+      end if;
+      v_res := v_res || jsonb_build_array(jsonb_build_object('i',i,'op','create','reutilizado',false,'registro',to_jsonb(v_row)));
+    elsif v_t in ('update','delete','restore') then
+      begin v_id := (v_op->>'id')::uuid; exception when others then raise exception 'op %: id inválido', i; end;
+      if v_op->>'expected_version' is null then raise exception 'op %: expected_version é obrigatório', i; end if;
+      begin v_ev := (v_op->>'expected_version')::int; exception when others then raise exception 'op %: expected_version inválido', i; end;
+      select * into v_row from public.fin_records where id=v_id and owner=v_owner for update;
+      if not found then raise exception 'op %: registro % não encontrado para este dono', i, v_id; end if;
+      if v_row.version<>v_ev then
+        raise exception 'op %: conflito de versão (atual %, enviada %). Estado atual: %', i, v_row.version, v_ev, to_jsonb(v_row)::text; end if;
+      if v_t='update' then
+        if v_row.deleted_at is not null then raise exception 'op %: registro está na lixeira', i; end if;
+        v_data := v_op->'data';
+        if v_data is null or jsonb_typeof(v_data)<>'object' or v_data='{}'::jsonb then raise exception 'op %: update exige data', i; end if;
+        perform public.fin_validate(v_row.kind, v_data, false);
+        perform public.fin_check_refs(v_owner, v_row.kind, v_data);
+        update public.fin_records set data=data||v_data, updated_by=p_source where id=v_id returning * into v_row;
+      elsif v_t='delete' then
+        if v_row.deleted_at is not null then raise exception 'op %: já está na lixeira', i; end if;
+        update public.fin_records set deleted_at=now(), updated_by=p_source where id=v_id returning * into v_row;
+      else
+        if v_row.deleted_at is null then raise exception 'op %: não está na lixeira', i; end if;
+        update public.fin_records set deleted_at=null, updated_by=p_source where id=v_id returning * into v_row;
+      end if;
+      v_res := v_res || jsonb_build_array(jsonb_build_object('i',i,'op',v_t,'registro',to_jsonb(v_row)));
+    else
+      raise exception 'op %: operação desconhecida (%)', i, v_t;
+    end if;
+  end loop;
+  v_out := jsonb_build_object('ok',true,'op_id',p_op_id,'repetida',false,'resultados',v_res);
+  insert into public.fin_ops_log(owner,op_id,source,actor,hash,result)
+    values (v_owner,p_op_id,p_source,coalesce(auth.uid()::text,'servico'),v_hash,v_out);
+  return v_out;
+end $f$;
+
+-- permissões: tabelas internas só pelo servidor; histórico não pode ser alterado por ninguém
+revoke all on public.fin_canal_dono, public.fin_ops_log, public.fin_capture_items, public.fin_records_hist from public, anon, authenticated;
+revoke update, delete, truncate on public.fin_records_hist from service_role;
+revoke all on function public.fin_apply(text,text,jsonb) from public, anon;
+revoke all on function public.fin_op_result(text,text) from public, anon;
+revoke all on function public.fin_owner_for(text) from public, anon;
+revoke all on function public.fin_validate(text,jsonb,boolean) from public, anon;
+revoke all on function public.fin_check_refs(uuid,text,jsonb) from public, anon, authenticated;
+revoke all on function public.fin_hist() from public, anon, authenticated;
+grant execute on function public.fin_apply(text,text,jsonb) to authenticated, service_role;
+grant execute on function public.fin_op_result(text,text) to authenticated, service_role;
