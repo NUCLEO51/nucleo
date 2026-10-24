@@ -84,7 +84,7 @@ Deno.serve(async (req) => {
 
   // 1) primeiro aviso de cada alarme que chegou na hora
   for (const a of due) {
-    await enviar(a.owner, JSON.stringify({ title: "Núcleo", body: a.message || "Lembrete", tag: a.id }));
+    await enviar(a.owner, JSON.stringify({ title: "Financeiro", body: a.message || "Lembrete", tag: a.id }));
     // agenda as repetições (o teste do app não repete)
     if (!String(a.key ?? "").startsWith("teste|")) {
       await fetch(`${URL_}/rest/v1/alarm_repeats`, {
@@ -109,7 +109,7 @@ Deno.serve(async (req) => {
     });
     const got = claim.ok ? await claim.json() : [];
     if (!got.length) continue;
-    await enviar(p.owner, JSON.stringify({ title: "Núcleo", body: `🔔 ${p.message} (${nova - 1} de ${p.total - 1})`, tag: `${p.alarm_id ?? p.id}-${nova}` }));
+    await enviar(p.owner, JSON.stringify({ title: "Financeiro", body: `🔔 ${p.message} (${nova - 1} de ${p.total - 1})`, tag: `${p.alarm_id ?? p.id}-${nova}` }));
     repetidos++;
   }
 
