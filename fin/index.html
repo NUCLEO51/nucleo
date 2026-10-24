@@ -1267,7 +1267,7 @@ function vHome(){
   const known=open.filter(i=>i.amountC!=null).reduce((a,i)=>a+i.amountC,0);
   const sem=open.filter(i=>i.amountC==null).length;
   const late=open.filter(i=>i.date<td).length;
-  let h=header('Financeiro',undoBtn()+rbtn('tab','📝','Anotações','notes')+rbtn('chat','💬','Chat financeiro')+rbtn('tab','⚙️','Ajustes','cfg'),'home')+'<p class="sub">'+esc(ymLabel(ym))+'</p><div class="wrap">';
+  let h=header('Financeiro',undoBtn()+rbtn('tab','🔎','Buscar tudo','stmt')+rbtn('tab','📝','Anotações','notes')+rbtn('chat','💬','Chat financeiro')+rbtn('tab','⚙️','Ajustes','cfg'),'home')+'<p class="sub">'+esc(ymLabel(ym))+'</p><div class="wrap">';
   const ibn=ibList();
   if(ibn.length)h+='<button class="item" data-act="tab" data-v="notes"><div class="row"><span class="t">📝 Anotações para decidir</span><span class="cnt">'+ibn.length+'</span></div><div class="mut">Siri ou digitadas: toque para dizer se é cartão, conta, dívida ou lembrete.</div></button>';
   const pend=pendList();
@@ -1300,15 +1300,13 @@ function vHome(){
     +srow('cards','Cartões',cardsH.length?money(totH):'—',cardsH.length?cardsH.length+(cardsH.length===1?' cartão · total usado':' cartões · total usado'):'Nenhum cartão')
     +srow('debts','Dívidas · saldo total',debts.length?money(dsum):'—',(debts.length?(nxD?'próxima parcela '+money(nxD.c)+' em '+brDate(nxD.dt).slice(0,5):debts.length+' em aberto'):'Nenhuma em aberto')+(dmiss?' · <span class="tag warn">saldo não informado</span>':'')+(recvs.length?' · <span class="rc">a receber '+money(recvs.reduce((a,d)=>a+(d.data.balanceC||0),0))+'</span>':''))
     +'<button data-act="st-go" data-f="in"><span class="nm"><b>Entradas do mês</b><i>'+(entM?'dinheiro que entrou (renda e empréstimo)':'nada importado neste mês')+'</i></span><span class="vl rc">'+(entM?'+ '+money(entM):'—')+'</span></button>'
-    +srow('stmt','Buscar lançamentos','🔎','gastos, entradas, mercado, posto, dia…')
-    +srow('plan','Plano para quitar dívidas','🎯','simulação, não é promessa')
     +srow('spend','Gastos do mês',g.rows.length?money(g.total):'—',g.semN?'<span class="tag warn">'+g.semN+' sem categoria</span>':(g.rows.length?'Por categoria':'Sem gastos neste mês'))
     +'</div>';
   const up=upcoming();
   if(up.length){
     h+='<h2>Próximos vencimentos</h2><div class="up">';
-    up.slice(0,5).forEach(u=>{h+='<button data-act="tab" data-v="bills" class="'+(u.late?'late':'')+'"><span class="dt">'+brDate(u.dt).slice(0,5)+'</span><span class="nm"><b>'+esc(u.name)+'</b><i>'+u.kind+(u.late?' · em atraso':'')+'</i></span><span class="vl'+(u.recv?' rc':'')+'">'+(u.recv?'+ ':'')+money(u.c)+'</span></button>';});
-    if(up.length>5)h+='<button data-act="tab" data-v="bills"><span class="dt">+'+(up.length-5)+'</span><span class="nm"><i>mais, veja em Mês</i></span><span class="vl mut">›</span></button>';
+    up.slice(0,3).forEach(u=>{h+='<button data-act="tab" data-v="bills" class="'+(u.late?'late':'')+'"><span class="dt">'+brDate(u.dt).slice(0,5)+'</span><span class="nm"><b>'+esc(u.name)+'</b><i>'+u.kind+(u.late?' · em atraso':'')+'</i></span><span class="vl'+(u.recv?' rc':'')+'">'+(u.recv?'+ ':'')+money(u.c)+'</span></button>';});
+    if(up.length>3)h+='<button data-act="tab" data-v="bills"><span class="dt">+'+(up.length-3)+'</span><span class="nm"><i>mais, veja em Mês</i></span><span class="vl mut">›</span></button>';
     h+='</div>';
   }
   if(S.remErr)h+='<div class="note"><span class="tag warn">Lembretes</span> Não consegui conferir os lembretes no Núcleo agora ('+esc(S.remErr)+').</div>';
@@ -1944,7 +1942,7 @@ function debtRow(d){
 function vDebts(){
   const ds=byKind('debt');
   const abertas=ds.filter(d=>d.data.status!=='PAGA'),pagar=abertas.filter(d=>d.data.dir!=='RECEBER'),receber=abertas.filter(d=>d.data.dir==='RECEBER'),feitas=ds.filter(d=>d.data.status==='PAGA');
-  let h=header('Dívidas',rbtn('debt-new','+','Nova dívida ou parcela')+sortBtn())+'<div class="wrap">';
+  let h=header('Dívidas',rbtn('debt-new','+','Nova dívida ou parcela')+sortBtn())+'<div class="wrap"><button class="btn sec" data-act="tab" data-v="plan">🎯 Plano para quitar as dívidas (simulação)</button>';
   if(!ds.length)h+='<div class="card mut">Nada cadastrado. Use “Nova dívida ou parcela” para o que você deve e também para o que te devem.</div>';
   if(pagar.length){
     const sum=pagar.reduce((a,d)=>a+(d.data.balanceC||0),0),inst=pagar.reduce((a,d)=>a+(d.data.installC||0),0),miss=pagar.some(d=>d.data.balanceC==null);
@@ -2092,7 +2090,7 @@ function stRows(){
   return out;
 }
 /* ---------- Extrato: buscar, filtrar por entradas/gastos, mês e dia ---------- */
-const APP_V='v36';
+const APP_V='v37';
 const ST_FILTERS=[['all','Tudo'],['in','Entradas'],['out','Gastos'],['fat','Faturas pagas'],['tr','Transferências']];
 function stAll(){
   const out=stRows().map(e=>Object.assign({},e,{src:'extrato'}));
@@ -2149,7 +2147,9 @@ function stListHtml(){
     byKind('debt').forEach(r=>{if(stNorm(r.data.creditor).indexOf(q)>=0)hits.push(['debts',r.data.dir==='RECEBER'?'A receber':'Dívida',r.data.creditor,r.data.balanceC]);});
     byKind('card').forEach(r=>{if(stNorm(r.data.name).indexOf(q)>=0)hits.push(['cards','Cartão',r.data.name,null]);});
     byKind('charge').forEach(r=>{if(stNorm(r.data.desc).indexOf(q)>=0)hits.push(['cards','Compra no cartão',r.data.desc,r.data.totalC]);});
-    if(hits.length){h+='<h2>Contas, cartões e dívidas</h2>';hits.slice(0,20).forEach(x=>{h+='<button class="item" data-act="tab" data-v="'+x[0]+'"><div class="row"><span class="t">'+esc(x[2])+'</span><b>'+(x[3]==null?'':money(x[3]))+'</b></div><div class="mut">'+x[1]+' · toque para abrir</div></button>';});}
+    ibList().forEach(r=>{if(stNorm(r.data&&r.data.text).indexOf(q)>=0)hits.push(['notes','Anotação',r.data.text,null]);});
+    pendList().forEach(r=>{if(stNorm(r.data&&r.data.text).indexOf(q)>=0)hits.push(['home','Pendente',r.data.text,null]);});
+    if(hits.length){h+='<h2>Contas, cartões, dívidas e anotações</h2>';hits.slice(0,20).forEach(x=>{h+='<button class="item" data-act="tab" data-v="'+x[0]+'"><div class="row"><span class="t">'+esc(x[2])+'</span><b>'+(x[3]==null?'':money(x[3]))+'</b></div><div class="mut">'+x[1]+' · toque para abrir</div></button>';});}
   }
   return h;
 }
