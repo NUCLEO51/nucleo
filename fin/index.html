@@ -77,6 +77,12 @@ html.lk-on body>*:not(#lock){visibility:hidden}
 .up button.late{box-shadow:inset .32rem 0 0 var(--danger)}.up button:active{background:var(--accent-soft)}.up:not(.s2) .dt{background:var(--surface-2);border-radius:.7rem;padding:.35rem 0;text-align:center;font-variant-numeric:tabular-nums}.up:not(.s2) .late .dt{background:var(--danger-soft)}.up .vl{font-variant-numeric:tabular-nums}
 .plan-bar{height:.5rem;border-radius:.3rem;background:var(--surface-2);margin:.15rem 0 .5rem;overflow:hidden}
 .plan-bar i{display:block;height:100%;background:var(--accent);border-radius:.3rem}
+.stq{width:100%;font-size:1.15rem;min-height:3.4rem;padding:.7rem 1rem;border-radius:1rem;border:2px solid var(--line);background:var(--surface);color:inherit;margin:.2rem 0 .5rem;box-sizing:border-box}
+.chips{display:flex;flex-wrap:wrap;gap:.5rem;margin:.4rem 0}
+.chip{border:1px solid var(--line);background:var(--surface);color:inherit;border-radius:2rem;padding:.65rem 1rem;min-height:3rem;font-size:1rem;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:.4rem}
+.chip.on{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+.chip input{font-size:1rem;background:transparent;color:inherit;border:0}
+h2.stday{font-size:1rem;margin:1rem 0 .1rem;color:var(--muted)}
 .spnav{display:flex;align-items:center;justify-content:space-between;gap:.6rem;margin:.6rem 0}
 .spnav .btn{width:4.2rem;margin:0}
 .donutbox{position:relative;display:flex;justify-content:center}
@@ -602,7 +608,7 @@ function vGastos(){
   const ym=S.sp.ym,g=gastosMes(ym),gp=gastosMes(addMonths(ym,-1));
   let h=header('Gastos','<button class="ibtn" data-back="1" data-act="tab" data-v="home" aria-label="Voltar" title="Voltar">←</button>')+'<div class="wrap">';
   h+='<div class="spnav"><button class="btn sec" data-act="sp-prev" aria-label="Mês anterior">‹</button><b>'+esc(ymLabel(ym))+'</b><button class="btn sec" data-act="sp-next" aria-label="Próximo mês">›</button></div>';
-  if(!g.rows.length)return h+'<div class="card mut">Sem gastos neste mês. Os gastos vêm dos extratos importados (Extratos do banco) e das compras no cartão.</div></div>';
+  if(!g.rows.length)return h+'<div class="card mut">Sem gastos neste mês. Os gastos vêm dos extratos importados (aba Extrato) e das compras no cartão.</div></div>';
   const dif=g.total-gp.total;
   h+='<div class="card"><div class="row"><span class="mut">Total gasto</span><b>'+money(g.total)+'</b></div>'
     +(gp.total?'<div class="row"><span class="mut">Mês passado</span><b>'+money(gp.total)+'</b></div><div class="row"><span class="mut">Diferença</span><b style="color:'+(dif>0?'var(--danger,#ff5c5c)':'#34c27a')+'">'+(dif>0?'+':'−')+money(Math.abs(dif))+'</b></div>':'')+'</div>';
@@ -1072,7 +1078,7 @@ const bestDay=c=>c.closeDay>=dim(todayIso().slice(0,7))?1:c.closeDay+1;
 /* ---------- telas ---------- */
 function header(t,extra,cls){return '<header class="hd'+(cls?' '+cls:'')+'"><h1>'+esc(t)+'</h1><div>'+(extra||'')+'</div></header>';}
 function tabs(){
-  const T=[['home','🏠','Início'],['bills','📅','Mês'],['cards','💳','Cartões'],['debts','📉','Dívidas'],['rem','🔔','Lembretes'],['plan','🎯','Quitar']];
+  const T=[['home','🏠','Início'],['bills','📅','Mês'],['stmt','🔎','Extrato'],['cards','💳','Cartões'],['debts','📉','Dívidas'],['rem','🔔','Lembretes']];
   return '<nav class="tabs">'+T.map(t=>'<button data-act="tab" data-v="'+t[0]+'" class="'+(S.tab===t[0]?'on':'')+'"><span class="e">'+t[1]+'</span>'+t[2]+'</button>').join('')+'</nav>';
 }
 
@@ -1261,7 +1267,7 @@ function vHome(){
   const known=open.filter(i=>i.amountC!=null).reduce((a,i)=>a+i.amountC,0);
   const sem=open.filter(i=>i.amountC==null).length;
   const late=open.filter(i=>i.date<td).length;
-  let h=header('Financeiro',undoBtn()+rbtn('tab','📝','Anotações','notes')+rbtn('tab','📄','Extratos do banco','stmt')+rbtn('chat','💬','Chat financeiro')+rbtn('tab','⚙️','Ajustes','cfg'),'home')+'<p class="sub">'+esc(ymLabel(ym))+'</p><div class="wrap">';
+  let h=header('Financeiro',undoBtn()+rbtn('tab','📝','Anotações','notes')+rbtn('chat','💬','Chat financeiro')+rbtn('tab','⚙️','Ajustes','cfg'),'home')+'<p class="sub">'+esc(ymLabel(ym))+'</p><div class="wrap">';
   const ibn=ibList();
   if(ibn.length)h+='<button class="item" data-act="tab" data-v="notes"><div class="row"><span class="t">📝 Anotações para decidir</span><span class="cnt">'+ibn.length+'</span></div><div class="mut">Siri ou digitadas: toque para dizer se é cartão, conta, dívida ou lembrete.</div></button>';
   const pend=pendList();
@@ -1275,6 +1281,7 @@ function vHome(){
   const dsum=debts.reduce((a,d)=>a+(d.data.balanceC||0),0),dmiss=debts.some(d=>d.data.balanceC==null);
   const nxD=debts.map(d=>{const dt=debtNext(d.data,true);return {c:(dt&&debtAmt(d.data,dt.slice(0,7)))||0,dt};}).filter(x=>x.dt).sort((a,b)=>a.dt<b.dt?-1:1)[0];
   const g=gastosMes(ym);
+  const entM=stRows().filter(e=>e.d&&e.d.slice(0,7)===ym&&(e.k==='INCOME'||e.k==='LOAN_DISBURSEMENT')).reduce((a,e)=>a+e.c,0);
   {const bd=backupDays();
    if(bd===null||bd>=7)h+='<button class="note bkn" data-act="backup" aria-label="Baixar uma cópia dos dados">💾 '+(bd===null?'Você ainda não baixou uma cópia dos seus dados.':'Faz '+bd+' dias desde a última cópia dos seus dados.')+' Toque para baixar.</button>';}
   const paidN=rows.filter(feitaH).length,totN=rows.length,paidC=rows.filter(i=>feitaH(i)&&i.amountC!=null).reduce((a,i)=>a+i.amountC,0);
@@ -1292,6 +1299,9 @@ function vHome(){
     +srow('bills','A pagar no mês',money(known),(late?'<span class="tag bad">'+late+(late===1?' atrasada':' atrasadas')+'</span> ':'')+(sem?'<span class="tag warn">'+sem+' sem valor</span>':'')+(!rows.length?'Nenhuma conta cadastrada':'')+((rows.length&&!late&&!sem)?'Valores conhecidos':''))
     +srow('cards','Cartões',cardsH.length?money(totH):'—',cardsH.length?cardsH.length+(cardsH.length===1?' cartão · total usado':' cartões · total usado'):'Nenhum cartão')
     +srow('debts','Dívidas · saldo total',debts.length?money(dsum):'—',(debts.length?(nxD?'próxima parcela '+money(nxD.c)+' em '+brDate(nxD.dt).slice(0,5):debts.length+' em aberto'):'Nenhuma em aberto')+(dmiss?' · <span class="tag warn">saldo não informado</span>':'')+(recvs.length?' · <span class="rc">a receber '+money(recvs.reduce((a,d)=>a+(d.data.balanceC||0),0))+'</span>':''))
+    +'<button data-act="st-go" data-f="in"><span class="nm"><b>Entradas do mês</b><i>'+(entM?'dinheiro que entrou (renda e empréstimo)':'nada importado neste mês')+'</i></span><span class="vl rc">'+(entM?'+ '+money(entM):'—')+'</span></button>'
+    +srow('stmt','Buscar lançamentos','🔎','gastos, entradas, mercado, posto, dia…')
+    +srow('plan','Plano para quitar dívidas','🎯','simulação, não é promessa')
     +srow('spend','Gastos do mês',g.rows.length?money(g.total):'—',g.semN?'<span class="tag warn">'+g.semN+' sem categoria</span>':(g.rows.length?'Por categoria':'Sem gastos neste mês'))
     +'</div>';
   const up=upcoming();
@@ -1309,7 +1319,10 @@ function vCfg(){
   h+='<h2>Segurança</h2>'+lkBlock('fin');
   h+='<h2>Aparência</h2>'+fsBlock();
   h+='<h2>Cópia de segurança</h2>'+backupBlock();
-  h+='<h2>Conta</h2><button class="btn sec" data-act="refresh">Atualizar</button><button class="btn sec" data-act="logout">Sair</button>';
+  h+='<h2>Atualizar</h2><p class="hint">“Atualizar dados” busca de novo os seus lançamentos no servidor (use se mexeu em outro aparelho ou o GPT gravou algo). “Atualizar o aplicativo” baixa a versão nova do próprio Financeiro (telas e ícone). Versão instalada: '+APP_V+'.</p>'
+    +(S.upd?'<div class="note">'+esc(S.upd)+'</div>':'')
+    +'<button class="btn" data-act="refresh">Atualizar dados</button><button class="btn sec" data-act="app-update">Atualizar o aplicativo (versão nova)</button>';
+  h+='<h2>Conta</h2><button class="btn sec" data-act="logout">Sair</button>';
   h+=hasDemo()?'<button class="btn sec" data-act="demo-off">Apagar os exemplos de teste</button>':(S.recs.length?'':'<button class="btn sec" data-act="demo-on">Carregar exemplos de teste</button>');
   h+='<p class="hint" style="text-align:center"><a class="lnk" href="../">Abrir o Núcleo</a></p>';
   h+='<p class="hint">Projeção parcial não é dinheiro disponível. O Financeiro só organiza e lembra: quem paga é você.</p></div>';
@@ -2078,26 +2091,77 @@ function stRows(){
   byKind('stmt').forEach(r=>r.data.entries.forEach(e=>out.push(Object.assign({acct:r.data.account},e))));
   return out;
 }
+/* ---------- Extrato: buscar, filtrar por entradas/gastos, mês e dia ---------- */
+const APP_V='v36';
+const ST_FILTERS=[['all','Tudo'],['in','Entradas'],['out','Gastos'],['fat','Faturas pagas'],['tr','Transferências']];
+function stAll(){
+  const out=stRows().map(e=>Object.assign({},e,{src:'extrato'}));
+  const ids={};byKind('charge').forEach(r=>{ids[r.id]=1;});
+  gastosRows().forEach(r=>{if(ids[r.i])out.push({i:r.i,d:r.d,t:r.t,c:-r.v,k:'EXPENSE',g:r.g,acct:r.src,src:'cartao'});});
+  return out;
+}
+const stKindLabel=e=>e.src==='cartao'?'Compra no cartão':(ST_KIND[e.k]||e.k);
+function stMatchF(e,f){
+  if(f==='in')return e.k==='INCOME'||e.k==='LOAN_DISBURSEMENT';
+  if(f==='out')return e.k==='EXPENSE';
+  if(f==='fat')return e.k==='CARD_SETTLEMENT';
+  if(f==='tr')return e.k==='TRANSFER';
+  return true;
+}
+function stMatchQ(e,q){
+  if(!q)return true;
+  const hay=stNorm([e.t,e.g,e.acct,stKindLabel(e),brDate(e.d),(Math.abs(e.c)/100).toFixed(2).replace('.',',')].join(' | '));
+  return q.split(/\s+/).filter(Boolean).every(w=>hay.indexOf(w)>=0);
+}
+function stState(){
+  if(!S.st)S.st={q:'',f:'all',ym:ymOf(todayIso()),day:'',lim:60};
+  return S.st;
+}
+function stFiltered(){
+  const st=stState(),q=stNorm(st.q);
+  return stAll().filter(e=>e.d&&(!st.day?(st.ym==='all'||e.d.slice(0,7)===st.ym):e.d===st.day)&&stMatchF(e,st.f)&&stMatchQ(e,q))
+    .sort((a,b)=>a.d<b.d?1:a.d>b.d?-1:(a.t<b.t?-1:1));
+}
+function stListHtml(){
+  const st=stState(),rows=stFiltered(),q=stNorm(st.q);
+  let h='';
+  const sum={in:0,out:0,fat:0,tr:0};
+  rows.forEach(e=>{if(e.k==='INCOME'||e.k==='LOAN_DISBURSEMENT')sum.in+=e.c;else if(e.k==='EXPENSE')sum.out+=-e.c;else if(e.k==='CARD_SETTLEMENT')sum.fat+=-e.c;else sum.tr+=e.c;});
+  h+='<div class="card"><div class="row"><span class="mut">Resultado</span><b>'+rows.length+(rows.length===1?' lançamento':' lançamentos')+'</b></div>'
+    +(sum.in?'<div class="row"><span class="mut">Entrou</span><b class="rc">+ '+money(sum.in)+'</b></div>':'')
+    +(sum.out?'<div class="row"><span class="mut">Gastou</span><b>'+money(sum.out)+'</b></div>':'')
+    +(sum.fat?'<div class="row"><span class="mut">Fatura de cartão paga</span><b>'+money(sum.fat)+'</b></div>':'')
+    +(sum.tr?'<div class="row"><span class="mut">Transferências (saldo)</span><b>'+money(sum.tr)+'</b></div>':'')+'</div>';
+  if(!rows.length){
+    h+='<div class="card mut">'+(stAll().length?'Nada encontrado com esses filtros. Tente outro mês, “Tudo” ou apague o que escreveu.':'Nenhum extrato importado ainda. Toque em “Importar extrato do Mobills” abaixo.')+'</div>';
+  }
+  let last='';
+  rows.slice(0,st.lim).forEach(e=>{
+    if(e.d!==last){last=e.d;h+='<h2 class="stday">'+brDate(e.d).slice(0,5)+' · '+dowOf(e.d)+'</h2>';}
+    const ent=(e.k==='INCOME'||e.k==='LOAN_DISBURSEMENT')||(e.k==='TRANSFER'&&e.c>0);
+    h+='<div class="item"><div class="row"><span class="t">'+esc(e.t||'(sem descrição)')+'</span><b class="'+(ent?'rc':'')+'">'+(ent?'+ ':'')+money(Math.abs(e.c))+'</b></div><div class="mut">'+stKindLabel(e)+(e.g?' · '+esc(e.g):'')+' · '+esc(e.acct||'')+'</div></div>';
+  });
+  if(rows.length>st.lim)h+='<button class="btn sec" data-act="st-more">Mostrar mais ('+(rows.length-st.lim)+' restantes)</button>';
+  /* contas, cartões e dívidas cadastrados que combinam com a busca */
+  if(q){
+    const hits=[];
+    byKind('bill').forEach(r=>{if(stNorm(r.data.name).indexOf(q)>=0)hits.push(['bills','Conta',r.data.name,r.data.amountC]);});
+    byKind('debt').forEach(r=>{if(stNorm(r.data.creditor).indexOf(q)>=0)hits.push(['debts',r.data.dir==='RECEBER'?'A receber':'Dívida',r.data.creditor,r.data.balanceC]);});
+    byKind('card').forEach(r=>{if(stNorm(r.data.name).indexOf(q)>=0)hits.push(['cards','Cartão',r.data.name,null]);});
+    byKind('charge').forEach(r=>{if(stNorm(r.data.desc).indexOf(q)>=0)hits.push(['cards','Compra no cartão',r.data.desc,r.data.totalC]);});
+    if(hits.length){h+='<h2>Contas, cartões e dívidas</h2>';hits.slice(0,20).forEach(x=>{h+='<button class="item" data-act="tab" data-v="'+x[0]+'"><div class="row"><span class="t">'+esc(x[2])+'</span><b>'+(x[3]==null?'':money(x[3]))+'</b></div><div class="mut">'+x[1]+' · toque para abrir</div></button>';});}
+  }
+  return h;
+}
 function vStmt(){
-  let h=header('Extratos','<button class="ibtn" data-back="1" data-act="tab" data-v="home" aria-label="Voltar" title="Voltar">←</button>'+rbtn('stmt-pick','📥','Importar arquivo do Mobills (.xlsx)'))+'<div class="wrap"><input type="file" id="stfile" accept=".xlsx" hidden>'
-    +'<p class="hint">No Mobills: Relatório de transações → exportar em Excel. Importar de novo o mesmo período não duplica.</p>';
-  const rows=stRows();
-  if(!rows.length)return h+'<div class="card mut">Nenhum extrato importado ainda.</div></div>';
-  const by={};
-  rows.forEach(e=>{const ym=e.d.slice(0,7);const m=by[ym]=by[ym]||{INCOME:0,EXPENSE:0,CARD_SETTLEMENT:0,LOAN_DISBURSEMENT:0,TRANSFER:0};m[e.k]+=e.c;});
-  Object.keys(by).sort().reverse().slice(0,6).forEach(ym=>{
-    const m=by[ym];
-    h+='<h2>'+ymShort(ym)+'</h2><div class="card"><div class="row"><span class="mut">Renda</span><b>'+money(m.INCOME)+'</b></div>'
-      +'<div class="row"><span class="mut">Gastos</span><b>'+money(-m.EXPENSE)+'</b></div>'
-      +'<div class="row"><span class="mut">Fatura de cartão paga</span><b>'+money(-m.CARD_SETTLEMENT)+'</b></div>'
-      +(m.LOAN_DISBURSEMENT?'<div class="row"><span class="mut">Empréstimo recebido</span><b>'+money(m.LOAN_DISBURSEMENT)+'</b></div>':'')
-      +'<div class="row"><span class="mut">Transferências (saldo)</span><b>'+money(m.TRANSFER)+'</b></div></div>';
-  });
-  h+='<h2>Últimos lançamentos</h2>';
-  rows.sort((a,b)=>a.d<b.d?1:a.d>b.d?-1:0).slice(0,40).forEach(e=>{
-    h+='<div class="item"><div class="row"><span class="t">'+esc(e.t||'(sem descrição)')+'</span><b>'+money(e.c)+'</b></div><div class="mut">'+brDate(e.d)+' · '+ST_KIND[e.k]+(e.g?' · '+esc(e.g):'')+' · '+esc(e.acct)+'</div></div>';
-  });
-  h+='<p class="hint">Mostrando os 40 mais recentes. Renda, empréstimo, transferência e fatura paga não entram em “Gastos”.</p>';
+  const st=stState();
+  let h=header('Extrato',rbtn('stmt-pick','📥','Importar extrato do Mobills (.xlsx)'))+'<div class="wrap"><input type="file" id="stfile" accept=".xlsx" hidden>';
+  h+='<input id="stq" class="stq" type="search" inputmode="search" autocomplete="off" placeholder="Buscar: mercado, posto, pix, 50,00, 12/10…" value="'+esc(st.q)+'" aria-label="Buscar lançamentos">';
+  h+='<div class="chips">'+ST_FILTERS.map(f=>'<button class="chip'+(st.f===f[0]?' on':'')+'" data-act="st-f" data-v="'+f[0]+'">'+f[1]+'</button>').join('')+'</div>';
+  h+='<div class="spnav"><button class="btn sec" data-act="st-prev" aria-label="Mês anterior">‹</button><b>'+(st.day?brDate(st.day):(st.ym==='all'?'Todos os meses':esc(ymLabel(st.ym))))+'</b><button class="btn sec" data-act="st-next" aria-label="Próximo mês">›</button></div>';
+  h+='<div class="chips"><button class="chip'+(st.ym==='all'&&!st.day?' on':'')+'" data-act="st-all">Todos os meses</button><label class="chip daylb'+(st.day?' on':'')+'">Dia: <input id="std" type="date" value="'+esc(st.day)+'" aria-label="Escolher um dia"></label>'+((st.q||st.day||st.f!=='all')?'<button class="chip" data-act="st-clear">Limpar</button>':'')+'</div>';
+  h+='<div id="stlist">'+stListHtml()+'</div>';
+  h+='<button class="btn sec" data-act="stmt-pick">📥 Importar extrato do Mobills</button><p class="hint">No Mobills: Relatório de transações → exportar em Excel. Importar de novo o mesmo período não duplica. Renda, empréstimo, transferência e fatura paga não entram em “Gastos”.</p>';
   return h+'</div>';
 }
 
@@ -2368,6 +2432,8 @@ async function debtForm(rec,preset){
   });
 }
 
+document.addEventListener('input',ev=>{const t=ev.target;if(t&&t.id==='stq'){const st=stState();st.q=t.value;st.lim=60;const l=$('stlist');if(l)l.innerHTML=stListHtml();}});
+document.addEventListener('change',ev=>{const t=ev.target;if(t&&t.id==='std'){const st=stState();st.day=t.value||'';st.lim=60;render();}});
 document.addEventListener('change',ev=>{const t=ev.target;if(t&&t.id==='stfile'&&t.files&&t.files[0]){const f=t.files[0];t.value='';stImport(f);}});
 document.addEventListener('click',async ev=>{
   const b=ev.target.closest('[data-act]');if(!b)return;
@@ -2383,7 +2449,22 @@ document.addEventListener('click',async ev=>{
   else if(act==='wk-prev'||act==='wk-next'||act==='wk-today'){const w=S.wk||mondayIso(todayIso());S.wk=act==='wk-today'?null:plusDays(w,act==='wk-prev'?-7:7);render();}
   else if(act==='pm-prev'||act==='pm-next'||act==='pm-today'){const y=S.pmY||todayIso().slice(0,7);S.pmY=act==='pm-today'?null:addMonths(y,act==='pm-prev'?-1:1);S.pday=null;render();}
   else if(act==='pm-day'){S.pday=b.dataset.v;render();}
-  else if(act==='refresh'){try{await Api.load();await ensureMonth();if(S.tab==='rem')await loadFinRems();}catch(e){S.msg='Sem internet.';}render();}
+  else if(act==='refresh'){
+    try{await Api.load();await ensureMonth();if(S.tab==='rem')await loadFinRems();const t=new Date();S.upd='Dados atualizados às '+String(t.getHours()).padStart(2,'0')+':'+String(t.getMinutes()).padStart(2,'0')+'. Agora há '+S.recs.length+' registros.';}
+    catch(e){S.upd='';S.msg='Sem internet. Nada foi alterado.';}
+    render();}
+  else if(act==='app-update'){
+    if(await confirmBox('Atualizar o aplicativo?',['Baixa a versão nova do Financeiro e reinicia.','Seus dados continuam salvos na nuvem.'],'Sim, atualizar')){
+      try{if(navigator.serviceWorker){const rs=await navigator.serviceWorker.getRegistrations();await Promise.all(rs.map(r=>r.unregister()));}
+        if(window.caches){const ks=await caches.keys();await Promise.all(ks.map(k=>caches.delete(k)));}}catch(e){}
+      location.reload();
+    }}
+  else if(act==='st-go'){S.st=stState();S.st.f=b.dataset.f||'all';S.st.q='';S.st.day='';S.st.ym=ymOf(todayIso());S.st.lim=60;S.tab='stmt';render();window.scrollTo(0,0);}
+  else if(act==='st-f'){const t=stState();t.f=b.dataset.v;t.lim=60;render();}
+  else if(act==='st-prev'||act==='st-next'){const t=stState();t.day='';t.lim=60;const cur=t.ym==='all'?ymOf(todayIso()):t.ym;t.ym=addMonths(cur,act==='st-prev'?-1:1);render();}
+  else if(act==='st-all'){const t=stState();t.day='';t.ym=(t.ym==='all')?ymOf(todayIso()):'all';t.lim=60;render();}
+  else if(act==='st-more'){const t=stState();t.lim+=60;render();}
+  else if(act==='st-clear'){const t=stState();t.q='';t.f='all';t.day='';t.lim=60;render();}
   else if(act==='logout'){if(await confirmBox('Sair do Financeiro?',['Você terá que entrar de novo.'],'Sim, sair')){Api.saveSess(null);lsSet('fin-cache','');location.reload();}}
   else if(act==='demo-on'){
     if(await confirmBox('Carregar exemplos de teste?',['Cria 2 cartões, 6 compras, 4 contas e 2 dívidas FALSOS.','Todos têm “(teste)” no nome.','Dá para apagar tudo de uma vez depois.'],'Sim, carregar')){
