@@ -49,6 +49,7 @@ h2{font-size:1.25rem;margin:1.2rem 1rem .4rem}
 .row b{white-space:nowrap}
 .mnav{display:flex;gap:.5rem;align-items:center;margin:.5rem 0}
 .mnav button{font:inherit;font-weight:800;min-height:3rem;border:0;border-radius:1rem;background:var(--surface-2);color:var(--fg);cursor:pointer}
+.frd{white-space:nowrap;flex:none;text-align:right}
 .mnav .arr{width:3.8rem;font-size:1.6rem}
 .mnav .mid{flex:1;font-size:1rem;line-height:1.2}.mnav .arr{width:3.2rem}
 .sum3{display:grid;grid-template-columns:repeat(3,1fr);gap:.4rem;text-align:center;padding:.7rem .5rem}
@@ -1499,7 +1500,7 @@ const frOpen=()=>(S.fr||[]).filter(r=>!r.data.done).sort(frSort);
 const frOn=iso=>frOpen().filter(r=>r.data.date===iso);
 function frRow(r,showDate){
   const x=r.data,td=todayIso(),late=!x.done&&x.date&&x.date<td;
-  return '<button class="item" data-act="rem-open" data-id="'+esc(r.id)+'"><div class="row"><span class="t">'+(x.done?'✔ ':'')+esc(x.title||'Sem título')+'</span><span class="mut">'
+  return '<button class="item" data-act="rem-open" data-id="'+esc(r.id)+'"><div class="row"><span class="t">'+(x.done?'✔ ':'')+esc(x.title||'Sem título')+'</span><span class="mut frd">'
     +(showDate&&x.date?brDate(x.date).slice(0,5)+' ':'')+esc(x.time||'')+'</span></div>'
     +'<div class="mut">'+(late?'<span class="tag bad">atrasado</span> ':'')+(frAuto(r)?'<span class="tag">automático</span> ':'')+((x.alarms&&x.alarms.length)?'🔔 alarme':'sem alarme')+(x.repeat==='monthly'?' · todo mês':'')+'</div></button>';
 }
