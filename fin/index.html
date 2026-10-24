@@ -575,10 +575,16 @@ function catOf(e){
 function gastosRows(){
   const out=[];
   stRows().forEach(e=>{if(e.k==='EXPENSE'&&e.c<0)out.push({i:e.i,d:e.d,t:e.t||'',v:-e.c,g:e.g||'',src:e.acct});});
-  byKind('charge').forEach(r=>{
-    const d=r.data||{},card=byKind('card').find(c=>c.id===d.cardId);
-    if(/^Fatura aberta/.test(d.desc||'')||(d.n||1)!==1||!(d.totalC>0))return;
-    out.push({i:r.id,d:d.date,t:d.desc||'',v:d.totalC,g:'',src:card?card.data.name:'cartão'});
+  /* compras no cartão: cada parcela entra no mês dela (a 1ª no mês da compra); estorno abate */
+  byKind('card').forEach(cr=>{
+    Object.values(cardCalc(cr).inv).forEach(v=>{
+      v.items.forEach(it=>{
+        const d=it.rec.data;
+        if(/^Fatura aberta/.test(d.desc||'')||!it.amountC)return;
+        const when=it.parcela>1?dateOf(addMonths(it.date.slice(0,7),it.parcela-1),+it.date.slice(8,10)):it.date;
+        out.push({i:it.rec.id,d:when,t:(d.desc||'')+(it.n>1?' ('+it.parcela+'/'+it.n+')':''),v:it.amountC,g:'',src:cr.data.name,card:true});
+      });
+    });
   });
   return out;
 }
@@ -594,8 +600,9 @@ function gastosMes(ym){
   return {total,list,semN:sem.length,semV,sem,rows};
 }
 function donutSvg(list,total,semV){
-  const parts=list.slice(0,7).map((x,i)=>({v:x.v,col:CAT_COL[i]})),resto=list.slice(7).reduce((a,x)=>a+x.v,0);
+  let parts=list.slice(0,7).map((x,i)=>({v:x.v,col:CAT_COL[i]})),resto=list.slice(7).reduce((a,x)=>a+x.v,0);
   if(resto)parts.push({v:resto,col:CAT_COL[7]});if(semV)parts.push({v:semV,col:'#5b6168'});
+  parts=parts.filter(p=>p.v>0);total=parts.reduce((a,p)=>a+p.v,0);if(!(total>0))return '';
   let acc=0,s='<svg viewBox="0 0 42 42" class="donut" role="img" aria-label="Gráfico de pizza dos gastos por categoria"><circle cx="21" cy="21" r="15.9155" fill="none" stroke="#2a2d31" stroke-width="6"/>';
   parts.forEach(p=>{const pct=100*p.v/total;s+='<circle cx="21" cy="21" r="15.9155" fill="none" stroke="'+p.col+'" stroke-width="6" stroke-dasharray="'+pct.toFixed(3)+' '+(100-pct).toFixed(3)+'" stroke-dashoffset="'+(25-acc).toFixed(3)+'"/>';acc+=pct;});
   return s+'</svg>';
@@ -1260,6 +1267,14 @@ async function clearDemo(){
 }
 const rbtn=(act,ico,label,v)=>'<button class="ibtn" data-act="'+act+'"'+(v?' data-v="'+v+'"':'')+' aria-label="'+esc(label)+'" title="'+esc(label)+'">'+ico+'</button>';
 const srow=(v,label,val,sub)=>'<button data-act="tab" data-v="'+v+'"><span class="nm"><b>'+label+'</b><i>'+(sub||'')+'</i></span><span class="vl">'+val+'</span></button>';
+function overdueBefore(){
+  const td=todayIso(),cur=ymOf(td),out=[];
+  for(let k=6;k>=1;k--){
+    const ym=addMonths(cur,-k);
+    monthItems(ym).forEach(i=>{if(i.dir!=='RECEBER'&&i.state==='Em atraso'&&i.amountC!=null&&i.date<td)out.push(Object.assign({mm:ym},i));});
+  }
+  return out;
+}
 function vHome(){
   const ym=ymOf(todayIso()),td=todayIso();
   /* tudo que o Mês mostra para pagar: contas, faturas de cartão e parcelas de dívidas (a tela de Início e a de Mês dão o mesmo total) */
@@ -1295,6 +1310,9 @@ function vHome(){
    if(tRc>0){const sob=tRc-tPg;
      h+='<div class="card"><div class="row"><span class="mut">Previsto a receber no mês</span><b class="rc">'+money(tRc)+'</b></div><div class="row"><span class="mut">Contas e parcelas do mês</span><b>'+money(tPg)+'</b></div><div class="row"><span class="mut">Sobra depois das contas</span><b'+(sob<0?' style="color:var(--danger)"':' class="rc"')+'>'+(sob<0?'Falta '+money(-sob):money(sob))+'</b></div><div class="hint">É previsão: só conta o que tem valor informado. Não é dinheiro disponível.</div></div>';}
   }
+  {const ob=overdueBefore();
+   if(ob.length){const tot=ob.reduce((a,i)=>a+(i.amountC||0),0);
+     h+='<button class="note bkn" data-act="m-old" data-v="'+ob[0].mm+'">⚠️ Atrasado de meses anteriores: '+money(tot)+' ('+ob.length+(ob.length===1?' item':' itens')+'). Isso não está em “Falta pagar neste mês”. Toque para ver.</button>';}}
   if(g.semN>0)h+='<button class="note bkn" data-act="tab" data-v="spend">📝 '+g.semN+(g.semN===1?' gasto sem categoria':' gastos sem categoria')+'. Toque para revisar.</button>';
   h+='<div class="up s2">'
     +srow('bills','A pagar no mês',money(known),(late?'<span class="tag bad">'+late+(late===1?' atrasada':' atrasadas')+'</span> ':'')+(sem?'<span class="tag warn">'+sem+' sem valor</span>':'')+(!rows.length?'Nenhuma conta cadastrada':'')+((rows.length&&!late&&!sem)?'Valores conhecidos':''))
@@ -1345,6 +1363,12 @@ function debtOwes(x,ym){
   if(x.nInst&&debtFd(x))return mdiff(debtFd(x),ym)<x.nInst;
   if(x.balanceC!=null&&x.installC)return mdiff(f,ym)<Math.ceil(x.balanceC/x.installC);
   return true;
+}
+function debtConfirm(x){
+  if(x.status!=='ATIVA'||!x.dueDay||x.dir==='RECEBER')return null;
+  const td=todayIso(),cur=ymOf(td);
+  if((x.paidYm||[]).indexOf(cur)>=0||!debtOwes(x,cur))return null;
+  const dt=dateOf(cur,x.dueDay);return dt<td?dt:null;
 }
 function debtNext(x,afterToday){
   const td=todayIso();let m=debtFirst(x);
@@ -1863,6 +1887,7 @@ function vMonth(){
   h+='<div class="card sum3"><div><div class="mut">A pagar</div><b>'+money(tP)+'</b></div><div><div class="mut">Já pago</div><b>'+money(pP)+'</b></div><div><div class="mut">Falta pagar</div><b>'+money(tP-pP)+'</b></div></div>';
   if(receber.length)h+='<div class="card sum3"><div><div class="mut">A receber</div><b class="rc">'+money(tR)+'</b></div><div><div class="mut">Já recebido</div><b class="rc">'+money(pR)+'</b></div><div><div class="mut">Falta receber</div><b class="rc">'+money(tR-pR)+'</b></div></div><div class="hint" style="margin:-.2rem .3rem .4rem">O que falta: você recebe '+money(tR-pR)+' e paga '+money(tP-pP)+' (diferença '+money((tR-pR)-(tP-pP))+').</div>';
   if(semV)h+='<div class="hint" style="margin:-.2rem .3rem .4rem">'+semV+' sem valor não entra na soma.</div>';
+  if(ym===cur){const ob=overdueBefore();if(ob.length)h+='<button class="note bkn" data-act="m-old" data-v="'+ob[0].mm+'">⚠️ Há '+ob.length+(ob.length===1?' item atrasado':' itens atrasados')+' de meses anteriores ('+money(ob.reduce((a,i)=>a+(i.amountC||0),0))+'). Toque para ver.</button>';}
   h+='<div class="chips2">'+[['all','Tudo',all.length],['pay','A pagar',pagar.filter(i=>!feita(i)).length]].concat(receber.length?[['rec','A receber',receber.filter(i=>!feita(i)).length]]:[]).concat([['done','Feitas',all.filter(feita).length]]).map(f=>'<button data-act="m-filter" data-v="'+f[0]+'" class="'+(S.mf===f[0]?'on':'')+'">'+f[1]+'<small>'+f[2]+'</small></button>').join('')+'</div>';
   if(!all.length)h+='<div class="card mut">Nada vence neste mês. Contas, faturas de cartão e parcelas de dívidas aparecem aqui sozinhas.</div>';
   else if(!shown.length)h+='<div class="card mut">Nada nesta lista.</div>';
@@ -1940,7 +1965,7 @@ const DSTR={ATIVA:'A receber',ATRASADA:'Atrasada',PAGA:'Recebida',DESCONHECIDA:'
 const dstTxt=x=>(x.dir==='RECEBER'?DSTR:DST)[x.status]||x.status;
 function debtRow(d){
   const x=d.data,rv=x.dir==='RECEBER';
-  return '<button class="item" data-act="debt-edit" data-id="'+d.id+'" data-rid="'+d.id+'"><div class="row"><span class="t">'+esc(x.creditor)+'</span><span class="tag '+(x.status==='PAGA'?'ok':(x.status==='ATRASADA'?'bad':''))+'">'+esc(dstTxt(x))+'</span></div><div class="row"><span class="mut">'+(rv?'Falta receber':'Saldo')+'</span><b'+(rv?' class="rc"':'')+'>'+money(x.balanceC)+'</b></div><div class="row"><span class="mut">Parcela</span><b'+(rv?' class="rc"':'')+'>'+money(x.installC)+'</b></div><div class="mut">'+(rv?'A receber':'Dívida')+(x.kindD?' · '+esc(x.kindD):'')+(x.rateBp!=null?' · juros '+(x.rateBp/100).toFixed(2).replace('.',',')+'% ao mês':'')+(x.account?' · conta '+esc(x.account):'')+'</div>'+(x.dueDay?'<div class="mut">Vence dia '+x.dueDay+(debtNext(x,true)?' · próxima parcela em '+brDate(debtNext(x,true)):'')+'</div>':'')+(S.remMap&&S.remMap[d.id]?'<div class="mut">🔔 Lembrete no Núcleo: 1 dia antes, às '+REM_TIME+'</div>':'')+(x.note?'<div class="mut">'+esc(x.note)+'</div>':'')+'</button>';
+  return '<button class="item" data-act="debt-edit" data-id="'+d.id+'" data-rid="'+d.id+'"><div class="row"><span class="t">'+esc(x.creditor)+'</span><span class="tag '+(x.status==='PAGA'?'ok':(x.status==='ATRASADA'?'bad':''))+'">'+esc(dstTxt(x))+'</span></div><div class="row"><span class="mut">'+(rv?'Falta receber':'Saldo')+'</span><b'+(rv?' class="rc"':'')+'>'+money(x.balanceC)+'</b></div><div class="row"><span class="mut">Parcela</span><b'+(rv?' class="rc"':'')+'>'+money(x.installC)+'</b></div><div class="mut">'+(rv?'A receber':'Dívida')+(x.kindD?' · '+esc(x.kindD):'')+(x.rateBp!=null?' · juros '+(x.rateBp/100).toFixed(2).replace('.',',')+'% ao mês':'')+(x.account?' · conta '+esc(x.account):'')+'</div>'+(x.dueDay?'<div class="mut">Vence dia '+x.dueDay+(debtConfirm(x)?' · ⚠️ parcela de '+brDate(debtConfirm(x))+': confirme se já pagou':(debtNext(x,true)?' · próxima parcela em '+brDate(debtNext(x,true)):''))+'</div>':'')+(S.remMap&&S.remMap[d.id]?'<div class="mut">🔔 Lembrete no Núcleo: 1 dia antes, às '+REM_TIME+'</div>':'')+(x.note?'<div class="mut">'+esc(x.note)+'</div>':'')+'</button>';
 }
 function vDebts(){
   const ds=byKind('debt');
@@ -2093,12 +2118,11 @@ function stRows(){
   return out;
 }
 /* ---------- Extrato: buscar, filtrar por entradas/gastos, mês e dia ---------- */
-const APP_V='v39';
+const APP_V='v40';
 const ST_FILTERS=[['all','Tudo'],['in','Entradas'],['out','Gastos'],['fat','Faturas pagas'],['tr','Transferências']];
 function stAll(){
   const out=stRows().map(e=>Object.assign({},e,{src:'extrato'}));
-  const ids={};byKind('charge').forEach(r=>{ids[r.id]=1;});
-  gastosRows().forEach(r=>{if(ids[r.i])out.push({i:r.i,d:r.d,t:r.t,c:-r.v,k:'EXPENSE',g:r.g,acct:r.src,src:'cartao'});});
+  gastosRows().filter(r=>r.card).forEach(r=>{out.push({i:r.i+'|'+r.d,d:r.d,t:r.t,c:-r.v,k:'EXPENSE',g:r.g,acct:r.src,src:'cartao'});});
   return out;
 }
 const stKindLabel=e=>e.src==='cartao'?'Compra no cartão':(ST_KIND[e.k]||e.k);
@@ -2443,6 +2467,7 @@ document.addEventListener('click',async ev=>{
   const act=b.dataset.act,id=b.dataset.id,get=i=>S.recs.find(r=>r.id===i);
   S.msg='';
   if(act==='tab'){S.tab=b.dataset.v;if(S.tab!=='cards')S.cardId=null;if(S.tab==='cards'&&b.dataset.v==='cards')S.cardId=null;render();window.scrollTo(0,0);}
+  else if(act==='m-old'){S.mm=b.dataset.v;S.tab='bills';render();window.scrollTo(0,0);}
   else if(act==='rem-mode'){S.lt=b.dataset.v;render();}
   else if(act==='rem-new')frForm(null);
   else if(act==='push-on')enablePush();
