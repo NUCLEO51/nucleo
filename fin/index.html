@@ -1795,7 +1795,7 @@ function fichaDebt(rec,ymHint){
   if(x.note)h+=frow('Observação',x.note);
   h+='</div>';
   if(sch.length){
-    h+='<h2>Parcelas</h2><div class="card">'+sch.map(s=>'<div class="row"><span>'+(s.date?brDate(s.date):esc(ymShort(s.ym)))+'</span><span>'+(s.amt==null?'—':money(s.amt))+'</span><b>'+esc(s.st)+'</b></div>').join('')+'</div>';
+    h+='<h2>Parcelas</h2><div class="card">'+sch.map(s=>'<div class="row"><span style="white-space:nowrap">'+(s.date?brDate(s.date):esc(ymShort(s.ym)))+'</span><span>'+(s.amt==null?'—':money(s.amt))+'</span><b>'+esc(s.st)+'</b></div>').join('')+'</div>';
     h+='<div class="card">'+frow(rv?'Já recebidas':'Já pagas',paidN+' de '+sch.length)+frow(rv?'Total já recebido':'Total já pago',money(totalPaid))+frow('Faltam',String(sch.length-paidN))+'</div>';
   }else h+='<div class="card mut">Sem parcelas a mostrar (falta o dia do vencimento ou a dívida está quitada).</div>';
   const ym=ymHint||(sch.find(s=>!s.paid)||{}).ym;
@@ -2118,7 +2118,7 @@ function stRows(){
   return out;
 }
 /* ---------- Extrato: buscar, filtrar por entradas/gastos, mês e dia ---------- */
-const APP_V='v40';
+const APP_V='v41';
 const ST_FILTERS=[['all','Tudo'],['in','Entradas'],['out','Gastos'],['fat','Faturas pagas'],['tr','Transferências']];
 function stAll(){
   const out=stRows().map(e=>Object.assign({},e,{src:'extrato'}));
@@ -2163,8 +2163,8 @@ function stListHtml(){
   let last='';
   rows.slice(0,st.lim).forEach(e=>{
     if(e.d!==last){last=e.d;h+='<h2 class="stday">'+brDate(e.d).slice(0,5)+' · '+dowOf(e.d)+'</h2>';}
-    const ent=(e.k==='INCOME'||e.k==='LOAN_DISBURSEMENT')||(e.k==='TRANSFER'&&e.c>0);
-    h+='<div class="item"><div class="row"><span class="t">'+esc(e.t||'(sem descrição)')+'</span><b class="'+(ent?'rc':'')+'">'+(ent?'+ ':'')+money(Math.abs(e.c))+'</b></div><div class="mut">'+stKindLabel(e)+(e.g?' · '+esc(e.g):'')+' · '+esc(e.acct||'')+'</div></div>';
+    const ent=e.c>0;
+    h+='<div class="item"><div class="row"><span class="t">'+esc(e.t||'(sem descrição)')+'</span><b class="'+(ent?'rc':'')+'">'+(ent?'+ ':'')+money(Math.abs(e.c))+'</b></div><div class="mut">'+(e.src==='cartao'&&e.c>0?'Estorno no cartão':stKindLabel(e))+(e.g?' · '+esc(e.g):'')+' · '+esc(e.acct||'')+'</div></div>';
   });
   if(rows.length>st.lim)h+='<button class="btn sec" data-act="st-more">Mostrar mais ('+(rows.length-st.lim)+' restantes)</button>';
   /* contas, cartões e dívidas cadastrados que combinam com a busca */
