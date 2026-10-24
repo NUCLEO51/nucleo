@@ -121,7 +121,7 @@ begin
   if p_kind is null or p_kind not in ('card','charge','invpay','bill','billmonth','debt','proposal','stmt') then
     raise exception 'kind inválido: %', p_kind; end if;
   if p_data is null or jsonb_typeof(p_data)<>'object' then raise exception 'data deve ser um objeto'; end if;
-  if octet_length(p_data::text) > 20000 then raise exception 'data grande demais (máx. 20000 bytes)'; end if;
+  if octet_length(p_data::text) > (case when p_kind='stmt' then 400000 else 20000 end) then raise exception 'data grande demais (máx. % bytes)', (case when p_kind='stmt' then 400000 else 20000 end); end if;
   for k,v in select key,value from jsonb_each(p_data) loop
     if k ~ '^[A-Za-z]+C$' or k in ('rateBp','nInst') then
       if jsonb_typeof(v) not in ('null','number') then raise exception '% deve ser número inteiro (centavos) ou null', k; end if;

@@ -81,7 +81,7 @@ html.lk-on body>*:not(#lock){visibility:hidden}
 .chips{display:flex;flex-wrap:wrap;gap:.5rem;margin:.4rem 0}
 .chip{border:1px solid var(--line);background:var(--surface);color:inherit;border-radius:2rem;padding:.65rem 1rem;min-height:3rem;font-size:1rem;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:.4rem}
 .chip.on{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
-.chip input{font-size:1rem;background:transparent;color:inherit;border:0}
+.chip input{min-height:2.6rem;font-size:1rem;background:transparent;color:inherit;border:0}
 h2.stday{font-size:1rem;margin:1rem 0 .1rem;color:var(--muted)}
 .spnav{display:flex;align-items:center;justify-content:space-between;gap:.6rem;margin:.6rem 0}
 .spnav .btn{width:4.2rem;margin:0}
@@ -884,7 +884,7 @@ const dateOf=(ym,day)=>ym+'-'+pad(Math.min(day,dim(ym)));
 const brDate=iso=>iso?iso.slice(8,10)+'/'+iso.slice(5,7)+'/'+iso.slice(0,4):'';
 const MES=['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
 const ymLabel=ym=>MES[+ym.slice(5,7)-1]+' de '+ym.slice(0,4);
-const ymShort=ym=>ym.slice(5,7)+'/'+ym.slice(0,4);
+const ymShort=ym=>(typeof ym==='string'&&ym.length>=7)?ym.slice(5,7)+'/'+ym.slice(0,4):'—';
 
 /* ---------- estado ---------- */
 const S={mm:null,mf:'all',recs:[],tab:'home',sess:null,ready:false,msg:'',cardId:null,invYm:null,busy:false};
@@ -1871,7 +1871,7 @@ function vMonth(){
   if(outras.length){
     h+='<h2>Outras contas cadastradas</h2><div class="hint" style="margin:0 1rem .3rem">Não vencem em '+esc(ymShort(ym))+'.</div>';
     const ob=ordRecs('bills:outras',outras,GB);h+=sortBarFor('bills:outras')+'<div'+ordAttr('bills:outras',true)+'>';
-    ob.forEach(b=>{h+='<button class="item" data-act="bill-edit" data-id="'+b.id+'" data-rid="'+b.id+'"><div class="row"><span class="t">'+esc(b.data.name)+'</span><span class="mut">dia '+b.data.dueDay+'</span></div><div class="mut">'+(b.data.recurring?'Todo mês':'Só em '+ymShort(b.data.startYm))+' · '+(b.data.variable?'valor muda':money(b.data.amountC))+'</div></button>';});h+='</div>';
+    ob.forEach(b=>{h+='<button class="item" data-act="bill-edit" data-id="'+b.id+'" data-rid="'+b.id+'"><div class="row"><span class="t">'+esc(b.data.name)+'</span><span class="mut">dia '+b.data.dueDay+'</span></div><div class="mut">'+(b.data.recurring?'Todo mês':(b.data.startYm?'Só em '+ymShort(b.data.startYm):'Sem mês definido'))+' · '+(b.data.variable?'valor muda':money(b.data.amountC))+'</div></button>';});h+='</div>';
   }
   return h+'</div>';
 }
@@ -2090,7 +2090,7 @@ function stRows(){
   return out;
 }
 /* ---------- Extrato: buscar, filtrar por entradas/gastos, mês e dia ---------- */
-const APP_V='v37';
+const APP_V='v38';
 const ST_FILTERS=[['all','Tudo'],['in','Entradas'],['out','Gastos'],['fat','Faturas pagas'],['tr','Transferências']];
 function stAll(){
   const out=stRows().map(e=>Object.assign({},e,{src:'extrato'}));
