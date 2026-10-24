@@ -54,3 +54,9 @@ As duas tentativas anteriores e mais duas desta sessão retornaram `{"status":"c
 
 ## Recomendação
 Reauditoria da AUD512 com esta evidência; executar `rest_homologacao.sh` e o passo do app a partir de uma máquina com acesso ao projeto de teste (ex.: Mac); executar os rollbacks com DROP; só então janela de produção. Fechar a escrita direta antes de declarar a integração pronta.
+
+## Complemento (23/10/2026, noite) — execução REST a partir do Mac
+O Mac de Marcelo (com internet) executou `tests/fin_apply/homologacao/rest_homologacao.sh` contra o projeto de teste (nunca contra produção; o guard recusa a URL de produção), com senhas novas geradas no próprio Mac (arquivo local com permissão 600, fora de qualquer repositório) e apenas o hash instalado nas 2 contas de teste.
+Resultado: **H0 a H9 = 10 PASS, 0 FALHA** (`HOMOLOGACAO_TODOS_PASSARAM`): login real JWT das 2 contas, anônimo negado, gravação persistida, repetição sem duplicar, isolamento entre contas e de recibo, 6 chamadas simultâneas reais (curl em segundo plano) = 1 registro, recibo recuperável, conflito de op_id, login comum não se passa por canal.
+Também no Mac: `tests/run_fin.js` na main publicada (b9a95d8) = **190 ok, 0 falhas**. `tests/run.js` (Núcleo) falha igualmente na main anterior (c6213f3) — problema preexistente e não relacionado.
+Continuam NÃO provados: leitura do lançamento pelo aplicativo/iPhone; trechos DROP dos rollbacks; rollback_preservando; dependências reais do modo legado; fechamento da escrita direta pela conexão administrativa. **Segue NÃO homologada para produção.**
