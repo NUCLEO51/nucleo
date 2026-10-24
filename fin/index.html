@@ -83,6 +83,7 @@ html.lk-on body>*:not(#lock){visibility:hidden}
 .chip.on{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
 .chip input{min-height:2.6rem;font-size:1rem;background:transparent;color:inherit;border:0}
 h2.stday{font-size:1rem;margin:1rem 0 .1rem;color:var(--muted)}
+.frlong{display:block;margin:.35rem 0}.frlong>span{display:block}.frlong>b{display:block;white-space:normal!important;overflow-wrap:anywhere;font-weight:700}
 .spnav{display:flex;align-items:center;justify-content:space-between;gap:.6rem;margin:.6rem 0}
 .spnav .btn{width:4.2rem;margin:0}
 .donutbox{position:relative;display:flex;justify-content:center}
@@ -1734,7 +1735,9 @@ function noteActions(rec){
 }
 
 /* ---------- ficha: tudo sobre uma conta ou dívida (abre ao tocar; editar é um botão) ---------- */
-const frow=(l,v)=>'<div class="row"><span class="mut">'+esc(l)+'</span><b>'+esc(v)+'</b></div>';
+const frow=(l,v)=>(String(v==null?'':v).length>26||String(v).indexOf('\n')>=0)
+  ?'<div class="frlong"><span class="mut">'+esc(l)+'</span><b>'+esc(v)+'</b></div>'
+  :'<div class="row"><span class="mut">'+esc(l)+'</span><b>'+esc(v)+'</b></div>';
 const yesNo=v=>v?'Sim':'Não';
 function debtSchedule(x){
   const paidSet=new Set(x.paidYm||[]),fd=debtFd(x);let yms=[];
@@ -2090,7 +2093,7 @@ function stRows(){
   return out;
 }
 /* ---------- Extrato: buscar, filtrar por entradas/gastos, mês e dia ---------- */
-const APP_V='v38';
+const APP_V='v39';
 const ST_FILTERS=[['all','Tudo'],['in','Entradas'],['out','Gastos'],['fat','Faturas pagas'],['tr','Transferências']];
 function stAll(){
   const out=stRows().map(e=>Object.assign({},e,{src:'extrato'}));
