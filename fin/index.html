@@ -1253,11 +1253,13 @@ async function clearDemo(){
 const rbtn=(act,ico,label,v)=>'<button class="ibtn" data-act="'+act+'"'+(v?' data-v="'+v+'"':'')+' aria-label="'+esc(label)+'" title="'+esc(label)+'">'+ico+'</button>';
 const srow=(v,label,val,sub)=>'<button data-act="tab" data-v="'+v+'"><span class="nm"><b>'+label+'</b><i>'+(sub||'')+'</i></span><span class="vl">'+val+'</span></button>';
 function vHome(){
-  const ym=ymOf(todayIso()),td=todayIso(),rows=monthRows(ym);
-  const open=rows.filter(x=>!x.r.data.paidAt);
-  const known=open.filter(x=>x.r.data.amountC!=null).reduce((a,x)=>a+x.r.data.amountC,0);
-  const sem=open.filter(x=>x.r.data.amountC==null).length;
-  const late=open.filter(x=>billDue(x)<td).length;
+  const ym=ymOf(todayIso()),td=todayIso();
+  /* tudo que o Mês mostra para pagar: contas, faturas de cartão e parcelas de dívidas (a tela de Início e a de Mês dão o mesmo total) */
+  const rows=monthItems(ym).filter(i=>i.dir!=='RECEBER'),feitaH=i=>i.state==='Paga'||i.state==='Recebida';
+  const open=rows.filter(i=>!feitaH(i));
+  const known=open.filter(i=>i.amountC!=null).reduce((a,i)=>a+i.amountC,0);
+  const sem=open.filter(i=>i.amountC==null).length;
+  const late=open.filter(i=>i.date<td).length;
   let h=header('Financeiro',undoBtn()+rbtn('tab','📝','Anotações','notes')+rbtn('tab','📄','Extratos do banco','stmt')+rbtn('chat','💬','Chat financeiro')+rbtn('tab','⚙️','Ajustes','cfg'),'home')+'<p class="sub">'+esc(ymLabel(ym))+'</p><div class="wrap">';
   const ibn=ibList();
   if(ibn.length)h+='<button class="item" data-act="tab" data-v="notes"><div class="row"><span class="t">📝 Anotações para decidir</span><span class="cnt">'+ibn.length+'</span></div><div class="mut">Siri ou digitadas: toque para dizer se é cartão, conta, dívida ou lembrete.</div></button>';
@@ -1274,10 +1276,10 @@ function vHome(){
   const g=gastosMes(ym);
   {const bd=backupDays();
    if(bd===null||bd>=7)h+='<button class="note bkn" data-act="backup" aria-label="Baixar uma cópia dos dados">💾 '+(bd===null?'Você ainda não baixou uma cópia dos seus dados.':'Faz '+bd+' dias desde a última cópia dos seus dados.')+' Toque para baixar.</button>';}
-  const paidN=rows.filter(x=>x.r.data.paidAt).length,totN=rows.length,paidC=rows.filter(x=>x.r.data.paidAt&&x.r.data.amountC!=null).reduce((a,x)=>a+x.r.data.amountC,0);
+  const paidN=rows.filter(feitaH).length,totN=rows.length,paidC=rows.filter(i=>feitaH(i)&&i.amountC!=null).reduce((a,i)=>a+i.amountC,0);
   if(totN){
     const pct=Math.round(paidN/totN*100),st=late?'bad':(sem?'warn':'ok');
-    h+='<button class="hero '+st+'" data-act="tab" data-v="bills" aria-label="Ver as contas do mês"><span class="hl">Falta pagar neste mês</span><span class="hv">'+money(known)+'</span><span class="hbar"><i style="width:'+pct+'%"></i></span><span class="hs">'+paidN+' de '+totN+' contas pagas'+(paidC?' · '+money(paidC)+' já pago':'')+(late?' · '+late+(late===1?' atrasada':' atrasadas'):'')+(sem?' · '+sem+' sem valor':'')+'</span></button>';
+    h+='<button class="hero '+st+'" data-act="tab" data-v="bills" aria-label="Ver as contas do mês"><span class="hl">Falta pagar neste mês</span><span class="hv">'+money(known)+'</span><span class="hbar"><i style="width:'+pct+'%"></i></span><span class="hs">'+paidN+' de '+totN+' itens pagos'+(paidC?' · '+money(paidC)+' já pago':'')+(late?' · '+late+(late===1?' atrasada':' atrasadas'):'')+(sem?' · '+sem+' sem valor':'')+'</span></button>';
   }
   {const mi=monthItems(ym),isR=i=>i.dir==='RECEBER',sm=l=>l.reduce((a,i)=>a+(i.amountC||0),0);
    const tRc=sm(mi.filter(isR)),tPg=sm(mi.filter(i=>!isR(i)));
