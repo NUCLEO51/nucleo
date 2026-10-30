@@ -12,7 +12,17 @@ anon(){ $P -c "select fin_apply('$1','${3:-gpt}','$2'::jsonb)" 2>&1; }
 as(){ $P -c "set request.jwt.claim.sub='$1'; set role authenticated; select fin_apply('$2','$3','$4'::jsonb)" 2>&1; }
 N=0
 cv(){ q "select version from fin_records where id='$1'"; }
-t(){ N=$((N+1)); r=$("$1" "op-t$(printf %05d $N)x" "$2" gpt); echo "$r"|grep -qi "$3" && ok "$4" || ko "$4 :: $(echo "$r"|head -c 300)"; }
+# impressão digital de TUDO que uma operação recusada não pode tocar (registros, versões, conteúdo, lixeira, recibos, histórico)
+fp(){ q "select (select count(*)||'/'||coalesce(sum(version),0)||'/'||md5(coalesce(string_agg(id::text||data::text||coalesce(deleted_at::text,''),'' order by id),'')) from fin_records)||'/'||(select count(*) from fin_ops_log)||'/'||(select count(*) from fin_records_hist)||'/'||(select count(*) from fin_capture_items)"; }
+# t FUNÇÃO OPS PADRÃO DESCRIÇÃO — só é PASS se: saída tem ERROR com o padrão esperado, NÃO tem "ok": true, e NADA mudou no banco
+t(){ N=$((N+1)); local a b; a=$(fp); r=$("$1" "op-t$(printf %05d $N)x" "$2" gpt); b=$(fp)
+  if echo "$r"|grep -q '"ok": true'; then ko "$4 :: operação foi ACEITA"
+  elif ! echo "$r"|grep -q '^ERROR'; then ko "$4 :: sem erro: $(echo "$r"|head -c 150)"
+  elif ! echo "$r"|grep '^ERROR'|grep -qi "$3"; then ko "$4 :: erro diferente do esperado: $(echo "$r"|grep '^ERROR'|head -c 200)"
+  elif [ "$a" != "$b" ]; then ko "$4 :: recusou mas o banco MUDOU"
+  else ok "$4"; fi; }
+# tp FUNÇÃO OPS DESCRIÇÃO — controle positivo: precisa ser aceita
+tp(){ N=$((N+1)); r=$("$1" "op-t$(printf %05d $N)x" "$2" gpt); echo "$r"|grep -q '"ok": true' && ok "$3" || ko "$3 :: $(echo "$r"|head -c 200)"; }
 ta(){ r=$(as $G "$1" gpt "$2"); echo "$r"|grep -qi "$3" && ok "$4" || ko "$4 :: $(echo "$r"|head -c 300)"; }
 legado(){ $P -c "update fin_config set valor='$1' where chave='admin_canal_legado'; update fin_config set valor='$2' where chave='admin_canal_legado_ate'" >/dev/null; }
 legado sim "$(date -u -d '+1 day' '+%Y-%m-%d %H:%M:%S+00')"
@@ -81,6 +91,76 @@ PID=$(q "select id from fin_records where data->>'cfg'='sortprefs' limit 1")
 r=$(svc op-cfg00002 "[{\"op\":\"update\",\"id\":\"$PID\",\"expected_version\":$(cv $PID),\"data\":{\"prefs\":{\"b\":2}}}]"); echo "$r"|grep -q '"ok": true' && ok "2.15b update de sortprefs funciona" || ko "2.15b $(echo "$r"|head -c 250)"
 t svc "[{\"op\":\"update\",\"id\":\"$PID\",\"expected_version\":$(cv $PID),\"data\":{\"prefs\":null}}]" "proposal exige" "2.15c update NÃO esvazia prefs"
 t svc '[{"op":"create","kind":"proposal","data":{"cfg":"outra"}}]' "proposal exige" "2.15d proposal vazio/desconhecido recusado"
+
+echo "--- ACHADO 2 (matriz): campo ausente x null explícito x tipo errado x valor inválido"
+CD="\"cardId\":\"$CARD\""
+tp svc '[{"op":"create","kind":"bill","data":{"name":"Controle","dueDay":10}}]' "2.20 controle: bill mínima válida aceita"
+t svc '[{"op":"create","kind":"bill","data":{"name":"Luz"}}]' "dueDay" "2.21a bill SEM dueDay (ausente) recusada"
+t svc '[{"op":"create","kind":"bill","data":{"name":"Luz","dueDay":null}}]' "dueDay" "2.21b bill com dueDay null recusada"
+t svc '[{"op":"create","kind":"bill","data":{"name":"Luz","dueDay":"10"}}]' "dia 1..31" "2.21c bill com dueDay texto recusada"
+t svc '[{"op":"create","kind":"bill","data":{"name":"Luz","dueDay":0}}]' "1..31" "2.21d bill dueDay 0 recusada"
+t svc '[{"op":"create","kind":"bill","data":{"name":"Luz","dueDay":32}}]' "1..31" "2.21e bill dueDay 32 recusada"
+t svc '[{"op":"create","kind":"bill","data":{"dueDay":10}}]' "bill exige name" "2.22a bill SEM name recusada"
+t svc '[{"op":"create","kind":"bill","data":{"name":null,"dueDay":10}}]' "bill exige name" "2.22b bill name null recusada"
+t svc '[{"op":"create","kind":"bill","data":{"name":"   ","dueDay":10}}]' "bill exige name" "2.22c bill name só espaços recusada"
+t svc '[{"op":"create","kind":"card","data":{}}]' "card exige name" "2.23a card SEM name recusado"
+t svc '[{"op":"create","kind":"card","data":{"name":null}}]' "card exige name" "2.23b card name null recusado"
+t svc '[{"op":"create","kind":"card","data":{"name":5}}]' "texto" "2.23c card name numérico recusado"
+t svc '[{"op":"create","kind":"card","data":{"name":" \t "}}]' "card exige name" "2.23d card name só espaços recusado"
+tp svc "[{\"op\":\"create\",\"kind\":\"charge\",\"data\":{$CD,\"desc\":\"Controle\",\"totalC\":100,\"date\":\"2026-10-01\"}}]" "2.24 controle: charge mínima válida aceita"
+t svc "[{\"op\":\"create\",\"kind\":\"charge\",\"data\":{$CD,\"desc\":\"Sem data e valor\"}}]" "charge exige" "2.25a charge SEM date e SEM totalC recusada"
+t svc "[{\"op\":\"create\",\"kind\":\"charge\",\"data\":{$CD,\"desc\":\"x\",\"totalC\":100}}]" "charge exige date" "2.25b charge SEM date recusada"
+t svc "[{\"op\":\"create\",\"kind\":\"charge\",\"data\":{$CD,\"desc\":\"x\",\"date\":\"2026-10-01\"}}]" "charge exige totalC" "2.25c charge SEM totalC recusada"
+t svc "[{\"op\":\"create\",\"kind\":\"charge\",\"data\":{$CD,\"totalC\":100,\"date\":\"2026-10-01\"}}]" "charge exige desc" "2.25d charge SEM desc recusada"
+t svc "[{\"op\":\"create\",\"kind\":\"charge\",\"data\":{\"desc\":\"x\",\"totalC\":100,\"date\":\"2026-10-01\"}}]" "charge exige cardId" "2.25e charge SEM cardId recusada"
+t svc "[{\"op\":\"create\",\"kind\":\"charge\",\"data\":{$CD,\"desc\":\"x\",\"totalC\":null,\"date\":\"2026-10-01\"}}]" "charge exige totalC" "2.25f charge totalC null recusada"
+t svc "[{\"op\":\"create\",\"kind\":\"charge\",\"data\":{$CD,\"desc\":\"x\",\"totalC\":100,\"date\":null}}]" "charge exige date" "2.25g charge date null recusada"
+t svc "[{\"op\":\"create\",\"kind\":\"charge\",\"data\":{$CD,\"desc\":\"   \",\"totalC\":100,\"date\":\"2026-10-01\"}}]" "charge exige desc" "2.25h charge desc só espaços recusada"
+t svc "[{\"op\":\"create\",\"kind\":\"charge\",\"data\":{$CD,\"desc\":\"x\",\"totalC\":\"100\",\"date\":\"2026-10-01\"}}]" "inteiro" "2.25i charge totalC texto recusada"
+t svc "[{\"op\":\"create\",\"kind\":\"charge\",\"data\":{$CD,\"desc\":\"x\",\"totalC\":100,\"date\":\"2026-10-01\",\"n\":0}}]" "parcelas\|nInst\|entre 1" "2.25j charge com n=0 recusada"
+t svc "[{\"op\":\"create\",\"kind\":\"charge\",\"data\":{$CD,\"desc\":\"x\",\"totalC\":100,\"date\":\"2026-10-01\",\"n\":121}}]" "parcelas\|entre 1" "2.25k charge com n=121 recusada"
+t svc "[{\"op\":\"create\",\"kind\":\"invpay\",\"data\":{$CD}}]" "invpay exige" "2.26a invpay SEM ym recusado"
+t svc '[{"op":"create","kind":"invpay","data":{"ym":"2026-10"}}]' "invpay exige" "2.26b invpay SEM cardId recusado"
+t svc "[{\"op\":\"create\",\"kind\":\"invpay\",\"data\":{$CD,\"ym\":null}}]" "invpay exige" "2.26c invpay ym null recusado"
+t svc '[{"op":"create","kind":"billmonth","data":{"ym":"2026-10"}}]' "billmonth exige" "2.27a billmonth SEM billId recusado"
+t svc '[{"op":"create","kind":"billmonth","data":{"billId":"00000000-0000-0000-0000-000000000009"}}]' "billmonth exige" "2.27b billmonth SEM ym recusado"
+t svc '[{"op":"create","kind":"debt","data":{}}]' "debt exige creditor" "2.28a debt SEM creditor recusada"
+t svc '[{"op":"create","kind":"debt","data":{"creditor":null}}]' "debt exige creditor" "2.28b debt creditor null recusada"
+t svc '[{"op":"create","kind":"debt","data":{"creditor":"   "}}]' "debt exige creditor" "2.28c debt creditor só espaços recusada"
+tp svc '[{"op":"create","kind":"stmt","data":{"account":"Controle","entries":[]}}]' "2.29 controle: extrato com lista vazia aceito"
+t svc '[{"op":"create","kind":"stmt","data":{"account":"Conta"}}]' "stmt exige entries" "2.30a stmt SEM entries recusado"
+t svc '[{"op":"create","kind":"stmt","data":{"account":"Conta","entries":null}}]' "entries" "2.30b stmt entries null recusado"
+t svc '[{"op":"create","kind":"stmt","data":{"account":"Conta","entries":"x"}}]' "entries" "2.30c stmt entries texto recusado"
+t svc '[{"op":"create","kind":"stmt","data":{"entries":[]}}]' "stmt exige account" "2.30d stmt SEM account recusado"
+t svc '[{"op":"create","kind":"stmt","data":{"account":"  ","entries":[]}}]' "stmt exige account" "2.30e stmt account só espaços recusado"
+t svc '[{"op":"create","kind":"stmt","data":{"account":"Conta","entries":[{"i":"x"}]}}]' "entries\[1\]" "2.31a item de extrato só com i recusado"
+t svc '[{"op":"create","kind":"stmt","data":{"account":"Conta","entries":[{"i":"x","c":100,"k":"INCOME"}]}}]' "entries\[1\]: d" "2.31b item SEM d recusado"
+t svc '[{"op":"create","kind":"stmt","data":{"account":"Conta","entries":[{"i":"x","d":"2026-10-01","k":"INCOME"}]}}]' "entries\[1\]: c" "2.31c item SEM c recusado"
+t svc '[{"op":"create","kind":"stmt","data":{"account":"Conta","entries":[{"i":"x","d":"2026-10-01","c":100}]}}]' "entries\[1\]: k" "2.31d item SEM k recusado"
+t svc '[{"op":"create","kind":"stmt","data":{"account":"Conta","entries":[{"d":"2026-10-01","c":100,"k":"INCOME"}]}}]' "entries\[1\]: i" "2.31e item SEM i recusado"
+t svc '[{"op":"create","kind":"stmt","data":{"account":"Conta","entries":[{"i":"  ","d":"2026-10-01","c":100,"k":"INCOME"}]}}]' "entries\[1\]: i" "2.31f item com i só espaços recusado"
+t svc '[{"op":"create","kind":"stmt","data":{"account":"Conta","entries":[{"i":"x","d":"2026-10-01","c":100,"k":"OUTRO"}]}}]' "entries\[1\]: k" "2.31g item com k inválido recusado"
+t svc '[{"op":"create","kind":"stmt","data":{"account":"Conta","entries":[{"i":"x","d":"2026-10-01","c":10.5,"k":"INCOME"}]}}]' "entries\[1\]: c" "2.31h item com c fracionado recusado"
+t svc '[{"op":"create","kind":"stmt","data":{"account":"Conta","entries":["texto"]}}]' "entries\[1\]" "2.31i item que não é objeto recusado"
+t svc '[{"op":"create","kind":"stmt","data":{"account":"Conta","entries":[{"i":"a","d":"2026-10-01","c":1,"k":"INCOME"},{"i":"b","d":"2026-10-02","c":2}]}}]' "entries\[2\]: k" "2.31j erro no 2º item é apontado e nada é gravado"
+t svc '[{"op":"create","kind":"proposal","data":{}}]' "proposal exige" "2.32a proposal vazia recusada"
+t svc '[{"op":"create","kind":"proposal","data":{"text":"   "}}]' "proposal exige" "2.32b proposal com text só espaços recusada"
+
+echo "--- ACHADO 2 (registro completo): registro antigo inválido NÃO é corrigido em silêncio; update e restore devolvem o problema"
+LEG="set request.jwt.claim.role='service_role'"
+$P -c "$LEG; insert into fin_records(owner,kind,data) values ('$A','debt','{\"creditor\":\"VelhoData\",\"firstDue\":20261030,\"balanceC\":100}')" >/dev/null 2>&1
+$P -c "$LEG; insert into fin_records(owner,kind,data) values ('$A','bill','{\"name\":\"VelhaConta\"}')" >/dev/null 2>&1
+$P -c "$LEG; insert into fin_records(owner,kind,data,deleted_at) values ('$A','debt','{\"creditor\":\"VelhoLixo\",\"dir\":\"TALVEZ\"}',now())" >/dev/null 2>&1
+$P -c "$LEG; insert into fin_records(owner,kind,data,deleted_at) values ('$A','charge','{\"cardId\":\"$CARD\",\"desc\":\"Velha compra\",\"totalC\":100}',now())" >/dev/null 2>&1
+V1=$(q "select id from fin_records where data->>'creditor'='VelhoData'"); V2=$(q "select id from fin_records where data->>'name'='VelhaConta'")
+V3=$(q "select id from fin_records where data->>'creditor'='VelhoLixo'"); V4=$(q "select id from fin_records where data->>'desc'='Velha compra'")
+[ -n "$V1" ] && [ -n "$V2" ] && [ -n "$V3" ] && [ -n "$V4" ] && ok "2.40 base de teste com 4 registros antigos inválidos criada" || ko "2.40 não criou os registros antigos"
+t svc "[{\"op\":\"update\",\"id\":\"$V1\",\"expected_version\":$(cv $V1),\"data\":{\"balanceC\":200}}]" "texto" "2.41 update de campo válido em registro com data numérica antiga: recusado (não corrige em silêncio)"
+t svc "[{\"op\":\"update\",\"id\":\"$V2\",\"expected_version\":$(cv $V2)}]" "update exige data" "2.42a update sem data recusado"
+t svc "[{\"op\":\"update\",\"id\":\"$V2\",\"expected_version\":$(cv $V2),\"data\":{\"name\":\"VelhaConta 2\"}}]" "dueDay" "2.42b update de bill antiga sem dueDay: recusado, problema devolvido"
+t svc "[{\"op\":\"restore\",\"id\":\"$V3\",\"expected_version\":$(cv $V3)}]" "PAGAR ou RECEBER" "2.43 restore de dívida antiga com dir inválido: recusado"
+t svc "[{\"op\":\"restore\",\"id\":\"$V4\",\"expected_version\":$(cv $V4)}]" "charge exige date" "2.44 restore de compra antiga sem date: recusado"
+tp svc "[{\"op\":\"update\",\"id\":\"$V1\",\"expected_version\":$(cv $V1),\"data\":{\"firstDue\":\"2026-10-30\"}}]" "2.45 update que CONSERTA o campo inválido é aceito (o usuário trata o problema)"
 echo "--- ACHADO 3: ausência de login não é administrador"
 t anon '[{"op":"create","kind":"debt","data":{"creditor":"Anon"}}]' "identidade de serviço" "3.1 fin_apply sem login e sem papel de serviço recusado" 
 n=$(q "select count(*) from fin_records where data->>'creditor'='Anon'"); [ "$n" = "0" ] && ok "3.1b nada gravado" || ko "3.1b n=$n"

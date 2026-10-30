@@ -57,7 +57,7 @@ declare k text; v jsonb; n numeric; s text; d date; e jsonb; idx int := 0;
 begin
   if p_kind is null or p_kind not in ('card','charge','invpay','bill','billmonth','debt','proposal','stmt') then
     raise exception 'kind inválido: %', p_kind; end if;
-  if p_data is null or jsonb_typeof(p_data)<>'object' then raise exception 'data deve ser um objeto'; end if;
+  if p_data is null or jsonb_typeof(p_data) is distinct from 'object' then raise exception 'data deve ser um objeto'; end if;
   if octet_length(p_data::text) > (case when p_kind='stmt' then 400000 else 20000 end) then
     raise exception 'data grande demais (máx. % bytes)', (case when p_kind='stmt' then 400000 else 20000 end); end if;
   for k,v in select key,value from jsonb_each(p_data) loop
@@ -68,11 +68,11 @@ begin
       if jsonb_typeof(v) not in ('null','number') then raise exception '% deve ser dia 1..31 ou null', k; end if;
       if jsonb_typeof(v)='number' then n:=(v#>>'{}')::numeric; if n<>trunc(n) or n<1 or n>31 then raise exception '% fora de 1..31', k; end if; end if;
     elsif k='dir' then
-      if jsonb_typeof(v)<>'string' or (v#>>'{}') not in ('PAGAR','RECEBER') then raise exception 'dir deve ser PAGAR ou RECEBER'; end if;
+      if jsonb_typeof(v) is distinct from 'string' or (v#>>'{}') not in ('PAGAR','RECEBER') then raise exception 'dir deve ser PAGAR ou RECEBER'; end if;
     elsif k='paidYm' then
-      if jsonb_typeof(v)<>'array' then raise exception 'paidYm deve ser lista'; end if;
+      if jsonb_typeof(v) is distinct from 'array' then raise exception 'paidYm deve ser lista'; end if;
       for e in select * from jsonb_array_elements(v) loop
-        if jsonb_typeof(e)<>'string' or (e#>>'{}') !~ '^\d{4}-(0[1-9]|1[0-2])$' then raise exception 'paidYm: mês inválido %', e; end if; end loop;
+        if jsonb_typeof(e) is distinct from 'string' or (e#>>'{}') !~ '^\d{4}-(0[1-9]|1[0-2])$' then raise exception 'paidYm: mês inválido %', e; end if; end loop;
     elsif k in ('date','firstDue','paidAt') then
       if jsonb_typeof(v) not in ('string','null') then raise exception '%: data deve ser texto AAAA-MM-DD', k; end if;
       if jsonb_typeof(v)='string' then
@@ -89,16 +89,16 @@ begin
     elsif k in ('variable','recurring','demo') then
       if jsonb_typeof(v) not in ('boolean','null') then raise exception '% deve ser verdadeiro ou falso', k; end if;
     elsif k='entries' then
-      if p_kind<>'stmt' or jsonb_typeof(v)<>'array' then raise exception 'entries deve ser uma lista (só no extrato)'; end if;
+      if p_kind<>'stmt' or jsonb_typeof(v) is distinct from 'array' then raise exception 'entries deve ser uma lista (só no extrato)'; end if;
       for e in select * from jsonb_array_elements(v) loop
         idx := idx+1;
-        if jsonb_typeof(e)<>'object' then raise exception 'entries[%]: deve ser objeto', idx; end if;
-        if jsonb_typeof(e->'i')<>'string' or coalesce(e->>'i','')='' then raise exception 'entries[%]: i (identificador) deve ser texto', idx; end if;
-        if jsonb_typeof(e->'d')<>'string' or (e->>'d') !~ '^\d{4}-\d{2}-\d{2}$' then raise exception 'entries[%]: d deve ser data AAAA-MM-DD', idx; end if;
+        if jsonb_typeof(e) is distinct from 'object' then raise exception 'entries[%]: deve ser objeto', idx; end if;
+        if jsonb_typeof(e->'i') is distinct from 'string' or btrim(coalesce(e->>'i',''), E' \t\r\n')='' then raise exception 'entries[%]: i (identificador) deve ser texto', idx; end if;
+        if jsonb_typeof(e->'d') is distinct from 'string' or (e->>'d') !~ '^\d{4}-\d{2}-\d{2}$' then raise exception 'entries[%]: d deve ser data AAAA-MM-DD', idx; end if;
         begin d := (e->>'d')::date; exception when others then raise exception 'entries[%]: data inexistente', idx; end;
         if to_char(d,'YYYY-MM-DD')<>(e->>'d') then raise exception 'entries[%]: data inexistente', idx; end if;
-        if jsonb_typeof(e->'c')<>'number' or ((e->>'c')::numeric)<>trunc((e->>'c')::numeric) then raise exception 'entries[%]: c deve ser inteiro (centavos)', idx; end if;
-        if jsonb_typeof(e->'k')<>'string' or (e->>'k') not in ('INCOME','EXPENSE','TRANSFER','CARD_SETTLEMENT','LOAN_DISBURSEMENT') then raise exception 'entries[%]: k inválido', idx; end if;
+        if jsonb_typeof(e->'c') is distinct from 'number' or ((e->>'c')::numeric)<>trunc((e->>'c')::numeric) then raise exception 'entries[%]: c deve ser inteiro (centavos)', idx; end if;
+        if jsonb_typeof(e->'k') is distinct from 'string' or (e->>'k') not in ('INCOME','EXPENSE','TRANSFER','CARD_SETTLEMENT','LOAN_DISBURSEMENT') then raise exception 'entries[%]: k inválido', idx; end if;
         if jsonb_typeof(e->'t') not in ('string','null') or jsonb_typeof(coalesce(e->'g','null'::jsonb)) not in ('string','null') then raise exception 'entries[%]: t e g devem ser texto', idx; end if;
       end loop;
     end if;
@@ -110,22 +110,22 @@ language plpgsql immutable set search_path=public as $f$
 declare n numeric;
 begin
   /* campos obrigatórios por tipo, sempre sobre o registro COMPLETO (criação, update já mesclado e restauração) */
-  if p_kind='card' and (jsonb_typeof(p_data->'name')<>'string' or coalesce(p_data->>'name','')='') then raise exception 'card exige name'; end if;
+  if p_kind='card' and (jsonb_typeof(p_data->'name') is distinct from 'string' or btrim(coalesce(p_data->>'name',''), E' \t\r\n')='') then raise exception 'card exige name'; end if;
   if p_kind='bill' then
-    if jsonb_typeof(p_data->'name')<>'string' or coalesce(p_data->>'name','')='' then raise exception 'bill exige name'; end if;
-    if jsonb_typeof(p_data->'dueDay')<>'number' then raise exception 'bill exige dueDay (1..31)'; end if;
+    if jsonb_typeof(p_data->'name') is distinct from 'string' or btrim(coalesce(p_data->>'name',''), E' \t\r\n')='' then raise exception 'bill exige name'; end if;
+    if jsonb_typeof(p_data->'dueDay') is distinct from 'number' then raise exception 'bill exige dueDay (1..31)'; end if;
   end if;
   if p_kind='charge' then
-    if jsonb_typeof(p_data->'cardId')<>'string' or coalesce(p_data->>'cardId','')='' then raise exception 'charge exige cardId'; end if;
-    if jsonb_typeof(p_data->'date')<>'string' then raise exception 'charge exige date (AAAA-MM-DD)'; end if;
-    if jsonb_typeof(p_data->'desc')<>'string' or coalesce(p_data->>'desc','')='' then raise exception 'charge exige desc'; end if;
-    if jsonb_typeof(p_data->'totalC')<>'number' or (p_data->>'totalC')::numeric=0 then raise exception 'charge exige totalC (centavos, diferente de zero)'; end if;
+    if jsonb_typeof(p_data->'cardId') is distinct from 'string' or btrim(coalesce(p_data->>'cardId',''), E' \t\r\n')='' then raise exception 'charge exige cardId'; end if;
+    if jsonb_typeof(p_data->'date') is distinct from 'string' then raise exception 'charge exige date (AAAA-MM-DD)'; end if;
+    if jsonb_typeof(p_data->'desc') is distinct from 'string' or btrim(coalesce(p_data->>'desc',''), E' \t\r\n')='' then raise exception 'charge exige desc'; end if;
+    if jsonb_typeof(p_data->'totalC') is distinct from 'number' or (p_data->>'totalC')::numeric=0 then raise exception 'charge exige totalC (centavos, diferente de zero)'; end if;
     if p_data ? 'n' and jsonb_typeof(p_data->'n')='number' and ((p_data->>'n')::numeric<1 or (p_data->>'n')::numeric>120) then raise exception 'charge: n (parcelas) deve estar entre 1 e 120'; end if;
   end if;
-  if p_kind='invpay' and (coalesce(p_data->>'cardId','')='' or jsonb_typeof(p_data->'cardId')<>'string' or jsonb_typeof(p_data->'ym')<>'string') then raise exception 'invpay exige cardId e ym'; end if;
-  if p_kind='billmonth' and (jsonb_typeof(p_data->'billId')<>'string' or coalesce(p_data->>'billId','')='' or jsonb_typeof(p_data->'ym')<>'string') then raise exception 'billmonth exige billId e ym'; end if;
+  if p_kind='invpay' and (btrim(coalesce(p_data->>'cardId',''), E' \t\r\n')='' or jsonb_typeof(p_data->'cardId') is distinct from 'string' or jsonb_typeof(p_data->'ym') is distinct from 'string') then raise exception 'invpay exige cardId e ym'; end if;
+  if p_kind='billmonth' and (jsonb_typeof(p_data->'billId') is distinct from 'string' or btrim(coalesce(p_data->>'billId',''), E' \t\r\n')='' or jsonb_typeof(p_data->'ym') is distinct from 'string') then raise exception 'billmonth exige billId e ym'; end if;
   if p_kind='debt' then
-    if jsonb_typeof(p_data->'creditor')<>'string' or coalesce(p_data->>'creditor','')='' then raise exception 'debt exige creditor'; end if;
+    if jsonb_typeof(p_data->'creditor') is distinct from 'string' or btrim(coalesce(p_data->>'creditor',''), E' \t\r\n')='' then raise exception 'debt exige creditor'; end if;
     if p_data->>'balanceC' is not null and (p_data->>'balanceC')::numeric<0 then raise exception 'balanceC negativo'; end if;
     if p_data->>'installC' is not null and (p_data->>'installC')::numeric<0 then raise exception 'installC negativo'; end if;
     if p_data->>'rateBp' is not null and (p_data->>'rateBp')::numeric<0 then raise exception 'rateBp negativo'; end if;
@@ -136,13 +136,14 @@ begin
   if p_kind='card' and p_data->>'limitC' is not null and (p_data->>'limitC')::numeric<0 then raise exception 'limitC negativo'; end if;
   if p_kind='bill' and p_data->>'amountC' is not null and (p_data->>'amountC')::numeric<0 then raise exception 'amountC negativo'; end if;
   if p_kind='stmt' then
-    if jsonb_typeof(p_data->'account')<>'string' or coalesce(p_data->>'account','')='' then raise exception 'stmt exige account'; end if;
-    if jsonb_typeof(p_data->'entries')<>'array' then raise exception 'stmt exige entries (lista)'; end if;
+    if jsonb_typeof(p_data->'account') is distinct from 'string' or btrim(coalesce(p_data->>'account',''), E' \t\r\n')='' then raise exception 'stmt exige account'; end if;
+    if jsonb_typeof(p_data->'entries') is distinct from 'array' then raise exception 'stmt exige entries (lista)'; end if;
   end if;
-  if p_kind='proposal' and not ( (jsonb_typeof(p_data->'text')='string' and coalesce(p_data->>'text','')<>'')
+  if p_kind='proposal' and not coalesce(
+        (jsonb_typeof(p_data->'text')='string' and btrim(coalesce(p_data->>'text',''), E' \t\r\n')<>'')
         or (p_data->>'cfg'='capacity' and jsonb_typeof(p_data->'capacityC')='number')
         or (p_data->>'cfg'='sortprefs' and jsonb_typeof(p_data->'prefs')='object')
-        or (p_data->>'cfg'='cats' and jsonb_typeof(p_data->'rules')='array') ) then
+        or (p_data->>'cfg'='cats' and jsonb_typeof(p_data->'rules')='array'), false) then
     raise exception 'proposal exige text, ou cfg=capacity com capacityC, ou cfg=sortprefs com prefs, ou cfg=cats com rules'; end if;
 end $f$;
 
@@ -176,7 +177,7 @@ begin
   select r.owner, r.canal, r.modo, r.ops into v_owner, v_canal, v_modo, v_perm from public.fin_resolve(p_source) r;
   if v_owner is null then raise exception 'dono não identificado para o canal %', p_source; end if;
   if coalesce(length(p_op_id),0) not between 8 and 120 then raise exception 'op_id deve ter de 8 a 120 caracteres'; end if;
-  if p_ops is null or jsonb_typeof(p_ops)<>'array' or jsonb_array_length(p_ops) not between 1 and 60 then raise exception 'ops deve ser lista de 1 a 60'; end if;
+  if p_ops is null or jsonb_typeof(p_ops) is distinct from 'array' or jsonb_array_length(p_ops) not between 1 and 60 then raise exception 'ops deve ser lista de 1 a 60'; end if;
   v_hash := md5(p_ops::text);
   perform pg_advisory_xact_lock(hashtext(v_owner::text||'|op|'||v_canal||'|'||p_op_id));
   select * into v_log from public.fin_ops_log where owner=v_owner and source=v_canal and op_id=p_op_id;
@@ -237,10 +238,11 @@ begin
       if v_t='update' then
         if v_row.deleted_at is not null then raise exception 'op %: registro está na lixeira', i; end if;
         v_data := v_op->'data';
-        if v_data is null or jsonb_typeof(v_data)<>'object' or v_data='{}'::jsonb then raise exception 'op %: update exige data', i; end if;
+        if v_data is null or jsonb_typeof(v_data) is distinct from 'object' or v_data='{}'::jsonb then raise exception 'op %: update exige data', i; end if;
         if v_data ?| array['capture_id','item_id','src'] then raise exception 'op %: capture_id, item_id e src são imutáveis', i; end if;
         perform public.fin_validate(v_row.kind, v_data, false);
         v_merged := v_row.data || v_data;
+        perform public.fin_validate(v_row.kind, v_merged, false);
         perform public.fin_validate_full(v_row.kind, v_merged);
         perform public.fin_check_refs(v_owner, v_row.kind, v_merged);
         update public.fin_records set data=data||v_data, updated_by=p_source where id=v_id returning * into v_row;
@@ -253,6 +255,7 @@ begin
         update public.fin_records set deleted_at=now(), updated_by=p_source where id=v_id returning * into v_row;
       else
         if v_row.deleted_at is null then raise exception 'op %: não está na lixeira', i; end if;
+        perform public.fin_validate(v_row.kind, v_row.data, false);
         perform public.fin_validate_full(v_row.kind, v_row.data);
         perform public.fin_check_refs(v_owner, v_row.kind, v_row.data);
         update public.fin_records set deleted_at=null, updated_by=p_source where id=v_id returning * into v_row;
