@@ -2828,11 +2828,13 @@ function mobillsParse(rows){
   });
   return {accts:accts,rows:body.length,dupGroups:Object.keys(occ).filter(k=>occ[k]>1).length};
 }
+/* nomes que o Mobills usa para contas que o Financeiro já tem cadastradas com outro nome */
+const ST_ALIAS={'Santander - C.Corrente':'Santander · Conta Corrente (final 2450-3)'};
 function stPlan(parsed){
   const out=[];
   for(const name of Object.keys(parsed.accts)){
     const ents=parsed.accts[name];
-    const rec=S.recs.find(r=>r.kind==='stmt'&&r.data.account===name);
+    const rec=S.recs.find(r=>r.kind==='stmt'&&r.data.account===name)||(ST_ALIAS[name]?S.recs.find(r=>r.kind==='stmt'&&r.data.account===ST_ALIAS[name]):null)||null;
     const old={};(rec?rec.data.entries:[]).forEach(e=>{old[e.i]=e;});
     let add=0,same=0;
     for(const e of ents){
@@ -2850,7 +2852,8 @@ async function stApply(plan){
     const have={};(x.rec?x.rec.data.entries:[]).forEach(e=>{have[e.i]=1;});
     const merged=(x.rec?x.rec.data.entries.slice():[]).concat(x.ents.filter(e=>!have[e.i]));
     merged.sort((a,b)=>a.d<b.d?-1:a.d>b.d?1:0);
-    const data={account:x.name,source:'mobills',entries:merged};
+    /* conta que já existe: mantém nome, banco, agência e observações; só os lançamentos mudam */
+    const data=x.rec?Object.assign({},x.rec.data,{entries:merged}):{account:x.name,source:'mobills',entries:merged};
     if(x.rec)await Api.update(x.rec,data);else await Api.create('stmt',data);
   }
 }
@@ -2868,7 +2871,7 @@ async function stImport(file){
   if(parsed.dupGroups)first.push('Há '+parsed.dupGroups+' grupo(s) de linhas iguais. Elas ficam como lançamentos separados.');
   let pl;
   try{pl=stPlan(parsed);}catch(e){S.msg=e.message;render();return;}
-  if(await confirmBox('Importar extrato do Mobills?',first.concat(pl.map(x=>x.name+': '+x.add+' novos, '+x.same+' já existiam')).concat(['Nada é pago nem alterado no banco.']),'Sim, importar')){
+  if(await confirmBox('Importar extrato do Mobills?',first.concat(pl.map(x=>(x.rec&&x.rec.data.account!==x.name?x.name+' → '+x.rec.data.account:x.name)+': '+x.add+' novos, '+x.same+' já existiam')).concat(['Nada é pago nem alterado no banco.']),'Sim, importar')){
     try{await stApply(pl);}catch(e){S.msg=e.message;}
     render();
   }
@@ -2886,7 +2889,7 @@ function stRows(){
   return out;
 }
 /* ---------- Extrato: buscar, filtrar por entradas/gastos, mês e dia ---------- */
-const APP_V='v65';
+const APP_V='v66';
 const ST_FILTERS=[['all','Tudo'],['in','Entradas'],['out','Gastos'],['fat','Faturas pagas'],['tr','Transferências']];
 function stAll(){
   const out=stRows().map(e=>Object.assign({},e,{src:'extrato'}));
