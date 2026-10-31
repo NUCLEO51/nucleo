@@ -580,7 +580,22 @@ async function lerDocModal(){
 }
 
 /* ---------- gastos: para onde vai o dinheiro (categorias, subcategorias, regras e gráfico) ---------- */
-const CAT_TREE={'Mercado':['Compras da casa','Lanches e salgadinhos','Bebidas e energéticos'],'Alimentação fora':['Restaurante','Lanchonete','Café','Bar'],'Carro':['Combustível','Manutenção','Estacionamento','Pedágio'],'Casa':['Contas (luz, água, internet)','Manutenção','Móveis e utensílios'],'Saúde':['Farmácia','Consultas e exames','Plano de saúde'],'Roupas e calçados':[],'Lazer':['Passeios','Jogos e apps','Viagens'],'Filhos':['Escola','Lazer','Roupas'],'Assinaturas':[],'Presentes e doações':[],'Impostos e taxas':['IPVA','Licenciamento','Tarifas e IOF'],'Outros':[]};
+const CAT_TREE={'Mercado':['Compras da casa','Lanches e salgadinhos','Bebidas e energéticos'],'Alimentação fora':['Restaurante','Lanchonete','Café','Bar'],'Carro':['Combustível','Manutenção','Estacionamento','Pedágio'],'Casa':['Contas (luz, água, internet)','Manutenção','Móveis e utensílios'],'Saúde':['Farmácia','Consultas e exames','Plano de saúde'],'Roupas e calçados':[],'Lazer':['Passeios','Jogos e apps','Viagens'],'Filhos':['Escola','Lazer','Roupas'],'Assinaturas':[],'Presentes e doações':[],'Impostos e taxas':['IPVA','Licenciamento','Tarifas e IOF'],'Cuidados pessoais':['Barbearia','Academia'],'Seguros':[],'Juros e encargos':['Juros e multas','IOF','Tarifas'],'Dinheiro sacado':[],'Outros':[]};
+const INC_TREE={'Salário e renda':[],'Pix recebido':[],'Depósitos e cheques':[],'Estornos e reembolsos':[],'Empréstimos':[],'Outros':[]};
+/* sugestões automáticas pelo nome do lugar (a primeira que combinar vale; o que você escolher sempre ganha) */
+const CAT_AUTO=[[/iof/,'Juros e encargos','IOF'],[/encargo|multa|mora|rotativo|juros|custo trans/,'Juros e encargos','Juros e multas'],[/tarifa|anuidade/,'Juros e encargos','Tarifas'],[/saque/,'Dinheiro sacado',''],
+ [/posto|combust|vbbr|ipiranga/,'Carro','Combustível'],[/rota da|pedagio|sem parar|conectcar/,'Carro','Pedágio'],[/rei do oleo|oficina|mecanic|pneu/,'Carro','Manutenção'],
+ [/supermercado|minimercado|mercado|emporio|hortifruti|atacad|assai|carrefour/,'Mercado','Compras da casa'],
+ [/sorvet|gelato|acai/,'Alimentação fora','Lanchonete'],[/padaria|confeitaria|casa de pao|pao da serra|lanchonete|pastel|salgad/,'Alimentação fora','Lanchonete'],
+ [/cafe|cafeteria/,'Alimentação fora','Café'],[/chopp|choperia|\bbar\b|boteco|cervej/,'Alimentação fora','Bar'],[/restaur|sushi|spasso|marmitaria|pizza|churrasc|ifood/,'Alimentação fora','Restaurante'],
+ [/droga|farma|raia|nissei|rd saude|panvel|pacheco/,'Saúde','Farmácia'],[/academia|smart fit|di sports/,'Cuidados pessoais','Academia'],[/barbear|salao|cabeleir/,'Cuidados pessoais','Barbearia'],
+ [/anthropic|github|trello|atlassian|openai|icloud|spotify|netflix|apple com bill|apple\.com/,'Assinaturas',''],[/seguro/,'Seguros',''],
+ [/infoserra|internet|\bvivo\b|\bclaro\b|copel|sanepar|enel|cpfl|sabesp/,'Casa','Contas (luz, água, internet)']];
+const INC_AUTO=[[/salario|folha|holerite/,'Salário e renda',''],[/estorno|reembolso|devolu/,'Estornos e reembolsos',''],[/emprest|credito pessoal|financiamento/,'Empréstimos',''],[/cheque|deposito/,'Depósitos e cheques',''],[/pix|transf|ted|doc/,'Pix recebido','']];
+/* grupos: onde o dinheiro vai, em poucas pastas */
+const GRP_MAP={'Mercado':'Alimentação','Alimentação fora':'Alimentação','Casa':'Casa','Carro':'Transporte','Saúde':'Saúde','Roupas e calçados':'Lazer e pessoal','Lazer':'Lazer e pessoal','Cuidados pessoais':'Lazer e pessoal','Presentes e doações':'Lazer e pessoal','Filhos':'Filhos','Juros e encargos':'Juros, taxas e saques','Impostos e taxas':'Juros, taxas e saques','Dinheiro sacado':'Juros, taxas e saques','Assinaturas':'Gastos fixos','Seguros':'Gastos fixos'};
+const GRP_FIX=[['Casa','Contas (luz, água, internet)'],['Saúde','Plano de saúde'],['Cuidados pessoais','Academia'],['Impostos e taxas','IPVA'],['Impostos e taxas','Licenciamento'],['Filhos','Escola']];
+function grpOf(k){if(!k)return 'Sem categoria';if(GRP_FIX.some(x=>x[0]===k.c&&x[1]===k.s))return 'Gastos fixos';return GRP_MAP[k.c]||'Outros';}
 const CAT_COL=['#4C9AFF','#34C27A','#FFB300','#FF5C5C','#A855F7','#2DD4BF','#FF8A3D','#98A2B3'];
 const gNorm=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
 const G_STOP=new Set(['pag','ltda','epp','eireli','cia','dos','das','com','loja','comercio']);
@@ -599,7 +614,8 @@ function catOf(e){
   if(d.over&&d.over[e.i])return d.over[e.i];
   const k=gKey(e.t);
   if(k)for(const r of (d.rules||[])){if(k===r.m||k.indexOf(r.m+' ')===0)return {c:r.c,s:r.s||''};}
-  if(e.g&&catTree()[e.g])return {c:e.g,s:''};
+  const nt=gNorm(e.t);for(const a of (e.inc?INC_AUTO:CAT_AUTO))if(a[0].test(nt))return {c:a[1],s:a[2],auto:true};
+  if(e.g&&!e.inc&&catTree()[e.g])return {c:e.g,s:''};
   return null;
 }
 
@@ -640,6 +656,12 @@ function gastosRows(){
   });
   return out;
 }
+const srcLbl=r=>r.card?'Cartão '+r.src:(r.src||'—');
+function incRows(){
+  const out=[];
+  stRows().forEach(e=>{if((e.k==='INCOME'||e.k==='LOAN_DISBURSEMENT')&&e.c>0)out.push({i:e.i,d:e.d,t:e.t||'',v:e.c,g:e.g||'',src:e.acct,inc:true});});
+  return out;
+}
 function gastosMes(ym){
   const rows=gastosRows().filter(r=>r.d&&r.d.slice(0,7)===ym),cats={},sem=[];let total=0,semV=0;
   rows.forEach(r=>{
@@ -661,39 +683,88 @@ function donutSvg(list,total,semV){
 }
 function gRow(r){
   const k=catOf(r);
-  return '<button class="item" data-act="sp-pick" data-i="'+esc(r.i)+'"><div class="row"><span class="t">'+esc(r.t||'(sem descrição)')+'</span><b>'+money(r.v)+'</b></div><div class="mut">'+brDate(r.d)+' · '+(k?esc(k.c)+(k.s?' › '+esc(k.s):''):'<span style="color:var(--warn,#ffb300)">sem categoria</span>')+'</div></button>';
+  return '<button class="item" data-act="sp-pick" data-i="'+esc(r.i)+'"><div class="row"><span class="t">'+esc(r.t||'(sem descrição)')+'</span><b>'+money(r.v)+'</b></div><div class="mut">'+brDate(r.d)+' · '+(k?esc(k.c)+(k.s?' › '+esc(k.s):'')+(k.auto?' <span class="mut">(sugerida)</span>':''):'<span style="color:var(--warn,#ffb300)">sem categoria</span>')+'</div></button>';
+}
+const SP_PER=[['m','Mês'],['3','3 meses'],['12','12 meses'],['all','Tudo']];
+const SP_DIM=[['cat','Categoria'],['grp','Grupo'],['lug','Lugar'],['org','Origem']];
+function spRange(sp){
+  const cur=ymOf(todayIso());
+  if(sp.per==='3')return {a:addMonths(cur,-2),b:cur,pa:addMonths(cur,-5),pb:addMonths(cur,-3),n:3};
+  if(sp.per==='12')return {a:addMonths(cur,-11),b:cur,pa:addMonths(cur,-23),pb:addMonths(cur,-12),n:12};
+  if(sp.per==='all')return {a:'0000-00',b:'9999-99',pa:null,pb:null,n:0};
+  return {a:sp.ym,b:sp.ym,pa:addMonths(sp.ym,-1),pb:addMonths(sp.ym,-1),n:1};
+}
+function spRows(sp,dir,a,b){
+  const src=sp.src||[];
+  return (dir==='in'?incRows():gastosRows()).filter(r=>r.d&&r.d.slice(0,7)>=a&&r.d.slice(0,7)<=b&&(!src.length||src.indexOf(srcLbl(r))>=0));
+}
+function lugLbl(r){const k=gKey(r.t);return k?k.replace(/\b\w/g,c=>c.toUpperCase()):(r.t||'(sem nome)');}
+function spAgg(rows,dim){
+  const m={};let total=0;
+  rows.forEach(r=>{
+    const k=catOf(r);total+=r.v;
+    let key=dim==='cat'?(k?k.c:'Sem categoria'):dim==='grp'?grpOf(k):dim==='lug'?lugLbl(r):srcLbl(r);
+    const sub=dim==='cat'?(k&&k.s?k.s:'(sem subcategoria)'):(k?k.c+(k.s?' › '+k.s:''):'Sem categoria');
+    const o=m[key]=m[key]||{c:key,v:0,n:0,subs:{},items:[]};
+    o.v+=r.v;o.n++;o.subs[sub]=(o.subs[sub]||0)+r.v;o.items.push(r);
+  });
+  return {total,list:Object.keys(m).map(x=>m[x]).sort((a,b)=>b.v-a.v)};
+}
+function spInsights(rows,prevAgg,agg){
+  const L=[];
+  const fx=rows.filter(r=>grpOf(catOf(r))==='Gastos fixos').reduce((a,r)=>a+r.v,0);
+  const tot=rows.reduce((a,r)=>a+r.v,0);
+  if(fx)L.push('📌 Gastos fixos: <b>'+money(fx)+'</b> ('+Math.round(100*fx/tot)+'%). Veja se algum dá para cancelar ou trocar por um mais barato.');
+  const ju=rows.filter(r=>{const k=catOf(r);return k&&k.c==='Juros e encargos';}).reduce((a,r)=>a+r.v,0);
+  if(ju)L.push('🔥 Juros, multas e tarifas: <b>'+money(ju)+'</b>. É dinheiro jogado fora: pagando em dia e sem saque parcelado, esse valor some.');
+  const lg=spAgg(rows,'lug').list;
+  const top=lg.filter(x=>x.c!=='Sem categoria').slice(0,3);
+  if(top.length)L.push('🏪 Onde mais sai: '+top.map(x=>esc(x.c)+' ('+money(x.v)+')').join(', ')+'.');
+  const fr=lg.filter(x=>x.n>=4).sort((a,b)=>b.n-a.n).slice(0,3);
+  if(fr.length)L.push('🔁 Visitas que se repetem: '+fr.map(x=>esc(x.c)+' '+x.n+'x ('+money(x.v)+')').join(', ')+'. Pequenos gastos repetidos pesam.');
+  if(prevAgg){
+    const up=agg.list.map(x=>{const p=prevAgg.list.find(y=>y.c===x.c);return {c:x.c,d:x.v-(p?p.v:0)};}).filter(x=>x.d>=3000&&x.c!=='Sem categoria').sort((a,b)=>b.d-a.d).slice(0,3);
+    if(up.length)L.push('📈 O que mais subiu em relação ao período anterior: '+up.map(x=>esc(x.c)+' (+'+money(x.d)+')').join(', ')+'.');
+  }
+  return L;
 }
 function vGastos(){
-  S.sp=S.sp||{ym:ymOf(todayIso()),cat:null,all:false};
-  const ym=S.sp.ym,g=gastosMes(ym),gp=gastosMes(addMonths(ym,-1)),sm=S.sp.sort||'dnew';
-  if(S.sp.sort&&g.list.length>1){
-    const ord=sortBy(g.list,sm,x=>x.v,x=>x.items.reduce((a,r)=>r.d>a?r.d:a,''),x=>x.c);
-    g.list.length=0;ord.forEach(x=>g.list.push(x));
-  }
-  let h=header('Gastos','<button class="ibtn" data-back="1" data-act="tab" data-v="home" aria-label="Voltar" title="Voltar">←</button>')+'<div class="wrap">';
-  h+='<div class="spnav"><button class="btn sec" data-act="sp-prev" aria-label="Mês anterior">‹</button><b>'+esc(ymLabel(ym))+'</b><button class="btn sec" data-act="sp-next" aria-label="Próximo mês">›</button></div>';
-  if(!g.rows.length)return h+'<div class="card mut">Sem gastos neste mês. Os gastos vêm dos extratos importados (aba Extrato) e das compras no cartão.</div></div>';
-  const dif=g.total-gp.total;
-  h+='<p class="hint" style="margin:.2rem 0">Ordenar por:</p>'+sortChips(S.sp.sort||'',"sp-sort");
-  h+='<div class="card"><div class="row"><span class="mut">Total gasto</span><b>'+money(g.total)+'</b></div>'
-    +(gp.total?'<div class="row"><span class="mut">Mês passado</span><b>'+money(gp.total)+'</b></div><div class="row"><span class="mut">Diferença</span><b style="color:'+(dif>0?'var(--danger,#ff5c5c)':'#34c27a')+'">'+(dif>0?'+':'−')+money(Math.abs(dif))+'</b></div>':'')+'</div>';
-  if(g.semN)h+='<div class="note"><b>'+g.semN+(g.semN===1?' lançamento sem categoria':' lançamentos sem categoria')+'</b> ('+money(g.semV)+'). Categorize uma vez e o Financeiro lembra os parecidos.</div><button class="btn" data-act="sp-queue">Categorizar agora</button>';
-  h+='<div class="card donutbox">'+donutSvg(g.list,g.total,g.semV)+'<div class="donutc"><b>'+money(g.total)+'</b><span class="mut">no mês</span></div></div>';
-  g.list.forEach((x,i)=>{
-    const p=gp.list.find(y=>y.c===x.c),d=p?x.v-p.v:null;
-    h+='<button class="item'+(S.sp.cat===x.c?' on':'')+'" data-act="sp-cat" data-c="'+esc(x.c)+'"><div class="row"><span class="t"><i class="dot" style="background:'+CAT_COL[Math.min(i,7)]+'"></i>'+esc(x.c)+'</span><b>'+money(x.v)+'</b></div><div class="mut">'+Math.round(100*x.v/g.total)+'% do mês'+(d?' · '+(d>0?'↑ ':'↓ ')+money(Math.abs(d))+' em relação ao mês passado':'')+'</div></button>';
-    if(S.sp.cat===x.c){
-      Object.keys(x.subs).sort((a,b)=>x.subs[b]-x.subs[a]).forEach(s=>{const pct=Math.max(4,Math.round(100*x.subs[s]/x.v));h+='<div class="row" style="margin:.35rem 1rem 0"><span>'+esc(s)+'</span><span class="mut">'+money(x.subs[s])+'</span></div><div class="plan-bar" style="margin:.1rem 1rem .3rem"><i style="width:'+pct+'%"></i></div>';});
+  S.sp=S.sp||{};const sp=S.sp;sp.ym=sp.ym||ymOf(todayIso());sp.per=sp.per||'m';sp.dir=sp.dir||'out';sp.dim=sp.dim||'cat';
+  const R=spRange(sp),inc=sp.dir==='in',sm=sp.sort||'dnew';
+  const rows=spRows(sp,sp.dir,R.a,R.b),agg=spAgg(rows,sp.dim);
+  const prev=R.pa?spAgg(spRows(sp,sp.dir,R.pa,R.pb),sp.dim):null;
+  const other=spRows(sp,inc?'out':'in',R.a,R.b).reduce((a,r)=>a+r.v,0);
+  const sem=rows.filter(r=>!catOf(r));
+  const allSrc=[...new Set(gastosRows().concat(incRows()).map(srcLbl))].sort();
+  let h=header(inc?'Entradas':'Gastos','<button class="ibtn" data-back="1" data-act="tab" data-v="home" aria-label="Voltar" title="Voltar">←</button>')+'<div class="wrap">';
+  h+='<div class="chips" role="group" aria-label="Tipo">'+[['out','Saídas (gastos)'],['in','Entradas']].map(x=>'<button class="chip'+(sp.dir===x[0]?' on':'')+'" data-act="sp-dir" data-v="'+x[0]+'">'+x[1]+'</button>').join('')+'</div>';
+  h+='<div class="chips" role="group" aria-label="Período">'+SP_PER.map(x=>'<button class="chip'+(sp.per===x[0]?' on':'')+'" data-act="sp-per" data-v="'+x[0]+'">'+x[1]+'</button>').join('')+'</div>';
+  if(sp.per==='m')h+='<div class="spnav"><button class="btn sec" data-act="sp-prev" aria-label="Mês anterior">‹</button><b>'+esc(ymLabel(sp.ym))+'</b><button class="btn sec" data-act="sp-next" aria-label="Próximo mês">›</button></div>';
+  else h+='<p class="sub" style="margin:.2rem 0">'+(sp.per==='all'?'Todo o período':'Últimos '+R.n+' meses')+'</p>';
+  h+='<button class="item" data-act="sp-src"><div class="row"><span class="t">Origem</span><b>'+esc(multiTxt(allSrc.map(x=>[x,x]),sp.src,'Tudo junto'))+'</b></div><div class="mut">Cartão, conta… Toque para ver só alguns ou deixe tudo junto.</div></button>';
+  h+='<p class="hint" style="margin:.2rem 0">Ver por:</p><div class="chips" role="group" aria-label="Ver por">'+SP_DIM.map(x=>'<button class="chip'+(sp.dim===x[0]?' on':'')+'" data-act="sp-dim" data-v="'+x[0]+'">'+x[1]+'</button>').join('')+'</div>';
+  if(!rows.length)return h+'<div class="card mut">Nada '+(inc?'entrou':'saiu')+' neste período'+((sp.src||[]).length?' nessa origem':'')+'. Os valores vêm dos extratos e das compras no cartão.</div></div>';
+  h+='<div class="card"><div class="row"><span class="mut">'+(inc?'Total que entrou':'Total gasto')+'</span><b>'+money(agg.total)+'</b></div>'
+    +'<div class="row"><span class="mut">'+(inc?'Saiu no período':'Entrou no período')+'</span><b>'+money(other)+'</b></div>'
+    +(prev&&prev.total?'<div class="row"><span class="mut">Período anterior</span><b>'+money(prev.total)+'</b></div>':'')
+    +(prev&&prev.total?(()=>{const dif=agg.total-prev.total;return '<div class="row"><span class="mut">Diferença</span><b style="color:'+((dif>0)!==inc?'var(--danger,#ff5c5c)':'#34c27a')+'">'+(dif>0?'+':'−')+money(Math.abs(dif))+'</b></div>';})():'')+'</div>';
+  if(sem.length){const sv=sem.reduce((a,r)=>a+r.v,0);h+='<div class="note"><b>'+sem.length+(sem.length===1?' lançamento sem categoria':' lançamentos sem categoria')+'</b> ('+money(sv)+'). Categorize uma vez e o Financeiro lembra os parecidos.</div><button class="btn" data-act="sp-queue">Categorizar agora</button>';}
+  if(!inc){const L=spInsights(rows,prev,agg);if(L.length)h+='<div class="card"><b>💡 Onde dá para reduzir</b>'+L.map(x=>'<p style="margin:.5rem 0 0">'+x+'</p>').join('')+'</div>';}
+  h+='<div class="card donutbox">'+donutSvg(agg.list.filter(x=>x.c!=='Sem categoria'),agg.total,agg.list.filter(x=>x.c==='Sem categoria').reduce((a,x)=>a+x.v,0))+'<div class="donutc"><b>'+money(agg.total)+'</b><span class="mut">'+(sp.per==='m'?'no mês':'no período')+'</span></div></div>';
+  h+='<p class="hint" style="margin:.2rem 0">Ordenar os lançamentos por:</p>'+sortChips(sp.sort||'','sp-sort');
+  const lst=agg.list.slice();
+  lst.forEach((x,i)=>{
+    const p=prev&&prev.list.find(y=>y.c===x.c),d=p?x.v-p.v:null,col=x.c==='Sem categoria'?'#5b6168':CAT_COL[Math.min(i,7)];
+    const open=sp.cat===x.c;
+    h+='<button class="item'+(open?' on':'')+'" data-act="sp-cat" data-c="'+esc(x.c)+'"><div class="row"><span class="t"><i class="dot" style="background:'+col+'"></i>'+esc(x.c)+'</span><b>'+money(x.v)+'</b></div><div class="mut">'+Math.round(100*x.v/agg.total)+'% · '+x.n+(x.n===1?' lançamento':' lançamentos')+(d?' · '+(d>0?'↑ ':'↓ ')+money(Math.abs(d))+' vs. período anterior':'')+'</div></button>';
+    if(open){
+      Object.keys(x.subs).sort((a,b)=>x.subs[b]-x.subs[a]).forEach(sn=>{const pct=Math.max(4,Math.round(100*x.subs[sn]/x.v));h+='<div class="row" style="margin:.35rem 1rem 0"><span>'+esc(sn)+'</span><span class="mut">'+money(x.subs[sn])+'</span></div><div class="plan-bar" style="margin:.1rem 1rem .3rem"><i style="width:'+pct+'%"></i></div>';});
       gSortRows(x.items,sm).forEach(r=>{h+=gRow(r);});
     }
   });
-  if(g.semN){
-    h+='<button class="item'+(S.sp.cat==='__sem'?' on':'')+'" data-act="sp-cat" data-c="__sem"><div class="row"><span class="t"><i class="dot" style="background:#5b6168"></i>Sem categoria</span><b>'+money(g.semV)+'</b></div><div class="mut">'+g.semN+' lançamento(s)</div></button>';
-    if(S.sp.cat==='__sem')gSortRows(g.sem,S.sp.sort||'vmax').forEach(r=>{h+=gRow(r);});
-  }
-  h+='<button class="btn sec" data-act="sp-all">'+(S.sp.all?'Esconder a planilha':'Ver todos os lançamentos (planilha)')+'</button>';
-  if(S.sp.all)gSortRows(g.rows,sm).forEach(r=>{h+=gRow(r);});
-  return h+'</div>';
+  h+='<button class="btn sec" data-act="sp-all">'+(sp.all?'Esconder a planilha':'Ver todos os lançamentos (planilha)')+'</button>';
+  if(sp.all)gSortRows(rows,sm).forEach(r=>{h+=gRow(r);});
+  return h+'<p class="hint">Categorias com “(sugerida)” foram adivinhadas pelo nome do lugar. Toque no lançamento para trocar: o que você escolher vale para sempre.</p></div>';
 }
 function catSave(mut){
   const rec=catCfg(),d=JSON.parse(JSON.stringify(catData()));
@@ -703,7 +774,7 @@ function catSave(mut){
 /* escolher a categoria de um gasto: categoria > subcategoria > vale para os parecidos? */
 function catPick(e,queue){
   return new Promise(res=>{
-    let cur=null,cat=null,sub='';const tree=catTree(),atual=catOf(e),key=gKey(e.t);
+    let cur=null,cat=null,sub='';const tree=e.inc?INC_TREE:catTree(),atual=catOf(e),key=gKey(e.t);
     const show=(html,bind)=>{if(cur)cur.remove();cur=modal(html);bind(cur);};
     const done=v=>{if(cur)cur.remove();cur=null;res(v);};
     const head='<div class="card sum">'+esc(e.t||'(sem descrição)')+'\n'+brDate(e.d)+' · '+money(e.v)+(atual?'\nHoje: '+esc(atual.c)+(atual.s?' › '+esc(atual.s):''):'')+'</div>';
@@ -724,15 +795,15 @@ function catPick(e,queue){
         m.querySelector('#c0').onclick=()=>s1();
       });};
     const s3=()=>{
-      const dd=catData(),parecidos=key?gastosRows().filter(r=>r.i!==e.i&&gKey(r.t)===key&&!(dd.over&&dd.over[r.i])):[];
+      const dd=catData(),parecidos=key?(e.inc?incRows():gastosRows()).filter(r=>r.i!==e.i&&gKey(r.t)===key&&!(dd.over&&dd.over[r.i])):[];
       show('<h3>Categorizar?</h3>'+head+'<div class="card sum">Categoria: '+esc(cat)+(sub?' › '+esc(sub):'')+(parecidos.length?'\nHá mais '+parecidos.length+' lançamento(s) parecidos com “'+esc(key)+'”.':'')+'</div>'
         +(parecidos.length?'<button class="btn" id="cp-all">Sim, para todos os parecidos ('+(parecidos.length+1)+')</button><button class="btn sec" id="cp-one">Só este lançamento</button>':'<button class="btn" id="cp-one">Sim, categorizar</button>')
         +'<button class="btn sec" id="c0">Voltar</button>',m=>{
         const salvar=async todos=>{
           try{
             await catSave(d=>{
-              const def=Object.prototype.hasOwnProperty.call(CAT_TREE,cat),ex=d.extra[cat]=d.extra[cat]||[];
-              if(sub&&(def?CAT_TREE[cat]:[]).indexOf(sub)<0&&ex.indexOf(sub)<0)ex.push(sub);
+              const BT=e.inc?INC_TREE:CAT_TREE,def=Object.prototype.hasOwnProperty.call(BT,cat),ex=d.extra[cat]=d.extra[cat]||[];
+              if(sub&&(def?BT[cat]:[]).indexOf(sub)<0&&ex.indexOf(sub)<0)ex.push(sub);
               if(def&&!ex.length)delete d.extra[cat];
               if(todos&&key){d.rules=d.rules.filter(r=>r.m!==key);d.rules.push({m:key,c:cat,s:sub});delete d.over[e.i];}
               else d.over[e.i]={c:cat,s:sub};
@@ -751,9 +822,9 @@ function catPick(e,queue){
   });
 }
 async function catQueue(){
-  const ym=S.sp.ym;
+  S.sp=S.sp||{};S.sp.ym=S.sp.ym||ymOf(todayIso());S.sp.per=S.sp.per||'m';S.sp.dir=S.sp.dir||'out';
   for(let guard=0;guard<500;guard++){
-    const list=gastosMes(ym).sem.slice().sort((a,b)=>b.v-a.v);
+    const R=spRange(S.sp),list=spRows(S.sp,S.sp.dir,R.a,R.b).filter(r=>!catOf(r)).sort((a,b)=>b.v-a.v);
     if(!list.length)break;
     if((await catPick(list[0],true))!==true)break;
   }
@@ -2407,7 +2478,7 @@ function stRows(){
   return out;
 }
 /* ---------- Extrato: buscar, filtrar por entradas/gastos, mês e dia ---------- */
-const APP_V='v53';
+const APP_V='v54';
 const ST_FILTERS=[['all','Tudo'],['in','Entradas'],['out','Gastos'],['fat','Faturas pagas'],['tr','Transferências']];
 function stAll(){
   const out=stRows().map(e=>Object.assign({},e,{src:'extrato'}));
@@ -2858,8 +2929,12 @@ document.addEventListener('click',async ev=>{
   else if(act==='hp-toggle'){S.hp=!S.hp;render();}
   else if(act==='sp-sort'){S.sp=S.sp||{ym:ymOf(todayIso()),cat:null,all:false};S.sp.sort=(S.sp.sort===b.dataset.v?null:b.dataset.v);render();}
   else if(act==='sp-all'){S.sp.all=!S.sp.all;render();}
+  else if(act==='sp-dir'){S.sp=S.sp||{};S.sp.dir=b.dataset.v;S.sp.cat=null;render();}
+  else if(act==='sp-per'){S.sp=S.sp||{};S.sp.per=b.dataset.v;S.sp.cat=null;render();}
+  else if(act==='sp-dim'){S.sp=S.sp||{};S.sp.dim=b.dataset.v;S.sp.cat=null;render();}
+  else if(act==='sp-src'){const all=[...new Set(gastosRows().concat(incRows()).map(srcLbl))].sort();const r=await multiPick('Ver só de onde?',all.map(x=>[x,x]),(S.sp&&S.sp.src)||[]);if(r){S.sp=S.sp||{};S.sp.src=r;S.sp.cat=null;render();}}
   else if(act==='sp-queue')catQueue();
-  else if(act==='sp-pick'){const r=gastosRows().find(x=>String(x.i)===b.dataset.i);if(r)catPick(r,false);}
+  else if(act==='sp-pick'){const r=gastosRows().concat(incRows()).find(x=>String(x.i)===b.dataset.i);if(r)catPick(r,false);}
   else if(act==='undo')undoDo();
   else if(act.indexOf('lk-')===0)lkAct(act);
   else if(act==='set-fs'){lsSet('fin-fs',b.dataset.v);fsApply();render();}
