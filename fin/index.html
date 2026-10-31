@@ -595,7 +595,17 @@ const INC_AUTO=[[/salario|folha|holerite/,'Salário e renda',''],[/estorno|reemb
 /* grupos: onde o dinheiro vai, em poucas pastas */
 const GRP_MAP={'Mercado':'Alimentação','Alimentação fora':'Alimentação','Casa':'Casa','Carro':'Transporte','Saúde':'Saúde','Roupas e calçados':'Lazer e pessoal','Lazer':'Lazer e pessoal','Cuidados pessoais':'Lazer e pessoal','Presentes e doações':'Lazer e pessoal','Filhos':'Filhos','Juros e encargos':'Juros, taxas e saques','Impostos e taxas':'Juros, taxas e saques','Dinheiro sacado':'Juros, taxas e saques','Assinaturas':'Gastos fixos','Seguros':'Gastos fixos'};
 const GRP_FIX=[['Casa','Contas (luz, água, internet)'],['Saúde','Plano de saúde'],['Cuidados pessoais','Academia'],['Impostos e taxas','IPVA'],['Impostos e taxas','Licenciamento'],['Filhos','Escola']];
-function grpOf(k){if(!k)return 'Sem categoria';if(GRP_FIX.some(x=>x[0]===k.c&&x[1]===k.s))return 'Gastos fixos';return GRP_MAP[k.c]||'Outros';}
+const GRP_BASE=['Alimentação','Casa','Transporte','Saúde','Lazer e pessoal','Filhos','Juros, taxas e saques','Gastos fixos','Outros'];
+const grpName=(g,d)=>((d||catData()).gren||{})[g]||g;
+function grpOf(k){
+  if(!k)return 'Sem categoria';
+  const d=catData();
+  if(d.gmap&&d.gmap[k.c])return d.gmap[k.c];
+  const oc=Object.keys(d.ren||{}).find(o=>d.ren[o]===k.c)||k.c;
+  const sm=d.sren&&d.sren[k.c];const os=(sm&&Object.keys(sm).find(o=>sm[o]===k.s))||k.s;
+  if(GRP_FIX.some(x=>x[0]===oc&&x[1]===os))return grpName('Gastos fixos',d);
+  return grpName(GRP_MAP[oc]||'Outros',d);
+}
 const CAT_COL=['#4C9AFF','#34C27A','#FFB300','#FF5C5C','#A855F7','#2DD4BF','#FF8A3D','#98A2B3'];
 const gNorm=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
 const G_STOP=new Set(['pag','ltda','epp','eireli','cia','dos','das','com','loja','comercio']);
@@ -603,9 +613,19 @@ const G_STOP=new Set(['pag','ltda','epp','eireli','cia','dos','das','com','loja'
 function gKey(desc){return gNorm(desc).replace(/[^a-z]+/g,' ').split(' ').filter(x=>x.length>=3&&!G_STOP.has(x)).slice(0,2).join(' ');}
 const catCfg=()=>byKind('proposal').find(r=>r.data&&r.data.cfg==='cats')||null;
 const catData=()=>{const r=catCfg();return r?r.data:{cfg:'cats',rules:[],over:{},extra:{}};};
+/* nomes editados pelo usuário: ren (categoria), sren (subcategoria), gmap (categoria→grupo), gren (nome de grupo), hide/shide (escondidas), grps (grupos criados) */
+const catRen=(c,d)=>((d||catData()).ren||{})[c]||c;
+function catSub(c,s,d){const m=((d||catData()).sren||{})[c];return (s&&m&&m[s])||s||'';}
+function catTreeFull(d){
+  d=d||catData();const out={},hide=d.hide||[],sh=d.shide||{};
+  const add=(c,subs)=>{const o=out[c]=out[c]||{subs:[],hidden:hide.indexOf(c)>=0};subs.forEach(x=>{if(!o.subs.some(y=>y.n===x))o.subs.push({n:x,hidden:(sh[c]||[]).indexOf(x)>=0});});};
+  Object.keys(CAT_TREE).forEach(c=>{const n=catRen(c,d);add(n,CAT_TREE[c].map(x=>catSub(n,x,d)));});
+  Object.keys(d.extra||{}).forEach(c=>add(c,(d.extra[c]||[]).map(x=>catSub(c,x,d))));
+  return out;
+}
 function catTree(){
-  const t=JSON.parse(JSON.stringify(CAT_TREE)),ex=catData().extra||{};
-  Object.keys(ex).forEach(c=>{t[c]=t[c]||[];(ex[c]||[]).forEach(s=>{if(t[c].indexOf(s)<0)t[c].push(s);});});
+  const f=catTreeFull(),t={};
+  Object.keys(f).forEach(c=>{if(f[c].hidden)return;t[c]=f[c].subs.filter(x=>!x.hidden).map(x=>x.n);});
   return t;
 }
 /* categoria de um gasto: 1) a que você escolheu só para ele, 2) a regra do lugar, 3) a do Mobills (se for uma categoria conhecida) */
@@ -620,15 +640,20 @@ function learnTok(d,inc){
   Object.keys(m).forEach(w=>{const cats=Object.keys(m[w].cs);const cc=[...new Set(cats.map(x=>x.split('|')[0]))];if(cc.length!==1)return;const subs=[...new Set(cats.map(x=>x.split('|')[1]))];out[w]={c:cc[0],s:subs.length===1?subs[0]:''};});
   return c[key]=out;
 }
-function catOf(e){
-  const d=catData();
+function catOf0(e,d){
   if(d.over&&d.over[e.i])return d.over[e.i];
   const k=gKey(e.t);
   if(k)for(const r of (d.rules||[])){if(!!r.inc!==!!e.inc)continue;if(k===r.m||k.indexOf(r.m+' ')===0)return {c:r.c,s:r.s||''};}
   if(k){const L=learnTok(d,!!e.inc);for(const w of k.split(' ')){const x=L[w];if(x)return {c:x.c,s:x.s,auto:true,learned:true};}}
   const nt=gNorm(e.t);for(const a of (e.inc?INC_AUTO:CAT_AUTO))if(a[0].test(nt))return {c:a[1],s:a[2],auto:true};
-  if(e.g&&!e.inc&&catTree()[e.g])return {c:e.g,s:''};
+  {const gg=catRen(e.g,d);if(e.g&&!e.inc&&catTree()[gg])return {c:gg,s:''};}
   return null;
+}
+function catOf(e){
+  const d=catData(),r=catOf0(e,d);if(!r)return null;
+  const c=catRen(r.c,d);let sb=catSub(c,r.s,d);
+  if(r.auto){if((d.hide||[]).indexOf(c)>=0)return null;if(sb&&((d.shide||{})[c]||[]).indexOf(sb)>=0)sb='';}
+  return (c===r.c&&sb===(r.s||''))?r:Object.assign({},r,{c:c,s:sb});
 }
 
 /* ---------- ordenar listas: maior/menor valor, categoria A-Z, data nova/antiga ---------- */
@@ -863,6 +888,7 @@ function vGastos(){
       gSortRows(x.items,sm).forEach(r=>{h+=gRow(r);});
     }
   });
+  h+='<button class="btn sec" data-act="cg-open">🗂️ Criar e editar grupos e categorias</button>';
   h+='<button class="btn sec" data-act="sp-learn">🧠 O que o app já aprendeu ('+((catData().rules||[]).length)+')</button>';
   h+='<button class="btn sec" data-act="sp-all">'+(sp.all?'Esconder a planilha':'Ver todos os lançamentos (planilha)')+'</button>';
   if(sp.all)gSortRows(rows,sm).forEach(r=>{h+=gRow(r);});
@@ -878,9 +904,188 @@ function learnModal(){
     if(await confirmBox('Esquecer este lugar?',[r.m,r.c+(r.s?' › '+r.s:''),'Os lançamentos voltam a ser sugeridos pelo nome.'],'Sim, esquecer',true)){
       try{await catSave(d=>{d.rules=d.rules.filter(x=>!(x.m===r.m&&!!x.inc===!!r.inc&&x.c===r.c));});}catch(e){S.msg=e.message;}render();}});
 }
+/* ---------- tela: grupos e categorias (criar, renomear, mudar de grupo, esconder) ---------- */
+function grpAll(d){
+  d=d||catData();const o=[],add=g=>{if(g&&o.indexOf(g)<0)o.push(g);};
+  GRP_BASE.forEach(g=>add(grpName(g,d)));Object.keys(d.gmap||{}).forEach(c=>add(d.gmap[c]));(d.grps||[]).forEach(add);
+  return o;
+}
+const cgLow=x=>gNorm(x).trim();
+function cgNameErr(n){
+  if(!n)return 'Escreva um nome.';
+  if(n.length>40)return 'Nome muito grande (até 40 letras).';
+  if(/[|]/.test(n))return 'Não use o sinal | no nome.';
+  return '';
+}
+function cgCatErr(n,self){
+  const e=cgNameErr(n);if(e)return e;
+  const d=catData(),full=catTreeFull(d);
+  const base=self?Object.keys(d.ren||{}).find(k=>d.ren[k]===self):null;
+  if(Object.keys(full).some(c=>c!==self&&cgLow(c)===cgLow(n)))return 'Já existe uma categoria com esse nome.';
+  if(Object.keys(d.ren||{}).some(k=>k!==base&&cgLow(k)===cgLow(n)))return 'Esse nome já foi usado antes por outra categoria. Escolha outro.';
+  return '';
+}
+function cgSubErr(c,n,self){
+  const e=cgNameErr(n);if(e)return e;
+  const d=catData(),o=catTreeFull(d)[c]||{subs:[]};
+  const m=(d.sren||{})[c]||{},base=self?Object.keys(m).find(k=>m[k]===self):null;
+  if(o.subs.some(x=>x.n!==self&&cgLow(x.n)===cgLow(n)))return 'Já existe uma subcategoria com esse nome.';
+  if(Object.keys(m).some(k=>k!==base&&cgLow(k)===cgLow(n)))return 'Esse nome já foi usado antes nesta categoria. Escolha outro.';
+  return '';
+}
+function cgGrpErr(n,self){
+  const e=cgNameErr(n);if(e)return e;
+  if(grpAll().some(g=>g!==self&&cgLow(g)===cgLow(n))||cgLow(n)==='sem categoria')return 'Já existe um grupo com esse nome.';
+  return '';
+}
+function askText(title,hint,val,okLbl){
+  return new Promise(res=>{
+    const m=modal('<h3>'+esc(title)+'</h3>'+(hint?'<p class="hint">'+esc(hint)+'</p>':'')+'<input id="at-v" type="text" value="'+esc(val||'')+'" maxlength="40" style="width:100%;font-size:1.1rem;margin:.4rem 0"><button class="btn" id="at-ok">'+esc(okLbl||'Continuar')+'</button><button class="btn sec" id="no">Voltar</button>');
+    const i=m.querySelector('#at-v');setTimeout(()=>{try{i.focus();}catch(e){}},50);
+    m.querySelector('#at-ok').onclick=()=>{const v=i.value.trim().replace(/\s+/g,' ');m.remove();res(v||null);};
+    m.querySelector('#no').onclick=()=>{m.remove();res(null);};
+  });
+}
+function cgPickGroup(title,cur){
+  return new Promise(res=>{
+    const gs=grpAll();
+    const m=modal('<h3>'+esc(title)+'</h3>'+gs.map((g,i)=>'<button class="btn'+(g===cur?'':' sec')+'" data-i="'+i+'">'+esc(g)+(g===cur?' (atual)':'')+'</button>').join('')+'<button class="btn sec" id="no">Voltar</button>');
+    m.querySelectorAll('[data-i]').forEach(b=>b.onclick=()=>{m.remove();res(gs[+b.dataset.i]);});
+    m.querySelector('#no').onclick=()=>{m.remove();res(null);};
+  });
+}
+async function cgSave(mut){try{await catSave(mut);}catch(e){S.msg=e.message;}render();}
+function mCatRename(d,old,nw){
+  const base=Object.keys(d.ren).find(k=>d.ren[k]===old);
+  if(base){d.ren[base]=nw;if(base===nw)delete d.ren[base];}else d.ren[old]=nw;
+  [d.extra,d.sren,d.gmap,d.shide].forEach(o=>{if(o&&Object.prototype.hasOwnProperty.call(o,old)){o[nw]=o[old];delete o[old];}});
+  d.hide=d.hide.map(x=>x===old?nw:x);
+}
+function mSubRename(d,c,old,nw){
+  const m=d.sren[c]=d.sren[c]||{},base=Object.keys(m).find(k=>m[k]===old);
+  if(base){m[base]=nw;if(base===nw)delete m[base];}else m[old]=nw;
+  if(d.extra[c])d.extra[c]=d.extra[c].map(x=>x===old?nw:x);
+  if(d.shide[c])d.shide[c]=d.shide[c].map(x=>x===old?nw:x);
+  if(!Object.keys(m).length)delete d.sren[c];
+}
+function mGrpRename(d,old,nw){
+  const base=GRP_BASE.find(b=>grpName(b,d)===old);
+  if(base){d.gren[base]=nw;if(nw===base)delete d.gren[base];}
+  Object.keys(d.gmap).forEach(k=>{if(d.gmap[k]===old)d.gmap[k]=nw;});
+  d.grps=d.grps.map(x=>x===old?nw:x);
+}
+function vCats(){
+  const d=catData(),full=catTreeFull(d),by={};
+  Object.keys(full).forEach(c=>{const g=grpOf({c:c,s:''});(by[g]=by[g]||[]).push(c);});
+  const groups=grpAll(d);Object.keys(by).forEach(g=>{if(groups.indexOf(g)<0)groups.push(g);});
+  let h=header('Grupos e categorias','<button class="ibtn" data-back="1" data-act="tab" data-v="'+(S.catsFrom||'cfg')+'" aria-label="Voltar" title="Voltar">←</button>')+'<div class="wrap">';
+  h+='<p class="hint">O grupo é a pasta grande (Casa, Transporte…). A categoria fica dentro do grupo. Toque numa categoria para renomear, mudar de grupo ou mexer nas subcategorias. Antes de salvar, o app sempre pergunta.</p>';
+  h+='<button class="btn" data-act="cg-newcat">+ Nova categoria</button><button class="btn sec" data-act="cg-newgrp">+ Novo grupo</button>';
+  groups.forEach(g=>{
+    const cs=(by[g]||[]).sort((a,b)=>a.localeCompare(b,'pt-BR'));
+    h+='<div class="row" style="margin-top:1.2rem;align-items:center;gap:.6rem"><h2 style="margin:0;min-width:0">'+esc(g)+'</h2><button class="btn sec" style="width:auto;margin:0" data-act="cg-grp" data-g="'+esc(g)+'">Editar grupo</button></div>';
+    if(!cs.length)h+='<div class="card mut">Nenhuma categoria neste grupo.</div>';
+    cs.forEach(c=>{const o=full[c],n=o.subs.filter(x=>!x.hidden).length;
+      h+='<button class="item" data-act="cg-cat" data-c="'+esc(c)+'"><div class="row"><span class="t">'+esc(c)+'</span><span class="mut">›</span></div><div class="mut">'+(o.hidden?'Escondida · ':'')+n+(n===1?' subcategoria':' subcategorias')+'</div></button>';});
+  });
+  return h+'<p class="hint">Mudar o nome vale também para os lançamentos antigos. “Esconder” tira da lista de escolha e das sugestões; o que já foi classificado continua.</p></div>';
+}
+async function cgNewCat(g){
+  const n=await askText('Nova categoria','Ex.: Pet, Streaming, Reforma','');if(!n)return;
+  const er=cgCatErr(n);if(er){await info('Não deu',er);return cgNewCat(g);}
+  let grp=g;if(!grp){grp=await cgPickGroup('Em que grupo ela fica?');if(!grp)return;}
+  if(!await confirmBox('Criar esta categoria?',['Categoria: '+n,'Grupo: '+grp],'Sim, criar'))return;
+  await cgSave(d=>{d.extra[n]=d.extra[n]||[];d.gmap[n]=grp;});
+}
+async function cgNewGrp(){
+  const n=await askText('Novo grupo','Ex.: Pets, Estudos, Viagens','');if(!n)return;
+  const er=cgGrpErr(n);if(er){await info('Não deu',er);return cgNewGrp();}
+  if(!await confirmBox('Criar este grupo?',['Grupo: '+n,'Depois você coloca categorias dentro dele.'],'Sim, criar'))return;
+  await cgSave(d=>{if(d.grps.indexOf(n)<0)d.grps.push(n);});
+}
+function cgGrp(g){
+  const d=catData(),full=catTreeFull(d),vazio=!Object.keys(full).some(c=>grpOf({c:c,s:''})===g),custom=(d.grps||[]).indexOf(g)>=0;
+  const m=modal('<h3>'+esc(g)+'</h3><button class="btn" id="g-ren">Renomear o grupo</button><button class="btn" id="g-new">+ Nova categoria neste grupo</button>'
+    +(custom&&vazio?'<button class="btn bad" id="g-del">Apagar este grupo</button>':'')+'<button class="btn sec" id="no">Voltar</button>');
+  m.querySelector('#no').onclick=()=>m.remove();
+  m.querySelector('#g-new').onclick=()=>{m.remove();cgNewGrpCat(g);};
+  m.querySelector('#g-ren').onclick=async()=>{
+    m.remove();
+    const n=await askText('Novo nome do grupo','',g);if(!n||n===g)return;
+    const er=cgGrpErr(n,g);if(er){await info('Não deu',er);return;}
+    if(!await confirmBox('Renomear o grupo?',['De: '+g,'Para: '+n],'Sim, renomear'))return;
+    await cgSave(d2=>mGrpRename(d2,g,n));
+  };
+  const del=m.querySelector('#g-del');
+  if(del)del.onclick=async()=>{m.remove();
+    if(!await confirmBox('Apagar este grupo?',[g,'Ele está vazio; nenhum lançamento é afetado.'],'Sim, apagar',true))return;
+    await cgSave(d2=>{d2.grps=d2.grps.filter(x=>x!==g);});};
+}
+function cgNewGrpCat(g){return cgNewCat(g);}
+function cgCat(c){
+  const d=catData(),o=catTreeFull(d)[c];if(!o)return;
+  const n=o.subs.filter(x=>!x.hidden).length;
+  const m=modal('<h3>'+esc(c)+'</h3><div class="card sum">Grupo: '+esc(grpOf({c:c,s:''}))+'\n'+n+(n===1?' subcategoria':' subcategorias')+(o.hidden?'\nEscondida: não aparece na lista de escolha':'')+'</div>'
+    +'<button class="btn" id="c-ren">Renomear</button><button class="btn" id="c-mov">Mudar de grupo</button><button class="btn" id="c-sub">Subcategorias</button>'
+    +'<button class="btn sec" id="c-hid">'+(o.hidden?'Mostrar de novo':'Esconder')+'</button><button class="btn sec" id="no">Voltar</button>');
+  m.querySelector('#no').onclick=()=>m.remove();
+  m.querySelector('#c-sub').onclick=()=>{m.remove();cgSubs(c);};
+  m.querySelector('#c-ren').onclick=async()=>{
+    m.remove();
+    const nn=await askText('Novo nome da categoria','',c);if(!nn||nn===c)return;
+    const er=cgCatErr(nn,c);if(er){await info('Não deu',er);return;}
+    if(!await confirmBox('Renomear a categoria?',['De: '+c,'Para: '+nn,'Os lançamentos já classificados passam a mostrar o nome novo.'],'Sim, renomear'))return;
+    await cgSave(d2=>mCatRename(d2,c,nn));
+  };
+  m.querySelector('#c-mov').onclick=async()=>{
+    m.remove();
+    const cur=grpOf({c:c,s:''}),g=await cgPickGroup('Mudar “'+c+'” para qual grupo?',cur);if(!g||g===cur)return;
+    if(!await confirmBox('Mudar de grupo?',['Categoria: '+c,'De: '+cur,'Para: '+g],'Sim, mudar'))return;
+    await cgSave(d2=>{d2.gmap[c]=g;});
+  };
+  m.querySelector('#c-hid').onclick=async()=>{
+    m.remove();
+    if(o.hidden){if(!await confirmBox('Mostrar de novo?',[c],'Sim, mostrar'))return;await cgSave(d2=>{d2.hide=d2.hide.filter(x=>x!==c);});return;}
+    if(!await confirmBox('Esconder esta categoria?',[c,'Ela some da lista de escolha e das sugestões automáticas. O que já foi classificado nela continua nela.'],'Sim, esconder',true))return;
+    await cgSave(d2=>{if(d2.hide.indexOf(c)<0)d2.hide.push(c);});
+  };
+}
+function cgSubs(c){
+  const o=catTreeFull()[c];if(!o)return;
+  const m=modal('<h3>Subcategorias de '+esc(c)+'</h3>'+(o.subs.length?o.subs.map((x,i)=>'<button class="btn sec" data-i="'+i+'">'+esc(x.n)+(x.hidden?' (escondida)':'')+'</button>').join(''):'<div class="card mut">Nenhuma ainda.</div>')
+    +'<button class="btn" id="s-new">+ Nova subcategoria</button><button class="btn sec" id="no">Voltar</button>');
+  m.querySelector('#no').onclick=()=>{m.remove();cgCat(c);};
+  m.querySelectorAll('[data-i]').forEach(b=>b.onclick=()=>{m.remove();cgSub(c,o.subs[+b.dataset.i]);});
+  m.querySelector('#s-new').onclick=async()=>{
+    m.remove();
+    const n=await askText('Nova subcategoria','Dentro de '+c,'');if(!n){cgSubs(c);return;}
+    const er=cgSubErr(c,n);if(er){await info('Não deu',er);cgSubs(c);return;}
+    if(!await confirmBox('Criar esta subcategoria?',['Categoria: '+c,'Subcategoria: '+n],'Sim, criar')){cgSubs(c);return;}
+    await cgSave(d=>{const ex=d.extra[c]=d.extra[c]||[];if(ex.indexOf(n)<0)ex.push(n);});
+    cgSubs(c);
+  };
+}
+function cgSub(c,x){
+  const m=modal('<h3>'+esc(x.n)+'</h3><div class="card sum">Categoria: '+esc(c)+(x.hidden?'\nEscondida':'')+'</div><button class="btn" id="x-ren">Renomear</button><button class="btn sec" id="x-hid">'+(x.hidden?'Mostrar de novo':'Esconder')+'</button><button class="btn sec" id="no">Voltar</button>');
+  m.querySelector('#no').onclick=()=>{m.remove();cgSubs(c);};
+  m.querySelector('#x-ren').onclick=async()=>{
+    m.remove();
+    const n=await askText('Novo nome da subcategoria','Dentro de '+c,x.n);if(!n||n===x.n){cgSubs(c);return;}
+    const er=cgSubErr(c,n,x.n);if(er){await info('Não deu',er);cgSubs(c);return;}
+    if(!await confirmBox('Renomear a subcategoria?',['Categoria: '+c,'De: '+x.n,'Para: '+n],'Sim, renomear')){cgSubs(c);return;}
+    await cgSave(d=>mSubRename(d,c,x.n,n));cgSubs(c);
+  };
+  m.querySelector('#x-hid').onclick=async()=>{
+    m.remove();
+    const msg=x.hidden?['Mostrar de novo?']:['Esconder esta subcategoria?','Ela some da lista de escolha. O que já foi classificado continua.'];
+    if(!await confirmBox(msg[0],[c+' › '+x.n].concat(msg.slice(1)),x.hidden?'Sim, mostrar':'Sim, esconder',!x.hidden)){cgSubs(c);return;}
+    await cgSave(d=>{const l=d.shide[c]=(d.shide[c]||[]).filter(y=>y!==x.n);if(!x.hidden)l.push(x.n);if(!l.length)delete d.shide[c];});
+    cgSubs(c);
+  };
+}
 function catSave(mut){
   const rec=catCfg(),d=JSON.parse(JSON.stringify(catData()));
-  d.cfg='cats';d.rules=d.rules||[];d.over=d.over||{};d.extra=d.extra||{};mut(d);
+  d.cfg='cats';d.rules=d.rules||[];d.over=d.over||{};d.extra=d.extra||{};d.ren=d.ren||{};d.sren=d.sren||{};d.gmap=d.gmap||{};d.gren=d.gren||{};d.hide=d.hide||[];d.shide=d.shide||{};d.grps=d.grps||[];mut(d);
   return rec?Api.update(rec,d):Api.create('proposal',d);
 }
 /* escolher a categoria de um gasto: categoria > subcategoria > vale para os parecidos? */
@@ -1572,6 +1777,7 @@ function vCfg(){
   h+='<h2>Segurança</h2>'+lkBlock('fin');
   h+='<h2>Aparência</h2>'+fsBlock();
   h+='<h2>Cópia de segurança</h2>'+backupBlock();
+  h+='<h2>Grupos e categorias</h2><button class="btn" data-act="cg-open">🗂️ Criar e editar grupos e categorias</button><p class="hint">Crie, renomeie, mude de grupo ou esconda. Antes de salvar o app sempre pergunta.</p>';
   h+='<h2>Lixeira</h2><button class="btn" data-act="tab" data-v="trash">🗑️ Ver o que foi apagado</button><p class="hint">Tudo que você apaga vai para a Lixeira. Lá dá para ver e restaurar.</p>';
   h+='<h2>Atualizar</h2><p class="hint">“Atualizar dados” busca de novo os seus lançamentos no servidor (use se mexeu em outro aparelho ou o GPT gravou algo). “Atualizar o aplicativo” baixa a versão nova do próprio Financeiro (telas e ícone). Versão instalada: '+APP_V+'.</p>'
     +(S.upd?'<div class="note">'+esc(S.upd)+'</div>':'')
@@ -2679,7 +2885,7 @@ function stRows(){
   return out;
 }
 /* ---------- Extrato: buscar, filtrar por entradas/gastos, mês e dia ---------- */
-const APP_V='v62';
+const APP_V='v63';
 const ST_FILTERS=[['all','Tudo'],['in','Entradas'],['out','Gastos'],['fat','Faturas pagas'],['tr','Transferências']];
 function stAll(){
   const out=stRows().map(e=>Object.assign({},e,{src:'extrato'}));
@@ -2922,7 +3128,7 @@ function render(){
   if(!S.sess||!S.ready){return;}
   RO.reg={};
   let body;
-  if(S.tab==='home')body=vHome();else if(S.tab==='bills')body=vMonth();else if(S.tab==='cal')body=vCal();else if(S.tab==='contas')body=S.contaId?vConta():vContas();else if(S.tab==='cards')body=S.cardId?(S.cardDados?vCardDados():vCard()):vCards();else if(S.tab==='debts')body=vDebts();else if(S.tab==='rem')body=vRem();else if(S.tab==='notes')body=vNotes();else if(S.tab==='plan')body=vPlan();else if(S.tab==='stmt')body=vStmt();else if(S.tab==='spend')body=vGastos();else if(S.tab==='poder')body=vPoder();else if(S.tab==='pagar')body=vPagar();else if(S.tab==='trash')body=vTrash();else if(S.tab==='cfg')body=vCfg();else body=vHome();
+  if(S.tab==='home')body=vHome();else if(S.tab==='bills')body=vMonth();else if(S.tab==='cal')body=vCal();else if(S.tab==='contas')body=S.contaId?vConta():vContas();else if(S.tab==='cards')body=S.cardId?(S.cardDados?vCardDados():vCard()):vCards();else if(S.tab==='debts')body=vDebts();else if(S.tab==='rem')body=vRem();else if(S.tab==='notes')body=vNotes();else if(S.tab==='plan')body=vPlan();else if(S.tab==='stmt')body=vStmt();else if(S.tab==='spend')body=vGastos();else if(S.tab==='poder')body=vPoder();else if(S.tab==='pagar')body=vPagar();else if(S.tab==='trash')body=vTrash();else if(S.tab==='cats')body=vCats();else if(S.tab==='cfg')body=vCfg();else body=vHome();
   if(S.tab!=='home'&&body.indexOf('data-back')<0)body='<div class="bkrow"><button class="bk" data-back="1" data-act="tab" data-v="home" aria-label="Voltar">← Voltar</button></div>'+body;
   a.innerHTML=body+(S.msg?'<div class="wrap"><div class="err">'+esc(S.msg)+'</div></div>':'')+tabs();
   roAfterRender();
@@ -3140,6 +3346,11 @@ document.addEventListener('click',async ev=>{
   else if(act==='rx-tot'){const rec=get(id);if(rec){const d=rec.data;form('Total da fatura no banco',[{k:'statementTotalC',label:'Total da fatura (como está no PDF ou app do banco)',type:'money',req:true,hint:'É o “total a pagar” impresso na fatura, já com o saldo anterior.'},{k:'futureInstallmentsC',label:'Parcelas para as próximas faturas (opcional)',type:'money'}],{statementTotalC:d.statementTotalC,futureInstallmentsC:d.futureInstallmentsC},{summary:o=>[d.account,'Total: '+money(o.statementTotalC),'Parcelas futuras: '+(o.futureInstallmentsC==null?'—':money(o.futureInstallmentsC))],save:async o=>{await Api.update(rec,Object.assign({},d,{statementTotalC:o.statementTotalC,futureInstallmentsC:o.futureInstallmentsC==null?(d.futureInstallmentsC==null?null:d.futureInstallmentsC):o.futureInstallmentsC}));}});}}
   else if(act==='rx-day'){S.st=stState();S.st.day=b.dataset.d;S.st.fs=[];S.st.cats=[];S.st.grps=[];S.st.accts=[];S.st.q='';S.st.lim=60;S.tab='stmt';render();window.scrollTo(0,0);}
   else if(act==='sp-learn'){learnModal();}
+  else if(act==='cg-open'){S.catsFrom=S.tab;S.tab='cats';render();window.scrollTo(0,0);}
+  else if(act==='cg-newcat')cgNewCat();
+  else if(act==='cg-newgrp')cgNewGrp();
+  else if(act==='cg-grp')cgGrp(b.dataset.g);
+  else if(act==='cg-cat')cgCat(b.dataset.c);
   else if(act==='sp-seg-clear'){if(S.sp&&S.sp.cat){S.sp.cat=null;render();}}
   else if(act==='sp-seg'){S.sp.cat=(S.sp.cat===b.dataset.c?null:b.dataset.c);render();}
   else if(act==='sp-all'){S.sp.all=!S.sp.all;render();}
