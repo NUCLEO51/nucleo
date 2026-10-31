@@ -172,6 +172,24 @@ label.f{display:block;font-weight:800;margin:.8rem 0 .25rem}
 .bar i.hi{background:var(--danger)}
 .sum{white-space:pre-line}
 a.lnk{color:var(--accent);font-weight:800}
+/* v45: botões menores e delicados: amarelo brilhante / fundo preto, letra fina */
+.btn{min-height:2.9rem;border-radius:.8rem;font-weight:600;font-size:1rem;letter-spacing:.01em;color:#1a1300;border:1px solid #E0A800;margin:.4rem 0;background:linear-gradient(180deg,#FFE680 0%,#FFD60A 48%,#F2B800 100%);box-shadow:inset 0 1px 0 rgba(255,255,255,.7),0 1px 8px rgba(255,200,0,.25)}
+.btn:active{filter:brightness(.93);transform:translateY(1px)}
+.btn.sec{background:#000;color:#FFD60A;font-weight:500;border:1px solid #B88F00;box-shadow:inset 0 0 0 1px rgba(255,214,10,.10)}
+.btn.bad{background:linear-gradient(180deg,#FF9B92,#E0463A);color:#fff;border-color:#B3362B;box-shadow:none}
+.btn:disabled{opacity:.5;filter:none}
+.ibtn{width:2.6rem;height:2.6rem;background:#000;color:#FFD60A;border:1px solid #B88F00;font-size:1.15rem;font-weight:500}
+.hd.home .ibtn{width:2.4rem;height:2.4rem;font-size:1.05rem}
+.chip{min-height:2.5rem;padding:.35rem .85rem;font-size:.95rem;font-weight:500;background:#000;color:#FFD60A;border:1px solid #6B5400}
+.chip.on{background:linear-gradient(180deg,#FFE680,#FFD60A 55%,#F2B800);color:#1a1300;border-color:#E0A800;font-weight:600}
+.chip input{color:inherit}
+.seg button,.mnav button,.chips2 button{font-weight:500}
+.mback{font-size:1rem;font-weight:500;min-height:2.6rem;padding:0 1rem;border-radius:.8rem;background:#000;color:#FFD60A;border:1px solid #B88F00}
+.bkrow{padding:calc(.6rem + env(safe-area-inset-top,0px)) 1rem 0}
+.bkrow+header.hd{padding-top:.4rem}
+.bk{font:inherit;font-size:1rem;font-weight:500;min-height:2.5rem;padding:0 1rem;border-radius:.8rem;background:#000;color:#FFD60A;border:1px solid #B88F00;cursor:pointer}
+.srt .chip{min-height:2.2rem;font-size:.88rem;padding:.25rem .7rem}
+.bk:active{filter:brightness(.85)}
 </style>
 </head>
 <body>
@@ -575,7 +593,7 @@ function catOf(e){
 
 /* ---------- ordenar listas: maior/menor valor, categoria A-Z, data nova/antiga ---------- */
 const SORTS=[['vmax','Maior valor'],['vmin','Menor valor'],['cat','Categoria A–Z'],['dnew','Data mais nova'],['dold','Data mais antiga']];
-function sortChips(cur,act){return '<div class="chips" role="group" aria-label="Ordenar por">'+SORTS.map(x=>'<button class="chip'+(cur===x[0]?' on':'')+'" data-act="'+act+'" data-v="'+x[0]+'">'+x[1]+'</button>').join('')+'</div>';}
+function sortChips(cur,act){return '<div class="chips srt" role="group" aria-label="Ordenar por">'+SORTS.map(x=>'<button class="chip'+(cur===x[0]?' on':'')+'" data-act="'+act+'" data-v="'+x[0]+'">'+x[1]+'</button>').join('')+'</div>';}
 /* ordena uma lista; v = valor (centavos), d = data AAAA-MM-DD, c = categoria (texto) */
 function sortBy(list,mode,v,d,c){
   const cmpD=(a,b)=>{const x=d(a)||'',y=d(b)||'';return x<y?-1:x>y?1:0;};
@@ -1952,7 +1970,7 @@ function vCard(){
   const yms=Object.keys(k.inv).sort();
   if(!S.invYm||!k.inv[S.invYm])S.invYm=k.openYm;
   let h=header(c.name,'<button class="tag" data-act="card-edit" data-id="'+cr.id+'" style="border:0;min-height:2.6rem;font-size:1rem">Editar</button>')
-    +'<div class="wrap"><button class="btn sec" data-back="1" data-act="tab" data-v="cards">← Voltar</button>';
+    +'<div class="wrap"><button class="bk" data-back="1" data-act="tab" data-v="cards" aria-label="Voltar">← Voltar</button>';
   const pct=c.limitC?Math.min(100,Math.max(0,Math.round(k.used*100/c.limitC))):0;
   h+='<div class="card"><div class="row"><span class="mut">Limite total</span><b>'+money(c.limitC)+'</b></div><div class="bar"><i class="'+(pct>=80?'hi':'')+'" style="width:'+pct+'%"></i></div>'
     +'<div class="row"><span class="mut">Usado (tudo que não foi pago)</span><b>'+money(k.used)+'</b></div>'
@@ -2160,7 +2178,7 @@ function stRows(){
   return out;
 }
 /* ---------- Extrato: buscar, filtrar por entradas/gastos, mês e dia ---------- */
-const APP_V='v44';
+const APP_V='v45';
 const ST_FILTERS=[['all','Tudo'],['in','Entradas'],['out','Gastos'],['fat','Faturas pagas'],['tr','Transferências']];
 function stAll(){
   const out=stRows().map(e=>Object.assign({},e,{src:'extrato'}));
@@ -2391,6 +2409,7 @@ function render(){
   RO.reg={};
   let body;
   if(S.tab==='home')body=vHome();else if(S.tab==='bills')body=vMonth();else if(S.tab==='cards')body=S.cardId?vCard():vCards();else if(S.tab==='debts')body=vDebts();else if(S.tab==='rem')body=vRem();else if(S.tab==='notes')body=vNotes();else if(S.tab==='plan')body=vPlan();else if(S.tab==='stmt')body=vStmt();else if(S.tab==='spend')body=vGastos();else if(S.tab==='cfg')body=vCfg();else body=vHome();
+  if(S.tab!=='home'&&body.indexOf('data-back')<0)body='<div class="bkrow"><button class="bk" data-back="1" data-act="tab" data-v="home" aria-label="Voltar">← Voltar</button></div>'+body;
   a.innerHTML=body+(S.msg?'<div class="wrap"><div class="err">'+esc(S.msg)+'</div></div>':'')+tabs();
   roAfterRender();
 }
