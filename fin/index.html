@@ -673,12 +673,13 @@ function gastosMes(ym){
   const list=Object.keys(cats).map(k=>cats[k]).sort((a,b)=>b.v-a.v);
   return {total,list,semN:sem.length,semV,sem,rows};
 }
-function donutSvg(list,total,semV){
-  let parts=list.slice(0,7).map((x,i)=>({v:x.v,col:CAT_COL[i]})),resto=list.slice(7).reduce((a,x)=>a+x.v,0);
-  if(resto)parts.push({v:resto,col:CAT_COL[7]});if(semV)parts.push({v:semV,col:'#5b6168'});
-  parts=parts.filter(p=>p.v>0);total=parts.reduce((a,p)=>a+p.v,0);if(!(total>0))return '';
-  let acc=0,s='<svg viewBox="0 0 42 42" class="donut" role="img" aria-label="Gráfico de pizza dos gastos por categoria"><circle cx="21" cy="21" r="15.9155" fill="none" stroke="#2a2d31" stroke-width="6"/>';
-  parts.forEach(p=>{const pct=100*p.v/total;s+='<circle cx="21" cy="21" r="15.9155" fill="none" stroke="'+p.col+'" stroke-width="6" stroke-dasharray="'+pct.toFixed(3)+' '+(100-pct).toFixed(3)+'" stroke-dashoffset="'+(25-acc).toFixed(3)+'"/>';acc+=pct;});
+const PAL=['#4C9AFF','#34C27A','#FFB300','#FF5C5C','#A855F7','#2DD4BF','#FF8A3D','#F472B6','#84CC16','#38BDF8','#E879F9','#FACC15'];
+const SEMCOL='#6b7280';
+function donutSvg(list,colOf,total,sel){
+  const parts=list.filter(x=>x.v>0);total=parts.reduce((a,p)=>a+p.v,0);if(!(total>0))return '';
+  let acc=0,s='<svg viewBox="0 0 42 42" class="donut" role="group" aria-label="Gráfico de pizza: toque numa cor para ver o valor"><circle cx="21" cy="21" r="15.9155" fill="none" stroke="#2a2d31" stroke-width="6"/>';
+  parts.forEach(p=>{const pct=100*p.v/total,on=sel===p.c;
+    s+='<circle class="seg" data-act="sp-seg" data-c="'+esc(p.c)+'" cx="21" cy="21" r="15.9155" fill="none" stroke="'+colOf(p.c)+'" stroke-width="'+(on?8.2:6)+'" stroke-dasharray="'+Math.max(0,pct-0.35).toFixed(3)+' '+(100-pct+0.35).toFixed(3)+'" stroke-dashoffset="'+(25-acc).toFixed(3)+'" style="cursor:pointer;opacity:'+(sel&&!on?.35:1)+'"><title>'+esc(p.c)+'</title></circle>';acc+=pct;});
   return s+'</svg>';
 }
 function gRow(r){
@@ -750,13 +751,15 @@ function vGastos(){
     +(prev&&prev.total?(()=>{const dif=agg.total-prev.total;return '<div class="row"><span class="mut">Diferença</span><b style="color:'+((dif>0)!==inc?'var(--danger,#ff5c5c)':'#34c27a')+'">'+(dif>0?'+':'−')+money(Math.abs(dif))+'</b></div>';})():'')+'</div>';
   if(sem.length){const sv=sem.reduce((a,r)=>a+r.v,0);h+='<div class="note"><b>'+sem.length+(sem.length===1?' lançamento sem categoria':' lançamentos sem categoria')+'</b> ('+money(sv)+'). Categorize uma vez e o Financeiro lembra os parecidos.</div><button class="btn" data-act="sp-queue">Categorizar agora</button>';}
   if(!inc){const L=spInsights(rows,prev,agg);if(L.length)h+='<div class="card"><b>💡 Onde dá para reduzir</b>'+L.map(x=>'<p style="margin:.5rem 0 0">'+x+'</p>').join('')+'</div>';}
-  h+='<div class="card donutbox">'+donutSvg(agg.list.filter(x=>x.c!=='Sem categoria'),agg.total,agg.list.filter(x=>x.c==='Sem categoria').reduce((a,x)=>a+x.v,0))+'<div class="donutc"><b>'+money(agg.total)+'</b><span class="mut">'+(sp.per==='m'?'no mês':'no período')+'</span></div></div>';
+  const colMap={};let ci=0;agg.list.forEach(x=>{colMap[x.c]=x.c==='Sem categoria'?SEMCOL:PAL[ci++%PAL.length];});const colOf=c=>colMap[c]||SEMCOL;
+  const selI=sp.cat&&agg.list.find(x=>x.c===sp.cat);
+  h+='<div class="card donutbox">'+donutSvg(agg.list,colOf,agg.total,sp.cat)+'<div class="donutc">'+(selI?'<span class="mut" style="max-width:9rem;text-align:center;line-height:1.15">'+esc(selI.c)+'</span><b>'+money(selI.v)+'</b><span class="mut">'+Math.round(100*selI.v/agg.total)+'% do total</span>':'<b>'+money(agg.total)+'</b><span class="mut">'+(sp.per==='m'?'no mês':'no período')+' · toque numa cor</span>')+'</div></div>';
   h+='<p class="hint" style="margin:.2rem 0">Ordenar os lançamentos por:</p>'+sortChips(sp.sort||'','sp-sort');
   const lst=agg.list.slice();
   lst.forEach((x,i)=>{
-    const p=prev&&prev.list.find(y=>y.c===x.c),d=p?x.v-p.v:null,col=x.c==='Sem categoria'?'#5b6168':CAT_COL[Math.min(i,7)];
+    const p=prev&&prev.list.find(y=>y.c===x.c),d=p?x.v-p.v:null;
     const open=sp.cat===x.c;
-    h+='<button class="item'+(open?' on':'')+'" data-act="sp-cat" data-c="'+esc(x.c)+'"><div class="row"><span class="t"><i class="dot" style="background:'+col+'"></i>'+esc(x.c)+'</span><b>'+money(x.v)+'</b></div><div class="mut">'+Math.round(100*x.v/agg.total)+'% · '+x.n+(x.n===1?' lançamento':' lançamentos')+(d?' · '+(d>0?'↑ ':'↓ ')+money(Math.abs(d))+' vs. período anterior':'')+'</div></button>';
+    h+='<button class="item'+(open?' on':'')+'" data-act="sp-cat" data-c="'+esc(x.c)+'"><div class="row"><span class="t"><i class="dot" style="background:'+colOf(x.c)+'"></i>'+esc(x.c)+'</span><b>'+money(x.v)+'</b></div><div class="mut">'+Math.round(100*x.v/agg.total)+'% · '+x.n+(x.n===1?' lançamento':' lançamentos')+(d?' · '+(d>0?'↑ ':'↓ ')+money(Math.abs(d))+' vs. período anterior':'')+'</div></button>';
     if(open){
       Object.keys(x.subs).sort((a,b)=>x.subs[b]-x.subs[a]).forEach(sn=>{const pct=Math.max(4,Math.round(100*x.subs[sn]/x.v));h+='<div class="row" style="margin:.35rem 1rem 0"><span>'+esc(sn)+'</span><span class="mut">'+money(x.subs[sn])+'</span></div><div class="plan-bar" style="margin:.1rem 1rem .3rem"><i style="width:'+pct+'%"></i></div>';});
       gSortRows(x.items,sm).forEach(r=>{h+=gRow(r);});
@@ -2478,7 +2481,7 @@ function stRows(){
   return out;
 }
 /* ---------- Extrato: buscar, filtrar por entradas/gastos, mês e dia ---------- */
-const APP_V='v54';
+const APP_V='v55';
 const ST_FILTERS=[['all','Tudo'],['in','Entradas'],['out','Gastos'],['fat','Faturas pagas'],['tr','Transferências']];
 function stAll(){
   const out=stRows().map(e=>Object.assign({},e,{src:'extrato'}));
@@ -2499,18 +2502,21 @@ function stMatchQ(e,q){
   return q.split(/\s+/).filter(Boolean).every(w=>hay.indexOf(w)>=0);
 }
 function stState(){
-  if(!S.st)S.st={q:'',f:'all',fs:[],cats:[],accts:[],ym:ymOf(todayIso()),day:'',lim:60};if(!S.st.fs)S.st.fs=[];if(!S.st.cats)S.st.cats=[];if(!S.st.accts)S.st.accts=[];
+  if(!S.st)S.st={q:'',f:'all',fs:[],cats:[],accts:[],ym:ymOf(todayIso()),day:'',lim:60};if(!S.st.fs)S.st.fs=[];if(!S.st.cats)S.st.cats=[];if(!S.st.accts)S.st.accts=[];if(!S.st.grps)S.st.grps=[];
   return S.st;
 }
-const stCatName=e=>{const k=catOf({i:e.i,t:e.t,g:e.g});return k?k.c:(e.g||'');};
+const stIsIn=e=>e.k==='INCOME'||e.k==='LOAN_DISBURSEMENT';
+const stCat=e=>catOf({i:String(e.i).split('|')[0],t:e.t,g:e.g,inc:stIsIn(e)});
+const stCatName=e=>{const k=stCat(e);return k?k.c:(e.g||'');};
+const stGrpName=e=>{if(e.k==='EXPENSE'&&e.c<0){const k=stCat(e);return grpOf(k);}if(stIsIn(e))return 'Entradas';return 'Faturas pagas e transferências';};
 function stFiltered(){
   const st=stState(),q=stNorm(st.q);
-  return stAll().filter(e=>e.d&&(!st.day?(st.ym==='all'||e.d.slice(0,7)===st.ym):e.d===st.day)&&(!(st.fs||[]).length||st.fs.some(f=>stMatchF(e,f)))&&(!(st.cats||[]).length||st.cats.indexOf(stCatName(e)||'__sem')>=0)&&(!(st.accts||[]).length||st.accts.indexOf(e.acct)>=0)&&stMatchQ(e,q))
+  return stAll().filter(e=>e.d&&(!st.day?(st.ym==='all'||e.d.slice(0,7)===st.ym):e.d===st.day)&&(!(st.fs||[]).length||st.fs.some(f=>stMatchF(e,f)))&&(!(st.cats||[]).length||st.cats.indexOf(stCatName(e)||'__sem')>=0)&&(!(st.grps||[]).length||st.grps.indexOf(stGrpName(e))>=0)&&(!(st.accts||[]).length||st.accts.indexOf(e.acct)>=0)&&stMatchQ(e,q))
     ;
 }
 function stSorted(){
   const st=stState(),rows=stFiltered(),m=st.sort||'dnew';
-  return sortBy(rows,m,e=>e.c,e=>e.d,e=>{const k=catOf({i:e.i,t:e.t,g:e.g});return k?k.c:(e.g||'');});
+  return sortBy(rows,m,e=>e.c,e=>e.d,e=>{const k=stCat(e);return k?k.c:(e.g||'');});
 }
 function stListHtml(){
   const st=stState(),rows=stSorted(),q=stNorm(st.q);
@@ -2551,17 +2557,18 @@ function vStmt(){
   let h=header('Extrato',rbtn('stmt-pick','📥','Importar extrato do Mobills (.xlsx)'))+'<div class="wrap"><input type="file" id="stfile" accept=".xlsx" hidden>';
   h+='<input id="stq" class="stq" type="search" inputmode="search" autocomplete="off" placeholder="Buscar: mercado, posto, pix, 50,00, 12/10…" value="'+esc(st.q)+'" aria-label="Buscar lançamentos">';
   const all=stAll(),cats=[...new Set(all.map(stCatName).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt-BR')),accts=[...new Set(all.map(e=>e.acct).filter(Boolean))].sort(),yms=[...new Set(all.filter(e=>e.d).map(e=>e.d.slice(0,7)).concat([ymOf(todayIso())]))].sort().reverse();
-  S._stOpts={fs:ST_FILTERS.slice(1),cats:[['__sem','Sem categoria']].concat(cats.map(c=>[c,c])),accts:accts.map(a=>[a,a])};
+  S._stOpts={fs:ST_FILTERS.slice(1),cats:[['__sem','Sem categoria']].concat(cats.map(c=>[c,c])),accts:accts.map(a=>[a,a]),grps:['Gastos fixos','Alimentação','Casa','Transporte','Saúde','Lazer e pessoal','Filhos','Juros, taxas e saques','Outros','Sem categoria','Entradas','Faturas pagas e transferências'].map(g=>[g,g])};
   const msel=(k,label,opts,cur)=>'<label class="fl"><span>'+label+'</span><button type="button" class="fsel" data-act="st-multi" data-k="'+k+'" style="text-align:left;overflow:hidden;white-space:nowrap">'+esc(multiTxt(opts,cur,'Todos'))+'</button></label>';
   const sel=(k,label,opts,cur)=>'<label class="fl"><span>'+label+'</span><select class="fsel" data-st="'+k+'" aria-label="'+label+'">'+opts.map(o=>'<option value="'+esc(o[0])+'"'+(String(cur)===String(o[0])?' selected':'')+'>'+esc(o[1])+'</option>').join('')+'</select></label>';
   h+='<div class="fgrid">'
     +msel('fs','Mostrar',ST_FILTERS.slice(1),st.fs)
     +sel('sort','Ordenar por',[['','Data nova'],['vmax','Maior valor'],['vmin','Menor valor'],['cat','Categoria A–Z'],['dold','Data antiga']],st.sort||'')
+    +msel('grps','Grupo (fixos, casa…)',S._stOpts.grps,st.grps)
     +msel('cats','Categoria',[['__sem','Sem categoria']].concat(cats.map(c=>[c,c])),st.cats)
     +msel('accts','Conta ou cartão',accts.map(a=>[a,a]),st.accts)
     +sel('ym','Mês',[['all','Todos os meses']].concat(yms.map(y=>[y,ymShort(y)])),st.ym)
     +'<label class="fl"><span>Dia</span><input id="std" class="fsel" type="date" value="'+esc(st.day)+'" aria-label="Escolher um dia"></label></div>';
-  h+='<div class="chips">'+((st.q||st.day||(st.fs||[]).length||(st.cats||[]).length||(st.accts||[]).length||st.sort||st.ym!==ymOf(todayIso()))?'<button class="chip" data-act="st-clear">Limpar filtros</button>':'')+'</div>';
+  h+='<div class="chips">'+((st.q||st.day||(st.fs||[]).length||(st.cats||[]).length||(st.grps||[]).length||(st.accts||[]).length||st.sort||st.ym!==ymOf(todayIso()))?'<button class="chip" data-act="st-clear">Limpar filtros</button>':'')+'</div>';
   h+='<div id="stlist">'+stListHtml()+'</div>';
   h+='<button class="btn sec" data-act="stmt-pick">📥 Importar extrato do Mobills</button><p class="hint">No Mobills: Relatório de transações → exportar em Excel. Importar de novo o mesmo período não duplica. Renda, empréstimo, transferência e fatura paga não entram em “Gastos”.</p>';
   return h+'</div>';
@@ -2888,15 +2895,15 @@ document.addEventListener('click',async ev=>{
         if(window.caches){const ks=await caches.keys();await Promise.all(ks.map(k=>caches.delete(k)));}}catch(e){}
       location.reload();
     }}
-  else if(act==='st-go'){S.st=stState();S.st.fs=(b.dataset.f&&b.dataset.f!=='all')?[b.dataset.f]:[];S.st.q='';S.st.day='';S.st.cats=[];S.st.accts=[];S.st.ym=ymOf(todayIso());S.st.lim=60;S.tab='stmt';render();window.scrollTo(0,0);}
+  else if(act==='st-go'){S.st=stState();S.st.fs=(b.dataset.f&&b.dataset.f!=='all')?[b.dataset.f]:[];S.st.q='';S.st.day='';S.st.cats=[];S.st.grps=[];S.st.accts=[];S.st.ym=ymOf(todayIso());S.st.lim=60;S.tab='stmt';render();window.scrollTo(0,0);}
   else if(act==='st-f'){const t=stState();t.f=b.dataset.v;t.lim=60;render();}
   else if(act==='st-prev'||act==='st-next'){const t=stState();t.day='';t.lim=60;const cur=t.ym==='all'?ymOf(todayIso()):t.ym;t.ym=addMonths(cur,act==='st-prev'?-1:1);render();}
   else if(act==='st-all'){const t=stState();t.day='';t.ym=(t.ym==='all')?ymOf(todayIso()):'all';t.lim=60;render();}
-  else if(act==='st-multi'){const t=stState(),k=b.dataset.k,o=(S._stOpts||{})[k]||[];const r=await multiPick({fs:'Mostrar',cats:'Categoria',accts:'Conta ou cartão'}[k],o,t[k]);if(r){t[k]=r;t.lim=60;render();}}
+  else if(act==='st-multi'){const t=stState(),k=b.dataset.k,o=(S._stOpts||{})[k]||[];const r=await multiPick({fs:'Mostrar',grps:'Grupo',cats:'Categoria',accts:'Conta ou cartão'}[k],o,t[k]);if(r){t[k]=r;t.lim=60;render();}}
   else if(act==='st-sort'){const t=stState();t.sort=(t.sort===b.dataset.v?null:b.dataset.v);t.lim=60;render();}
-  else if(act==='st-det'){const e=stSorted()[+b.dataset.ix];if(e){const k=catOf({i:e.i,t:e.t,g:e.g});detalheModal({t:e.t,d:e.d,c:e.c,tipo:(e.src==='cartao'&&e.c>0?'Estorno no cartão':stKindLabel(e)),cat:k?k.c+(k.s?' › '+k.s:''):(e.g||''),onde:e.acctFull||e.acct});}}
+  else if(act==='st-det'){const e=stSorted()[+b.dataset.ix];if(e){const k=stCat(e);detalheModal({t:e.t,d:e.d,c:e.c,tipo:(e.src==='cartao'&&e.c>0?'Estorno no cartão':stKindLabel(e)),cat:k?k.c+(k.s?' › '+k.s:''):(e.g||''),onde:e.acctFull||e.acct});}}
   else if(act==='st-more'){const t=stState();t.lim+=60;render();}
-  else if(act==='st-clear'){const t=stState();t.q='';t.fs=[];t.day='';t.cats=[];t.accts=[];t.sort=null;t.ym=ymOf(todayIso());t.lim=60;render();}
+  else if(act==='st-clear'){const t=stState();t.q='';t.fs=[];t.day='';t.cats=[];t.grps=[];t.accts=[];t.sort=null;t.ym=ymOf(todayIso());t.lim=60;render();}
   else if(act==='logout'){if(await confirmBox('Sair do Financeiro?',['Você terá que entrar de novo.'],'Sim, sair')){Api.saveSess(null);lsSet('fin-cache','');location.reload();}}
   else if(act==='demo-on'){
     if(await confirmBox('Carregar exemplos de teste?',['Cria 2 cartões, 6 compras, 4 contas e 2 dívidas FALSOS.','Todos têm “(teste)” no nome.','Dá para apagar tudo de uma vez depois.'],'Sim, carregar')){
@@ -2928,6 +2935,7 @@ document.addEventListener('click',async ev=>{
   else if(act==='sp-cat'){S.sp.cat=(S.sp.cat===b.dataset.c?null:b.dataset.c);render();}
   else if(act==='hp-toggle'){S.hp=!S.hp;render();}
   else if(act==='sp-sort'){S.sp=S.sp||{ym:ymOf(todayIso()),cat:null,all:false};S.sp.sort=(S.sp.sort===b.dataset.v?null:b.dataset.v);render();}
+  else if(act==='sp-seg'){S.sp.cat=(S.sp.cat===b.dataset.c?null:b.dataset.c);render();}
   else if(act==='sp-all'){S.sp.all=!S.sp.all;render();}
   else if(act==='sp-dir'){S.sp=S.sp||{};S.sp.dir=b.dataset.v;S.sp.cat=null;render();}
   else if(act==='sp-per'){S.sp=S.sp||{};S.sp.per=b.dataset.v;S.sp.cat=null;render();}
