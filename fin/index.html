@@ -1768,6 +1768,7 @@ function vHome(){
     +'<button data-act="tab" data-v="debts"><span class="nm"><b>Dívidas</b><i>'+(debts.length?debts.length+' em aberto':'nenhuma em aberto')+'</i></span><span class="vl mut">›</span></button>'
     +'<button data-act="st-go" data-f="in"><span class="nm"><b>Entradas</b></span><span class="vl mut">›</span></button>'
     +'<button data-act="tab" data-v="spend"><span class="nm"><b>Raio-X financeiro</b></span><span class="vl mut">›</span></button>'
+    +'<button data-act="cg-open"><span class="nm"><b>Grupos e categorias</b><i>criar e editar</i></span><span class="vl mut">›</span></button>'
     +'</div>';
   if(S.remErr)h+='<div class="note"><span class="tag warn">Lembretes</span> Não consegui conferir os lembretes no Núcleo agora ('+esc(S.remErr)+').</div>';
   return h+'</div>';
@@ -2885,7 +2886,7 @@ function stRows(){
   return out;
 }
 /* ---------- Extrato: buscar, filtrar por entradas/gastos, mês e dia ---------- */
-const APP_V='v63';
+const APP_V='v64';
 const ST_FILTERS=[['all','Tudo'],['in','Entradas'],['out','Gastos'],['fat','Faturas pagas'],['tr','Transferências']];
 function stAll(){
   const out=stRows().map(e=>Object.assign({},e,{src:'extrato'}));
@@ -2959,6 +2960,7 @@ function stListHtml(){
 function vStmt(){
   const st=stState();
   let h=header('Extrato',rbtn('stmt-pick','📥','Importar extrato do Mobills (.xlsx)'))+'<div class="wrap"><input type="file" id="stfile" accept=".xlsx" hidden>';
+  h+='<button class="btn sec" data-act="cg-open">🗂️ Criar e editar grupos e categorias</button>';
   h+='<input id="stq" class="stq" type="search" inputmode="search" autocomplete="off" placeholder="Buscar: mercado, posto, pix, 50,00, 12/10…" value="'+esc(st.q)+'" aria-label="Buscar lançamentos">';
   const all=stAll(),cats=[...new Set(all.map(stCatName).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt-BR')),accts=[...new Set(all.map(e=>e.acct).filter(Boolean))].sort(),yms=[...new Set(all.filter(e=>e.d).map(e=>e.d.slice(0,7)).concat([ymOf(todayIso())]))].sort().reverse();
   S._stOpts={fs:ST_FILTERS.slice(1),cats:[['__sem','Sem categoria']].concat(cats.map(c=>[c,c])),accts:accts.map(a=>[a,a]),grps:['Gastos fixos','Alimentação','Casa','Transporte','Saúde','Lazer e pessoal','Filhos','Juros, taxas e saques','Outros','Sem categoria','Entradas','Faturas pagas e transferências'].map(g=>[g,g])};
