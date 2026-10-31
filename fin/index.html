@@ -2857,9 +2857,88 @@ async function stApply(plan){
     if(x.rec)await Api.update(x.rec,data);else await Api.create('stmt',data);
   }
 }
+/* ---------- Extrato do próprio banco (Santander): Data, Descrição, Valor, Saldo ---------- */
+function bankIsFmt(rows){return rows.some(r=>r&&['data','descricao','valor','saldo'].every((h,i)=>stNorm(r[i])===h));}
+function bankKind(desc,c){
+  const d=stNorm(desc);
+  if(c>0){
+    if(d.startsWith('credito liberado'))return 'LOAN_DISBURSEMENT';
+    if(d.startsWith('liquido de vencimento')||d.indexOf('beneficios do inss')>=0)return 'INCOME';
+    return 'TRANSFER';
+  }
+  if(d.indexOf('fat.cartao')>=0||d.indexOf('fatura')>=0)return 'CARD_SETTLEMENT';
+  if(d.startsWith('pix enviado')||d.startsWith('ted ')||d.startsWith('doc ')||d.startsWith('transferencia'))return 'TRANSFER';
+  return 'EXPENSE';
+}
+function bankParse(rows){
+  const hi=rows.findIndex(r=>r&&['data','descricao','valor','saldo'].every((h,i)=>stNorm(r[i])===h));
+  if(hi<0)throw new Error('Não achei as colunas Data, Descrição, Valor e Saldo.');
+  const meta={};rows.slice(0,hi).forEach(r=>{if(r&&r[0]&&r[1]!=null)meta[stNorm(r[0])]=String(r[1]);});
+  const conta=String(meta['conta']||'').replace(/\D/g,'');
+  if(conta.length<5)throw new Error('O arquivo não diz qual é a conta.');
+  const pm=/(\d{2})\/(\d{2})\/(\d{4})\s*a\s*(\d{2})\/(\d{2})\/(\d{4})/.exec(meta['periodo do extrato']||'');
+  const body=[];rows.slice(hi+1).forEach((r,i)=>{if(r&&r.some(c=>c!==null&&c!==''))body.push({r:r,line:hi+i+2});});
+  if(!body.length)throw new Error('O arquivo não tem lançamentos.');
+  if(body.length>10000)throw new Error('Lançamentos demais (máximo 10.000).');
+  const out=[];
+  body.forEach(x=>{
+    const r=x.r,m=typeof r[0]==='string'?/^(\d{2})\/(\d{2})\/(\d{4})$/.exec(r[0].trim()):null;
+    if(!m)throw new Error('Data inválida na linha '+x.line+'.');
+    const date=m[3]+'-'+m[2]+'-'+m[1];if(isNaN(new Date(date+'T00:00:00Z'))||new Date(date+'T00:00:00Z').toISOString().slice(0,10)!==date)throw new Error('Data inválida na linha '+x.line+'.');
+    const c=Math.round(r[2]*100),sb=Math.round(r[3]*100);
+    if(typeof r[2]!=='number'||typeof r[3]!=='number'||!isFinite(r[2])||!isFinite(r[3])||c===0)throw new Error('Valor ou saldo inválido na linha '+x.line+'.');
+    const desc=String(r[1]==null?'':r[1]).split(/\r?\n/).map(z=>z.trim()).filter(Boolean).join(' · ');
+    out.push({d:date,c:c,sb:sb,t:desc.slice(0,80),k:bankKind(desc,c),raw:desc});
+  });
+  /* o extrato vem do mais novo para o mais antigo: cada saldo menos o valor tem de ser o saldo da linha de baixo */
+  for(let i=0;i<out.length-1;i++)if(out[i].sb-out[i].c!==out[i+1].sb)throw new Error('Os saldos do arquivo não fecham perto da linha '+body[i].line+'. Nada foi gravado.');
+  const ents=out.map(e=>({i:e.d+'-b'+fnv(JSON.stringify([e.d,e.c,stNorm(e.raw),e.sb]))+'-1',d:e.d,c:e.c,k:e.k,t:e.t,g:''}));
+  const ds=ents.map(e=>e.d).sort();
+  const from=pm?pm[3]+'-'+pm[2]+'-'+pm[1]:ds[0],to=pm?pm[6]+'-'+pm[5]+'-'+pm[4]:ds[ds.length-1];
+  if(ds[0]<from||ds[ds.length-1]>to)throw new Error('Há lançamentos fora do período do extrato.');
+  return {conta:conta,agency:meta['agencia']||'',from:from,to:to,ents:ents,rows:ents.length,endBal:out[0].sb,endDate:out[0].d};
+}
+function bankPlan(b){
+  const key=b.conta.slice(-5);
+  const cand=S.recs.filter(r=>r.kind==='stmt'&&!r.data.cardId&&!/fatura/i.test(r.data.account||'')&&((r.data.account||'')+' '+(r.data.number||'')).replace(/\D/g,'').indexOf(key)>=0);
+  if(cand.length!==1)throw new Error(cand.length?'Achei mais de uma conta com final '+key.slice(0,4)+'-'+key.slice(4)+'.':'Não achei a conta cadastrada com final '+key.slice(0,4)+'-'+key.slice(4)+'. Cadastre em Contas e tente de novo.');
+  const rec=cand[0],old=rec.data.entries||[];
+  const keep=old.filter(e=>e.d<b.from||e.d>b.to),drop=old.filter(e=>e.d>=b.from&&e.d<=b.to);
+  /* guarda a categoria que o Mobills já tinha dado a lançamentos de mesmo dia e valor */
+  const pool={};drop.forEach(e=>{if(e.g){const k=e.d+'|'+e.c;(pool[k]=pool[k]||[]).push(e.g);}});
+  const ents=b.ents.map(e=>{const k=e.d+'|'+e.c,g=pool[k]&&pool[k].length?pool[k].shift():'';return Object.assign({},e,{g:g});});
+  const merged=keep.concat(ents).sort((a,c)=>a.d<c.d?-1:a.d>c.d?1:0);
+  let sum=0;merged.forEach(e=>{if(e.d<=b.to)sum+=e.c;});
+  const opening=b.endBal-sum;
+  return {rec:rec,keep:keep,drop:drop,ents:ents,merged:merged,opening:opening,after:keep.filter(e=>e.d>b.to),b:b};
+}
+async function bankApply(pl){
+  await Api.update(pl.rec,Object.assign({},pl.rec.data,{entries:pl.merged,openingC:pl.opening,source:'banco'}));
+}
+async function bankImport(rows){
+  let b,pl;
+  try{b=bankParse(rows);pl=bankPlan(b);}catch(e){S.msg='Não consegui ler o arquivo: '+e.message;render();return;}
+  const lines=[
+    pl.rec.data.account+'.',
+    b.rows+' lançamentos do banco, de '+brDate(b.from)+' até '+brDate(b.to)+'.',
+    'Saldo do banco em '+brDate(b.endDate)+': '+money(b.endBal)+'.',
+    'Saem '+pl.drop.length+' lançamentos antigos desse período e entram os do banco.',
+    'Saldo inicial passa de '+(pl.rec.data.openingC==null?'vazio':money(pl.rec.data.openingC))+' para '+money(pl.opening)+'.'
+  ];
+  if(pl.keep.length-pl.after.length)lines.push((pl.keep.length-pl.after.length)+' lançamentos anteriores ficam como estão.');
+  if(pl.after.length)lines.push(pl.after.length+' lançamento(s) depois de '+brDate(b.to)+' ficam: '+pl.after.slice(0,3).map(e=>brDate(e.d)+' '+money(e.c)).join(', ')+'.');
+  lines.push('Nada é pago nem alterado no banco.');
+  if(await confirmBox('Importar extrato do Santander?',lines,'Sim, importar')){
+    try{await bankApply(pl);}catch(e){S.msg=e.message;}
+    render();
+  }
+}
 async function stImport(file){
-  let parsed;
-  try{parsed=mobillsParse(await xlsxRows(await file.arrayBuffer()));}
+  let parsed,rows;
+  try{rows=await xlsxRows(await file.arrayBuffer());}
+  catch(e){S.msg='Não consegui ler o arquivo: '+e.message;render();return;}
+  if(bankIsFmt(rows)){await bankImport(rows);return;}
+  try{parsed=mobillsParse(rows);}
   catch(e){S.msg='Não consegui ler o arquivo: '+e.message;render();return;}
   const names=Object.keys(parsed.accts);
   const dates=[].concat.apply([],names.map(n=>parsed.accts[n].map(e=>e.d))).sort();
@@ -2889,7 +2968,7 @@ function stRows(){
   return out;
 }
 /* ---------- Extrato: buscar, filtrar por entradas/gastos, mês e dia ---------- */
-const APP_V='v66';
+const APP_V='v67';
 const ST_FILTERS=[['all','Tudo'],['in','Entradas'],['out','Gastos'],['fat','Faturas pagas'],['tr','Transferências']];
 function stAll(){
   const out=stRows().map(e=>Object.assign({},e,{src:'extrato'}));
@@ -2962,7 +3041,7 @@ function stListHtml(){
 }
 function vStmt(){
   const st=stState();
-  let h=header('Extrato',rbtn('stmt-pick','📥','Importar extrato do Mobills (.xlsx)'))+'<div class="wrap"><input type="file" id="stfile" accept=".xlsx" hidden>';
+  let h=header('Extrato',rbtn('stmt-pick','📥','Importar extrato do banco (.xlsx)'))+'<div class="wrap"><input type="file" id="stfile" accept=".xlsx" hidden>';
   h+='<button class="btn sec" data-act="cg-open">🗂️ Criar e editar grupos e categorias</button>';
   h+='<input id="stq" class="stq" type="search" inputmode="search" autocomplete="off" placeholder="Buscar: mercado, posto, pix, 50,00, 12/10…" value="'+esc(st.q)+'" aria-label="Buscar lançamentos">';
   const all=stAll(),cats=[...new Set(all.map(stCatName).filter(Boolean).concat(Object.keys(catTree())))].sort((a,b)=>a.localeCompare(b,'pt-BR')),accts=[...new Set(all.map(e=>e.acct).filter(Boolean))].sort(),yms=[...new Set(all.filter(e=>e.d).map(e=>e.d.slice(0,7)).concat([ymOf(todayIso())]))].sort().reverse();
