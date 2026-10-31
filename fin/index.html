@@ -572,6 +572,27 @@ function catOf(e){
   if(e.g&&catTree()[e.g])return {c:e.g,s:''};
   return null;
 }
+
+/* ---------- ordenar listas: maior/menor valor, categoria A-Z, data nova/antiga ---------- */
+const SORTS=[['vmax','Maior valor'],['vmin','Menor valor'],['cat','Categoria A–Z'],['dnew','Data mais nova'],['dold','Data mais antiga']];
+function sortChips(cur,act){return '<div class="chips" role="group" aria-label="Ordenar por">'+SORTS.map(x=>'<button class="chip'+(cur===x[0]?' on':'')+'" data-act="'+act+'" data-v="'+x[0]+'">'+x[1]+'</button>').join('')+'</div>';}
+/* ordena uma lista; v = valor (centavos), d = data AAAA-MM-DD, c = categoria (texto) */
+function sortBy(list,mode,v,d,c){
+  const cmpD=(a,b)=>{const x=d(a)||'',y=d(b)||'';return x<y?-1:x>y?1:0;};
+  const cmpV=(a,b)=>Math.abs(v(a)||0)-Math.abs(v(b)||0);
+  const cmpC=(a,b)=>String(c(a)||'￿').localeCompare(String(c(b)||'￿'),'pt-BR');
+  const f=mode==='vmax'?(a,b)=>cmpV(b,a)||cmpD(b,a):mode==='vmin'?(a,b)=>cmpV(a,b)||cmpD(b,a):mode==='cat'?(a,b)=>cmpC(a,b)||cmpD(b,a):mode==='dold'?(a,b)=>cmpD(a,b):(a,b)=>cmpD(b,a);
+  return list.slice().sort(f);
+}
+const gSortRows=(rows,mode)=>sortBy(rows,mode||'dnew',r=>r.v,r=>r.d,r=>{const k=catOf(r);return k?k.c+' '+(k.s||''):'';});
+/* janela "o que é isto?" para uma linha de extrato ou de fatura */
+function detalheModal(x){
+  const rows=[['Descrição',x.t||'(sem descrição)'],['Data',x.d?brDate(x.d)+' · '+dowOf(x.d):''],['Valor',x.c==null?'':(x.c>0?'+ ':'')+money(Math.abs(x.c))],['Tipo',x.tipo||''],['Categoria',x.cat||''],['Onde',x.onde||''],['Parcela',x.parcela||''],['Quem',x.by||'']].filter(r=>r[1]);
+  const m=modal('<h3>O que é este lançamento</h3><div class="card">'+rows.map(r=>'<div class="row"><span class="mut">'+r[0]+'</span><b style="text-align:right;white-space:pre-wrap;word-break:break-word">'+esc(r[1])+'</b></div>').join('')+'</div>'
+    +(x.editId?'<button class="btn" id="dt-ed">Editar este lançamento</button>':'')+'<button class="btn sec" id="no">Fechar</button>');
+  m.querySelector('#no').onclick=()=>m.remove();
+  const e=m.querySelector('#dt-ed');if(e)e.onclick=()=>{m.remove();chargeForm(get(x.editId),null);};
+}
 function gastosRows(){
   const out=[];
   stRows().forEach(e=>{if(e.k==='EXPENSE'&&e.c<0)out.push({i:e.i,d:e.d,t:e.t||'',v:-e.c,g:e.g||'',src:e.acct});});
@@ -613,11 +634,16 @@ function gRow(r){
 }
 function vGastos(){
   S.sp=S.sp||{ym:ymOf(todayIso()),cat:null,all:false};
-  const ym=S.sp.ym,g=gastosMes(ym),gp=gastosMes(addMonths(ym,-1));
+  const ym=S.sp.ym,g=gastosMes(ym),gp=gastosMes(addMonths(ym,-1)),sm=S.sp.sort||'dnew';
+  if(S.sp.sort&&g.list.length>1){
+    const ord=sortBy(g.list,sm,x=>x.v,x=>x.items.reduce((a,r)=>r.d>a?r.d:a,''),x=>x.c);
+    g.list.length=0;ord.forEach(x=>g.list.push(x));
+  }
   let h=header('Gastos','<button class="ibtn" data-back="1" data-act="tab" data-v="home" aria-label="Voltar" title="Voltar">←</button>')+'<div class="wrap">';
   h+='<div class="spnav"><button class="btn sec" data-act="sp-prev" aria-label="Mês anterior">‹</button><b>'+esc(ymLabel(ym))+'</b><button class="btn sec" data-act="sp-next" aria-label="Próximo mês">›</button></div>';
   if(!g.rows.length)return h+'<div class="card mut">Sem gastos neste mês. Os gastos vêm dos extratos importados (aba Extrato) e das compras no cartão.</div></div>';
   const dif=g.total-gp.total;
+  h+='<p class="hint" style="margin:.2rem 0">Ordenar por:</p>'+sortChips(S.sp.sort||'',"sp-sort");
   h+='<div class="card"><div class="row"><span class="mut">Total gasto</span><b>'+money(g.total)+'</b></div>'
     +(gp.total?'<div class="row"><span class="mut">Mês passado</span><b>'+money(gp.total)+'</b></div><div class="row"><span class="mut">Diferença</span><b style="color:'+(dif>0?'var(--danger,#ff5c5c)':'#34c27a')+'">'+(dif>0?'+':'−')+money(Math.abs(dif))+'</b></div>':'')+'</div>';
   if(g.semN)h+='<div class="note"><b>'+g.semN+(g.semN===1?' lançamento sem categoria':' lançamentos sem categoria')+'</b> ('+money(g.semV)+'). Categorize uma vez e o Financeiro lembra os parecidos.</div><button class="btn" data-act="sp-queue">Categorizar agora</button>';
@@ -627,15 +653,15 @@ function vGastos(){
     h+='<button class="item'+(S.sp.cat===x.c?' on':'')+'" data-act="sp-cat" data-c="'+esc(x.c)+'"><div class="row"><span class="t"><i class="dot" style="background:'+CAT_COL[Math.min(i,7)]+'"></i>'+esc(x.c)+'</span><b>'+money(x.v)+'</b></div><div class="mut">'+Math.round(100*x.v/g.total)+'% do mês'+(d?' · '+(d>0?'↑ ':'↓ ')+money(Math.abs(d))+' em relação ao mês passado':'')+'</div></button>';
     if(S.sp.cat===x.c){
       Object.keys(x.subs).sort((a,b)=>x.subs[b]-x.subs[a]).forEach(s=>{const pct=Math.max(4,Math.round(100*x.subs[s]/x.v));h+='<div class="row" style="margin:.35rem 1rem 0"><span>'+esc(s)+'</span><span class="mut">'+money(x.subs[s])+'</span></div><div class="plan-bar" style="margin:.1rem 1rem .3rem"><i style="width:'+pct+'%"></i></div>';});
-      x.items.slice().sort((a,b)=>a.d<b.d?1:a.d>b.d?-1:0).forEach(r=>{h+=gRow(r);});
+      gSortRows(x.items,sm).forEach(r=>{h+=gRow(r);});
     }
   });
   if(g.semN){
     h+='<button class="item'+(S.sp.cat==='__sem'?' on':'')+'" data-act="sp-cat" data-c="__sem"><div class="row"><span class="t"><i class="dot" style="background:#5b6168"></i>Sem categoria</span><b>'+money(g.semV)+'</b></div><div class="mut">'+g.semN+' lançamento(s)</div></button>';
-    if(S.sp.cat==='__sem')g.sem.slice().sort((a,b)=>b.v-a.v).forEach(r=>{h+=gRow(r);});
+    if(S.sp.cat==='__sem')gSortRows(g.sem,S.sp.sort||'vmax').forEach(r=>{h+=gRow(r);});
   }
   h+='<button class="btn sec" data-act="sp-all">'+(S.sp.all?'Esconder a planilha':'Ver todos os lançamentos (planilha)')+'</button>';
-  if(S.sp.all)g.rows.slice().sort((a,b)=>a.d<b.d?1:a.d>b.d?-1:0).forEach(r=>{h+=gRow(r);});
+  if(S.sp.all)gSortRows(g.rows,sm).forEach(r=>{h+=gRow(r);});
   return h+'</div>';
 }
 function catSave(mut){
@@ -1943,11 +1969,24 @@ function vCard(){
       +'<div class="row"><span class="mut">Vence '+brDate(dueDateFor(c,ym))+'</span><b>'+money(v.totalC)+'</b></div></button>';
   });
   const v=k.inv[S.invYm];
-  h+='<h2 style="margin-left:0">Lançamentos de '+esc(ymShort(S.invYm))+'</h2>';
-  if(!v.items.length)h+='<div class="card mut">Nada lançado nesta fatura.</div>';
-  v.items.sort((a,b)=>a.date<b.date?-1:1).forEach(it=>{
-    h+='<button class="item" data-act="charge-edit" data-id="'+it.rec.id+'"><div class="row"><span class="t">'+esc(it.desc)+(it.n>1?' '+it.parcela+'/'+it.n:'')+'</span><b>'+money(it.amountC)+'</b></div><div class="mut">Compra em '+brDate(it.date)+(it.by?' · '+esc(it.by):'')+(it.amountC<0?' · estorno':'')+'</div></button>';
-  });
+  h+='<h2 style="margin-left:0">Extrato de '+esc(ymShort(S.invYm))+'</h2>';
+  /* extrato da fatura: o importado do PDF/banco (se houver); senão, os lançamentos do app */
+  const dueIso=dueDateFor(c,S.invYm),w0=stNorm(c.name).split(' ')[0];
+  const sr=byKind('stmt').find(r=>{const a=stNorm(r.data.account);return a.indexOf('fatura '+dueIso)>=0&&(!w0||a.indexOf(w0)>=0);});
+  let lin=[];
+  if(sr)lin=sr.data.entries.map(e=>({t:e.t,d:e.d,c:e.c,i:e.i,g:e.g,tipo:(e.c>0?'Pagamento/estorno na fatura':'Compra no cartão'),onde:sr.data.account}));
+  else lin=v.items.map(it=>({t:it.desc+(it.n>1?' '+it.parcela+'/'+it.n:''),d:it.date,c:-it.amountC,i:it.rec.id,tipo:(it.amountC<0?'Estorno':'Compra no cartão'),parcela:it.n>1?it.parcela+' de '+it.n:'',by:it.by||'',onde:c.name,editId:it.rec.id}));
+  lin.forEach(x=>{if(!x.cat){const kk=catOf({i:x.i,t:x.t,g:x.g});if(kk)x.cat=kk.c+(kk.s?' › '+kk.s:'');else if(x.g)x.cat=x.g;}});
+  const cs=S.cSort||'dnew';
+  lin=sortBy(lin,cs,x=>x.c,x=>x.d,x=>x.cat||'');
+  S._invLin=lin;
+  h+=sortChips(S.cSort||'','card-sort');
+  if(!lin.length)h+='<div class="card mut">Nada lançado nesta fatura.</div>';
+  else{
+    h+='<div class="tbl" role="table"><div class="tr th" role="row"><span>Dia</span><span>Descrição</span><span style="text-align:right">Valor</span></div>';
+    lin.forEach((x,ix)=>{h+='<button class="tr" role="row" data-act="inv-det" data-ix="'+ix+'"><span class="d"><b>'+(x.d?x.d.slice(8,10):'')+'</b><i>'+(x.d?x.d.slice(5,7)+'/'+x.d.slice(2,4):'')+'</i></span><span class="w"><b>'+esc(x.t||'(sem descrição)')+'</b></span><span class="v"><b'+(x.c>0?' class="rc"':'')+'>'+(x.c>0?'+ ':'')+money(Math.abs(x.c))+'</b></span></button>';});
+    h+='</div><p class="hint">Toque numa linha para ver o que é.</p>';
+  }
   h+='<button class="btn sec" data-act="inv-pay" data-ym="'+S.invYm+'">'+(v.paid?'Desfazer “fatura paga”':'Marcar esta fatura como paga')+'</button>';
   h+='<p class="hint">Marcar como paga só avisa o Financeiro. O pagamento você faz no banco.</p>';
   const mn=byKind('charge').filter(x=>x.data.cardId===cr.id).length;
@@ -2112,7 +2151,7 @@ function stRows(){
   return out;
 }
 /* ---------- Extrato: buscar, filtrar por entradas/gastos, mês e dia ---------- */
-const APP_V='v42';
+const APP_V='v43';
 const ST_FILTERS=[['all','Tudo'],['in','Entradas'],['out','Gastos'],['fat','Faturas pagas'],['tr','Transferências']];
 function stAll(){
   const out=stRows().map(e=>Object.assign({},e,{src:'extrato'}));
@@ -2139,10 +2178,14 @@ function stState(){
 function stFiltered(){
   const st=stState(),q=stNorm(st.q);
   return stAll().filter(e=>e.d&&(!st.day?(st.ym==='all'||e.d.slice(0,7)===st.ym):e.d===st.day)&&stMatchF(e,st.f)&&stMatchQ(e,q))
-    .sort((a,b)=>a.d<b.d?1:a.d>b.d?-1:(a.t<b.t?-1:1));
+    ;
+}
+function stSorted(){
+  const st=stState(),rows=stFiltered(),m=st.sort||'dnew';
+  return sortBy(rows,m,e=>e.c,e=>e.d,e=>{const k=catOf({i:e.i,t:e.t,g:e.g});return k?k.c:(e.g||'');});
 }
 function stListHtml(){
-  const st=stState(),rows=stFiltered(),q=stNorm(st.q);
+  const st=stState(),rows=stSorted(),q=stNorm(st.q);
   let h='';
   const sum={in:0,out:0,fat:0,tr:0};
   rows.forEach(e=>{if(e.k==='INCOME'||e.k==='LOAN_DISBURSEMENT')sum.in+=e.c;else if(e.k==='EXPENSE')sum.out+=-e.c;else if(e.k==='CARD_SETTLEMENT')sum.fat+=-e.c;else sum.tr+=e.c;});
@@ -2155,10 +2198,11 @@ function stListHtml(){
     h+='<div class="card mut">'+(stAll().length?'Nada encontrado com esses filtros. Tente outro mês, “Tudo” ou apague o que escreveu.':'Nenhum extrato importado ainda. Toque em “Importar extrato do Mobills” abaixo.')+'</div>';
   }
   let last='';
-  rows.slice(0,st.lim).forEach(e=>{
-    if(e.d!==last){last=e.d;h+='<h2 class="stday">'+brDate(e.d).slice(0,5)+' · '+dowOf(e.d)+'</h2>';}
+  const porData=!st.sort||st.sort==='dnew'||st.sort==='dold';
+  rows.slice(0,st.lim).forEach((e,ix)=>{
+    if(porData&&e.d!==last){last=e.d;h+='<h2 class="stday">'+brDate(e.d).slice(0,5)+' · '+dowOf(e.d)+'</h2>';}
     const ent=e.c>0;
-    h+='<div class="item"><div class="row"><span class="t">'+esc(e.t||'(sem descrição)')+'</span><b class="'+(ent?'rc':'')+'">'+(ent?'+ ':'')+money(Math.abs(e.c))+'</b></div><div class="mut">'+(e.src==='cartao'&&e.c>0?'Estorno no cartão':stKindLabel(e))+(e.g?' · '+esc(e.g):'')+' · '+esc(e.acct||'')+'</div></div>';
+    h+='<button class="item" data-act="st-det" data-ix="'+ix+'"><div class="row"><span class="t">'+esc(e.t||'(sem descrição)')+'</span><b class="'+(ent?'rc':'')+'">'+(ent?'+ ':'')+money(Math.abs(e.c))+'</b></div><div class="mut">'+(e.src==='cartao'&&e.c>0?'Estorno no cartão':stKindLabel(e))+(e.g?' · '+esc(e.g):'')+' · '+esc(e.acct||'')+(porData?'':' · '+brDate(e.d))+'</div></button>';
   });
   if(rows.length>st.lim)h+='<button class="btn sec" data-act="st-more">Mostrar mais ('+(rows.length-st.lim)+' restantes)</button>';
   /* contas, cartões e dívidas cadastrados que combinam com a busca */
@@ -2179,6 +2223,7 @@ function vStmt(){
   let h=header('Extrato',rbtn('stmt-pick','📥','Importar extrato do Mobills (.xlsx)'))+'<div class="wrap"><input type="file" id="stfile" accept=".xlsx" hidden>';
   h+='<input id="stq" class="stq" type="search" inputmode="search" autocomplete="off" placeholder="Buscar: mercado, posto, pix, 50,00, 12/10…" value="'+esc(st.q)+'" aria-label="Buscar lançamentos">';
   h+='<div class="chips">'+ST_FILTERS.map(f=>'<button class="chip'+(st.f===f[0]?' on':'')+'" data-act="st-f" data-v="'+f[0]+'">'+f[1]+'</button>').join('')+'</div>';
+  h+='<p class="hint" style="margin:.2rem 0">Ordenar por:</p>'+sortChips(st.sort||'','st-sort');
   h+='<div class="spnav"><button class="btn sec" data-act="st-prev" aria-label="Mês anterior">‹</button><b>'+(st.day?brDate(st.day):(st.ym==='all'?'Todos os meses':esc(ymLabel(st.ym))))+'</b><button class="btn sec" data-act="st-next" aria-label="Próximo mês">›</button></div>';
   h+='<div class="chips"><button class="chip'+(st.ym==='all'&&!st.day?' on':'')+'" data-act="st-all">Todos os meses</button><label class="chip daylb'+(st.day?' on':'')+'">Dia: <input id="std" type="date" value="'+esc(st.day)+'" aria-label="Escolher um dia"></label>'+((st.q||st.day||st.f!=='all')?'<button class="chip" data-act="st-clear">Limpar</button>':'')+'</div>';
   h+='<div id="stlist">'+stListHtml()+'</div>';
@@ -2485,6 +2530,8 @@ document.addEventListener('click',async ev=>{
   else if(act==='st-f'){const t=stState();t.f=b.dataset.v;t.lim=60;render();}
   else if(act==='st-prev'||act==='st-next'){const t=stState();t.day='';t.lim=60;const cur=t.ym==='all'?ymOf(todayIso()):t.ym;t.ym=addMonths(cur,act==='st-prev'?-1:1);render();}
   else if(act==='st-all'){const t=stState();t.day='';t.ym=(t.ym==='all')?ymOf(todayIso()):'all';t.lim=60;render();}
+  else if(act==='st-sort'){const t=stState();t.sort=(t.sort===b.dataset.v?null:b.dataset.v);t.lim=60;render();}
+  else if(act==='st-det'){const e=stSorted()[+b.dataset.ix];if(e){const k=catOf({i:e.i,t:e.t,g:e.g});detalheModal({t:e.t,d:e.d,c:e.c,tipo:(e.src==='cartao'&&e.c>0?'Estorno no cartão':stKindLabel(e)),cat:k?k.c+(k.s?' › '+k.s:''):(e.g||''),onde:e.acct});}}
   else if(act==='st-more'){const t=stState();t.lim+=60;render();}
   else if(act==='st-clear'){const t=stState();t.q='';t.f='all';t.day='';t.lim=60;render();}
   else if(act==='logout'){if(await confirmBox('Sair do Financeiro?',['Você terá que entrar de novo.'],'Sim, sair')){Api.saveSess(null);lsSet('fin-cache','');location.reload();}}
@@ -2517,6 +2564,7 @@ document.addEventListener('click',async ev=>{
   else if(act==='sp-next'){S.sp=S.sp||{ym:ymOf(todayIso()),cat:null,all:false};S.sp.ym=addMonths(S.sp.ym,1);S.sp.cat=null;render();}
   else if(act==='sp-cat'){S.sp.cat=(S.sp.cat===b.dataset.c?null:b.dataset.c);render();}
   else if(act==='hp-toggle'){S.hp=!S.hp;render();}
+  else if(act==='sp-sort'){S.sp=S.sp||{ym:ymOf(todayIso()),cat:null,all:false};S.sp.sort=(S.sp.sort===b.dataset.v?null:b.dataset.v);render();}
   else if(act==='sp-all'){S.sp.all=!S.sp.all;render();}
   else if(act==='sp-queue')catQueue();
   else if(act==='sp-pick'){const r=gastosRows().find(x=>String(x.i)===b.dataset.i);if(r)catPick(r,false);}
@@ -2533,6 +2581,8 @@ document.addEventListener('click',async ev=>{
   else if(act==='card-new')cardForm(null);
   else if(act==='card-edit')cardForm(get(id));
   else if(act==='card'){S.cardId=id;S.tab='cards';S.invYm=null;render();window.scrollTo(0,0);}
+  else if(act==='card-sort'){S.cSort=(S.cSort===b.dataset.v?null:b.dataset.v);render();}
+  else if(act==='inv-det'){const x=(S._invLin||[])[+b.dataset.ix];if(x)detalheModal(x);}
   else if(act==='inv'){S.invYm=b.dataset.ym;render();}
   else if(act==='charge-new')chargeForm(get(id),null);
   else if(act==='charge-edit'){const r=get(id);chargeForm(get(r.data.cardId),r);}
