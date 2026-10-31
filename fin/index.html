@@ -1300,34 +1300,28 @@ function vHome(){
   const entM=stRows().filter(e=>e.d&&e.d.slice(0,7)===ym&&(e.k==='INCOME'||e.k==='LOAN_DISBURSEMENT')).reduce((a,e)=>a+e.c,0);
   {const bd=backupDays();
    if(bd===null||bd>=7)h+='<button class="note bkn" data-act="backup" aria-label="Baixar uma cópia dos dados">💾 '+(bd===null?'Você ainda não baixou uma cópia dos seus dados.':'Faz '+bd+' dias desde a última cópia dos seus dados.')+' Toque para baixar.</button>';}
-  const paidN=rows.filter(feitaH).length,totN=rows.length,paidC=rows.filter(i=>feitaH(i)&&i.amountC!=null).reduce((a,i)=>a+i.amountC,0);
-  if(totN){
-    const pct=Math.round(paidN/totN*100),st=late?'bad':(sem?'warn':'ok');
-    h+='<button class="hero '+st+'" data-act="tab" data-v="bills" aria-label="Ver as contas do mês"><span class="hl">Falta pagar neste mês</span><span class="hv">'+money(known)+'</span><span class="hbar"><i style="width:'+pct+'%"></i></span><span class="hs">'+paidN+' de '+totN+' itens pagos'+(paidC?' · '+money(paidC)+' já pago':'')+(late?' · '+late+(late===1?' atrasada':' atrasadas'):'')+(sem?' · '+sem+' sem valor':'')+'</span></button>';
-  }
-  {const mi=monthItems(ym),isR=i=>i.dir==='RECEBER',sm=l=>l.reduce((a,i)=>a+(i.amountC||0),0);
-   const tRc=sm(mi.filter(isR)),tPg=sm(mi.filter(i=>!isR(i)));
-   if(tRc>0){const sob=tRc-tPg;
-     h+='<div class="card"><div class="row"><span class="mut">Previsto a receber no mês</span><b class="rc">'+money(tRc)+'</b></div><div class="row"><span class="mut">Contas e parcelas do mês</span><b>'+money(tPg)+'</b></div><div class="row"><span class="mut">Sobra depois das contas</span><b'+(sob<0?' style="color:var(--danger)"':' class="rc"')+'>'+(sob<0?'Falta '+money(-sob):money(sob))+'</b></div><div class="hint">É previsão: só conta o que tem valor informado. Não é dinheiro disponível.</div></div>';}
+  /* Início calmo: sem número gigante. Uma tabela simples do que vence neste mês + atalhos sem valores em destaque */
+  {const all=monthItems(ym),fz=i=>i.state==='Paga'||i.state==='Recebida';
+   const abertos=all.filter(i=>!fz(i)),feitos=all.filter(fz);
+   h+='<h2>Neste mês</h2>';
+   if(!all.length)h+='<div class="card mut">Nada vence neste mês. Contas, faturas e parcelas aparecem aqui sozinhas quando você cadastrar.</div>';
+   else{
+     h+='<div class="tbl" role="table"><div class="tr th" role="row"><span>Dia</span><span>O que</span><span>Valor</span></div>'+abertos.map(mRow).join('')+(S.hDone?feitos.map(mRow).join(''):'')+'</div>';
+     if(!abertos.length)h+='<div class="card mut">Tudo deste mês está pago.</div>';
+     if(feitos.length)h+='<button class="btn sec" data-act="h-done">'+(S.hDone?'Esconder as já pagas':'Mostrar as '+feitos.length+' já pagas')+'</button>';
+     h+='<p class="hint">Toque numa linha para ver os detalhes.</p>';
+   }
   }
   {const ob=overdueBefore();
-   if(ob.length){const tot=ob.reduce((a,i)=>a+(i.amountC||0),0);
-     h+='<button class="note bkn" data-act="m-old" data-v="'+ob[0].mm+'">⚠️ Atrasado de meses anteriores: '+money(tot)+' ('+ob.length+(ob.length===1?' item':' itens')+'). Isso não está em “Falta pagar neste mês”. Toque para ver.</button>';}}
+   if(ob.length){h+='<button class="note bkn" data-act="m-old" data-v="'+ob[0].mm+'">⚠️ Há '+ob.length+(ob.length===1?' item atrasado':' itens atrasados')+' de meses anteriores. Toque para ver.</button>';}}
   if(g.semN>0)h+='<button class="note bkn" data-act="tab" data-v="spend">📝 '+g.semN+(g.semN===1?' gasto sem categoria':' gastos sem categoria')+'. Toque para revisar.</button>';
-  h+='<div class="up s2">'
-    +srow('bills','A pagar no mês',money(known),(late?'<span class="tag bad">'+late+(late===1?' atrasada':' atrasadas')+'</span> ':'')+(sem?'<span class="tag warn">'+sem+' sem valor</span>':'')+(!rows.length?'Nenhuma conta cadastrada':'')+((rows.length&&!late&&!sem)?'Valores conhecidos':''))
-    +srow('cards','Cartões',cardsH.length?money(totH):'—',cardsH.length?cardsH.length+(cardsH.length===1?' cartão · total usado':' cartões · total usado'):'Nenhum cartão')
-    +srow('debts','Dívidas · saldo total',debts.length?money(dsum):'—',(debts.length?(nxD?'próxima parcela '+money(nxD.c)+' em '+brDate(nxD.dt).slice(0,5):debts.length+' em aberto'):'Nenhuma em aberto')+(dmiss?' · <span class="tag warn">saldo não informado</span>':'')+(recvs.length?' · <span class="rc">a receber '+money(recvs.reduce((a,d)=>a+(d.data.balanceC||0),0))+'</span>':''))
-    +'<button data-act="st-go" data-f="in"><span class="nm"><b>Entradas do mês</b><i>'+(entM?'dinheiro que entrou (renda e empréstimo)':'nada importado neste mês')+'</i></span><span class="vl rc">'+(entM?'+ '+money(entM):'—')+'</span></button>'
-    +srow('spend','Gastos do mês',g.rows.length?money(g.total):'—',g.semN?'<span class="tag warn">'+g.semN+' sem categoria</span>':(g.rows.length?'Por categoria':'Sem gastos neste mês'))
+  h+='<h2>Abrir</h2><div class="up s2">'
+    +'<button data-act="tab" data-v="bills"><span class="nm"><b>Contas do mês</b></span><span class="vl mut">›</span></button>'
+    +'<button data-act="tab" data-v="cards"><span class="nm"><b>Cartões</b><i>'+(cardsH.length?cardsH.length+(cardsH.length===1?' cartão':' cartões'):'nenhum')+'</i></span><span class="vl mut">›</span></button>'
+    +'<button data-act="tab" data-v="debts"><span class="nm"><b>Dívidas</b><i>'+(debts.length?debts.length+' em aberto':'nenhuma em aberto')+'</i></span><span class="vl mut">›</span></button>'
+    +'<button data-act="st-go" data-f="in"><span class="nm"><b>Entradas</b></span><span class="vl mut">›</span></button>'
+    +'<button data-act="tab" data-v="spend"><span class="nm"><b>Gastos</b></span><span class="vl mut">›</span></button>'
     +'</div>';
-  const up=upcoming();
-  if(up.length){
-    h+='<h2>Próximos vencimentos</h2><div class="up">';
-    up.slice(0,3).forEach(u=>{h+='<button data-act="tab" data-v="bills" class="'+(u.late?'late':'')+'"><span class="dt">'+brDate(u.dt).slice(0,5)+'</span><span class="nm"><b>'+esc(u.name)+'</b><i>'+u.kind+(u.late?' · em atraso':'')+'</i></span><span class="vl'+(u.recv?' rc':'')+'">'+(u.recv?'+ ':'')+money(u.c)+'</span></button>';});
-    if(up.length>3)h+='<button data-act="tab" data-v="bills"><span class="dt">+'+(up.length-3)+'</span><span class="nm"><i>mais, veja em Mês</i></span><span class="vl mut">›</span></button>';
-    h+='</div>';
-  }
   if(S.remErr)h+='<div class="note"><span class="tag warn">Lembretes</span> Não consegui conferir os lembretes no Núcleo agora ('+esc(S.remErr)+').</div>';
   return h+'</div>';
 }
@@ -2118,7 +2112,7 @@ function stRows(){
   return out;
 }
 /* ---------- Extrato: buscar, filtrar por entradas/gastos, mês e dia ---------- */
-const APP_V='v41';
+const APP_V='v42';
 const ST_FILTERS=[['all','Tudo'],['in','Entradas'],['out','Gastos'],['fat','Faturas pagas'],['tr','Transferências']];
 function stAll(){
   const out=stRows().map(e=>Object.assign({},e,{src:'extrato'}));
@@ -2511,6 +2505,7 @@ document.addEventListener('click',async ev=>{
   else if(act==='m-next'){S.mm=addMonths(S.mm||ymOf(todayIso()),1);render();}
   else if(act==='m-today'){S.mm=null;render();}
   else if(act==='m-filter'){S.mf=b.dataset.v;render();}
+  else if(act==='h-done'){S.hDone=!S.hDone;render();}
   else if(act==='m-open'){
     const k=b.dataset.k,ym=b.dataset.ym;
     if(k==='bill'){const r=get(id),bl=get(r.data.billId);fichaBill(bl,{r,bill:bl});}
