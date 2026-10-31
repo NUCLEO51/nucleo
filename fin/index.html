@@ -1987,6 +1987,15 @@ function vCard(){
     lin.forEach((x,ix)=>{h+='<button class="tr" role="row" data-act="inv-det" data-ix="'+ix+'"><span class="d"><b>'+(x.d?x.d.slice(8,10):'')+'</b><i>'+(x.d?x.d.slice(5,7)+'/'+x.d.slice(2,4):'')+'</i></span><span class="w"><b>'+esc(x.t||'(sem descrição)')+'</b></span><span class="v"><b'+(x.c>0?' class="rc"':'')+'>'+(x.c>0?'+ ':'')+money(Math.abs(x.c))+'</b></span></button>';});
     h+='</div><p class="hint">Toque numa linha para ver o que é.</p>';
   }
+  const tf=c.tarifas;
+  if(tf&&tf.linhas&&tf.linhas.length){
+    const pc=x=>(x==null?'—':String(x).replace('.',',')+'%');
+    h+='<h2 style="margin-left:0">Tarifas do cartão</h2><div class="tbl" role="table"><div class="tr th" role="row" style="grid-template-columns:1fr auto auto"><span>Taxa</span><span>Mês</span><span>Ano</span></div>'
+      +tf.linhas.map(l=>'<div class="tr" role="row" style="grid-template-columns:1fr auto auto;cursor:default"><span class="w"><b>'+esc(l.nome)+'</b><i>CET '+pc(l.cetAnoPct)+' ao ano</i></span><span class="v"><b>'+pc(l.mesPct)+'</b></span><span class="v"><b>'+pc(l.anoPct)+'</b></span></div>').join('')+'</div>'
+      +'<div class="card"><div class="row"><span class="mut">IOF diário</span><b>'+pc(tf.iofDiarioPct)+'</b></div><div class="row"><span class="mut">IOF adicional</span><b>'+pc(tf.iofAdicionalPct)+'</b></div><div class="row"><span class="mut">Juros de mora</span><b>'+pc(tf.jurosMoraMesPct)+' ao mês</b></div><div class="row"><span class="mut">Multa</span><b>'+pc(tf.multaPct)+'</b></div></div>'
+      +'<p class="hint">Fonte: '+esc(tf.fonte||'')+'</p>';
+  }
+  h+='<button class="btn sec" data-act="card-tarifas" data-id="'+cr.id+'">Editar tarifas do cartão</button>';
   h+='<button class="btn sec" data-act="inv-pay" data-ym="'+S.invYm+'">'+(v.paid?'Desfazer “fatura paga”':'Marcar esta fatura como paga')+'</button>';
   h+='<p class="hint">Marcar como paga só avisa o Financeiro. O pagamento você faz no banco.</p>';
   const mn=byKind('charge').filter(x=>x.data.cardId===cr.id).length;
@@ -2151,7 +2160,7 @@ function stRows(){
   return out;
 }
 /* ---------- Extrato: buscar, filtrar por entradas/gastos, mês e dia ---------- */
-const APP_V='v43';
+const APP_V='v44';
 const ST_FILTERS=[['all','Tudo'],['in','Entradas'],['out','Gastos'],['fat','Faturas pagas'],['tr','Transferências']];
 function stAll(){
   const out=stRows().map(e=>Object.assign({},e,{src:'extrato'}));
@@ -2441,10 +2450,27 @@ async function cardForm(rec){
   ],Object.assign({},d),{
     validate:o=>(o.last4&&!/^\d{4}$/.test(o.last4))?'Os últimos dígitos devem ser exatamente 4 números.':null,
     summary:o=>['Cartão: '+o.name,'Final: '+(o.last4||'—'),'Limite: '+money(o.limitC),'Fecha dia '+o.closeDay+' · vence dia '+o.dueDay],
-    save:async o=>{if(rec)await Api.update(rec,o);else await Api.create('card',o);},
+    save:async o=>{if(rec)await Api.update(rec,Object.assign({},d,o));else await Api.create('card',o);},
     onDelete:rec?async()=>{
       if(await confirmBox('Apagar este cartão?',['Cartão: '+d.name,'Os lançamentos dele também saem da tela.','Vai para a lixeira.'],'Sim, apagar',true)){
         try{for(const x of S.recs.filter(r=>(r.kind==='charge'||r.kind==='invpay')&&r.data.cardId===rec.id))await Api.remove(x);await Api.remove(rec);S.cardId=null;S.tab='cards';}catch(e){S.msg=e.message;}render();}}:null
+  });
+}
+const nPct=x=>{const t=String(x==null?'':x).trim().replace('%','').replace(',','.');if(t==='')return null;const n=Number(t);return isFinite(n)&&n>=0&&n<1000?n:NaN;};
+const pTxt=x=>x==null?'':String(x).replace('.',',');
+async function tarifasForm(rec){
+  const d=rec.data,tf=d.tarifas||{linhas:[]},ls=tf.linhas||[];
+  const fields=[],init={};
+  ls.forEach((l,i)=>{fields.push({k:'m'+i,label:l.nome+' (% ao mês)',type:'text'});init['m'+i]=pTxt(l.mesPct);});
+  [['iofD','IOF diário (%)','iofDiarioPct'],['iofA','IOF adicional (%)','iofAdicionalPct'],['mora','Juros de mora (% ao mês)','jurosMoraMesPct'],['multa','Multa (%)','multaPct']].forEach(x=>{fields.push({k:x[0],label:x[1],type:'text'});init[x[0]]=pTxt(tf[x[2]]);});
+  return form('Tarifas do cartão',fields,init,{
+    validate:o=>{for(const k of Object.keys(init))if(Number.isNaN(nPct(o[k])))return 'Número inválido em um dos campos. Use só números, com vírgula.';return null;},
+    summary:o=>ls.map((l,i)=>l.nome+': '+(o['m'+i]||'—')+'% ao mês').concat(['IOF diário '+(o.iofD||'—')+'% · adicional '+(o.iofA||'—')+'%','Mora '+(o.mora||'—')+'% · multa '+(o.multa||'—')+'%']),
+    save:async o=>{
+      const nt=JSON.parse(JSON.stringify(tf));nt.linhas=ls.map((l,i)=>Object.assign({},l,{mesPct:nPct(o['m'+i])}));
+      nt.iofDiarioPct=nPct(o.iofD);nt.iofAdicionalPct=nPct(o.iofA);nt.jurosMoraMesPct=nPct(o.mora);nt.multaPct=nPct(o.multa);
+      await Api.update(rec,Object.assign({},d,{tarifas:nt}));
+    }
   });
 }
 async function chargeForm(card,rec,preset){
@@ -2580,6 +2606,7 @@ document.addEventListener('click',async ev=>{
   else if(act==='bill-open'){const r=get(id);billMonthForm({r,bill:get(r.data.billId)});}
   else if(act==='card-new')cardForm(null);
   else if(act==='card-edit')cardForm(get(id));
+  else if(act==='card-tarifas'){const r=get(id);if(r&&r.data.tarifas)tarifasForm(r);else S.msg='Este cartão ainda não tem tarifas salvas.',render();}
   else if(act==='card'){S.cardId=id;S.tab='cards';S.invYm=null;render();window.scrollTo(0,0);}
   else if(act==='card-sort'){S.cSort=(S.cSort===b.dataset.v?null:b.dataset.v);render();}
   else if(act==='inv-det'){const x=(S._invLin||[])[+b.dataset.ix];if(x)detalheModal(x);}
