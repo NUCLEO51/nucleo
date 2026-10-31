@@ -609,11 +609,23 @@ function catTree(){
   return t;
 }
 /* categoria de um gasto: 1) a que você escolheu só para ele, 2) a regra do lugar, 3) a do Mobills (se for uma categoria conhecida) */
+/* o app generaliza o que você ensinou: se toda vez que apareceu a palavra “drogaria” você disse Saúde, as próximas “drogaria” já vêm como Saúde */
+const _learnC=new WeakMap();
+function learnTok(d,inc){
+  const key=inc?'i':'o';let c=_learnC.get(d.rules||d);if(!c){c={};_learnC.set(d.rules||d,c);}
+  if(c[key])return c[key];
+  const m={};
+  (d.rules||[]).forEach(r=>{if(!!r.inc!==inc)return;String(r.m).split(' ').forEach(w=>{if(w.length<4)return;const o=m[w]=m[w]||{cs:{},n:0};const kk=r.c+'|'+(r.s||'');o.cs[kk]=(o.cs[kk]||0)+1;o.n++;});});
+  const out={};
+  Object.keys(m).forEach(w=>{const cats=Object.keys(m[w].cs);const cc=[...new Set(cats.map(x=>x.split('|')[0]))];if(cc.length!==1)return;const subs=[...new Set(cats.map(x=>x.split('|')[1]))];out[w]={c:cc[0],s:subs.length===1?subs[0]:''};});
+  return c[key]=out;
+}
 function catOf(e){
   const d=catData();
   if(d.over&&d.over[e.i])return d.over[e.i];
   const k=gKey(e.t);
-  if(k)for(const r of (d.rules||[])){if(k===r.m||k.indexOf(r.m+' ')===0)return {c:r.c,s:r.s||''};}
+  if(k)for(const r of (d.rules||[])){if(!!r.inc!==!!e.inc)continue;if(k===r.m||k.indexOf(r.m+' ')===0)return {c:r.c,s:r.s||''};}
+  if(k){const L=learnTok(d,!!e.inc);for(const w of k.split(' ')){const x=L[w];if(x)return {c:x.c,s:x.s,auto:true,learned:true};}}
   const nt=gNorm(e.t);for(const a of (e.inc?INC_AUTO:CAT_AUTO))if(a[0].test(nt))return {c:a[1],s:a[2],auto:true};
   if(e.g&&!e.inc&&catTree()[e.g])return {c:e.g,s:''};
   return null;
@@ -684,7 +696,7 @@ function donutSvg(list,colOf,total,sel){
 }
 function gRow(r){
   const k=catOf(r);
-  return '<button class="item" data-act="sp-pick" data-i="'+esc(r.i)+'"><div class="row"><span class="t">'+esc(r.t||'(sem descrição)')+'</span><b>'+money(r.v)+'</b></div><div class="mut">'+brDate(r.d)+' · '+(k?esc(k.c)+(k.s?' › '+esc(k.s):'')+(k.auto?' <span class="mut">(sugerida)</span>':''):'<span style="color:var(--warn,#ffb300)">sem categoria</span>')+'</div></button>';
+  return '<button class="item" data-act="sp-pick" data-i="'+esc(r.i)+'"><div class="row"><span class="t">'+esc(r.t||'(sem descrição)')+'</span><b>'+money(r.v)+'</b></div><div class="mut">'+brDate(r.d)+' · '+(k?esc(k.c)+(k.s?' › '+esc(k.s):'')+(k.auto?' <span class="mut">('+(k.learned?'aprendida':'sugerida')+')</span>':''):'<span style="color:var(--warn,#ffb300)">sem categoria</span>')+'</div></button>';
 }
 const SP_PER=[['m','Mês'],['3','3 meses'],['12','12 meses'],['all','Tudo']];
 const SP_DIM=[['cat','Categoria'],['grp','Grupo'],['lug','Lugar'],['org','Origem']];
@@ -765,9 +777,20 @@ function vGastos(){
       gSortRows(x.items,sm).forEach(r=>{h+=gRow(r);});
     }
   });
+  h+='<button class="btn sec" data-act="sp-learn">🧠 O que o app já aprendeu ('+((catData().rules||[]).length)+')</button>';
   h+='<button class="btn sec" data-act="sp-all">'+(sp.all?'Esconder a planilha':'Ver todos os lançamentos (planilha)')+'</button>';
   if(sp.all)gSortRows(rows,sm).forEach(r=>{h+=gRow(r);});
   return h+'<p class="hint">Categorias com “(sugerida)” foram adivinhadas pelo nome do lugar. Toque no lançamento para trocar: o que você escolher vale para sempre.</p></div>';
+}
+function learnModal(){
+  const rl=(catData().rules||[]).slice().sort((a,b)=>String(a.m).localeCompare(String(b.m)));
+  const m=modal('<h3>O que o app aprendeu</h3><p class="hint">Cada vez que você escolhe “lembrar deste lugar”, entra aqui. Os próximos já vêm categorizados sozinhos.</p>'
+    +(rl.length?rl.map((r,i)=>'<div class="row" style="align-items:center;gap:.6rem;padding:.4rem 0;border-bottom:1px solid #333"><span style="min-width:0"><b>'+esc(r.m.replace(/\b\w/g,c=>c.toUpperCase()))+'</b><br><span class="mut">'+(r.inc?'Entrada · ':'')+esc(r.c)+(r.s?' › '+esc(r.s):'')+'</span></span><button class="btn sec" data-i="'+i+'" style="width:auto;margin:0">Esquecer</button></div>').join(''):'<div class="card mut">Ainda nada. Categorize um gasto e escolha “lembrar deste lugar”.</div>')
+    +'<button class="btn sec" id="no">Fechar</button>');
+  m.querySelector('#no').onclick=()=>m.remove();
+  m.querySelectorAll('[data-i]').forEach(b=>b.onclick=async()=>{const r=rl[+b.dataset.i];m.remove();
+    if(await confirmBox('Esquecer este lugar?',[r.m,r.c+(r.s?' › '+r.s:''),'Os lançamentos voltam a ser sugeridos pelo nome.'],'Sim, esquecer',true)){
+      try{await catSave(d=>{d.rules=d.rules.filter(x=>!(x.m===r.m&&!!x.inc===!!r.inc&&x.c===r.c));});}catch(e){S.msg=e.message;}render();}});
 }
 function catSave(mut){
   const rec=catCfg(),d=JSON.parse(JSON.stringify(catData()));
@@ -800,7 +823,7 @@ function catPick(e,queue){
     const s3=()=>{
       const dd=catData(),parecidos=key?(e.inc?incRows():gastosRows()).filter(r=>r.i!==e.i&&gKey(r.t)===key&&!(dd.over&&dd.over[r.i])):[];
       show('<h3>Categorizar?</h3>'+head+'<div class="card sum">Categoria: '+esc(cat)+(sub?' › '+esc(sub):'')+(parecidos.length?'\nHá mais '+parecidos.length+' lançamento(s) parecidos com “'+esc(key)+'”.':'')+'</div>'
-        +(parecidos.length?'<button class="btn" id="cp-all">Sim, para todos os parecidos ('+(parecidos.length+1)+')</button><button class="btn sec" id="cp-one">Só este lançamento</button>':'<button class="btn" id="cp-one">Sim, categorizar</button>')
+        +(key?'<button class="btn" id="cp-all">'+(parecidos.length?'Sim, e lembrar deste lugar ('+(parecidos.length+1)+' agora)':'Sim, e lembrar deste lugar')+'</button><button class="btn sec" id="cp-one">Só este lançamento (não lembrar)</button><p class="hint">“Lembrar” faz o app categorizar sozinho os próximos de “'+esc(key)+'” e parecidos.</p>':'<button class="btn" id="cp-one">Sim, categorizar</button>')
         +'<button class="btn sec" id="c0">Voltar</button>',m=>{
         const salvar=async todos=>{
           try{
@@ -808,7 +831,7 @@ function catPick(e,queue){
               const BT=e.inc?INC_TREE:CAT_TREE,def=Object.prototype.hasOwnProperty.call(BT,cat),ex=d.extra[cat]=d.extra[cat]||[];
               if(sub&&(def?BT[cat]:[]).indexOf(sub)<0&&ex.indexOf(sub)<0)ex.push(sub);
               if(def&&!ex.length)delete d.extra[cat];
-              if(todos&&key){d.rules=d.rules.filter(r=>r.m!==key);d.rules.push({m:key,c:cat,s:sub});delete d.over[e.i];}
+              if(todos&&key){d.rules=d.rules.filter(r=>!(r.m===key&&!!r.inc===!!e.inc));d.rules.push({m:key,c:cat,s:sub,inc:!!e.inc});delete d.over[e.i];}
               else d.over[e.i]={c:cat,s:sub};
             });
             done(true);
@@ -2481,7 +2504,7 @@ function stRows(){
   return out;
 }
 /* ---------- Extrato: buscar, filtrar por entradas/gastos, mês e dia ---------- */
-const APP_V='v55';
+const APP_V='v56';
 const ST_FILTERS=[['all','Tudo'],['in','Entradas'],['out','Gastos'],['fat','Faturas pagas'],['tr','Transferências']];
 function stAll(){
   const out=stRows().map(e=>Object.assign({},e,{src:'extrato'}));
@@ -2935,6 +2958,7 @@ document.addEventListener('click',async ev=>{
   else if(act==='sp-cat'){S.sp.cat=(S.sp.cat===b.dataset.c?null:b.dataset.c);render();}
   else if(act==='hp-toggle'){S.hp=!S.hp;render();}
   else if(act==='sp-sort'){S.sp=S.sp||{ym:ymOf(todayIso()),cat:null,all:false};S.sp.sort=(S.sp.sort===b.dataset.v?null:b.dataset.v);render();}
+  else if(act==='sp-learn'){learnModal();}
   else if(act==='sp-seg'){S.sp.cat=(S.sp.cat===b.dataset.c?null:b.dataset.c);render();}
   else if(act==='sp-all'){S.sp.all=!S.sp.all;render();}
   else if(act==='sp-dir'){S.sp=S.sp||{};S.sp.dir=b.dataset.v;S.sp.cat=null;render();}
