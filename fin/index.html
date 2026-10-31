@@ -749,7 +749,7 @@ function vGastos(){
   const other=spRows(sp,inc?'out':'in',R.a,R.b).reduce((a,r)=>a+r.v,0);
   const sem=rows.filter(r=>!catOf(r));
   const allSrc=[...new Set(gastosRows().concat(incRows()).map(srcLbl))].sort();
-  let h=header(inc?'Entradas':'Gastos','<button class="ibtn" data-back="1" data-act="tab" data-v="home" aria-label="Voltar" title="Voltar">←</button>')+'<div class="wrap">';
+  let h=header(inc?'Entradas e categorias':'Gastos e categorias','<button class="ibtn" data-back="1" data-act="tab" data-v="home" aria-label="Voltar" title="Voltar">←</button>')+'<div class="wrap">';
   h+='<div class="chips" role="group" aria-label="Tipo">'+[['out','Saídas (gastos)'],['in','Entradas']].map(x=>'<button class="chip'+(sp.dir===x[0]?' on':'')+'" data-act="sp-dir" data-v="'+x[0]+'">'+x[1]+'</button>').join('')+'</div>';
   h+='<div class="chips" role="group" aria-label="Período">'+SP_PER.map(x=>'<button class="chip'+(sp.per===x[0]?' on':'')+'" data-act="sp-per" data-v="'+x[0]+'">'+x[1]+'</button>').join('')+'</div>';
   if(sp.per==='m')h+='<div class="spnav"><button class="btn sec" data-act="sp-prev" aria-label="Mês anterior">‹</button><b>'+esc(ymLabel(sp.ym))+'</b><button class="btn sec" data-act="sp-next" aria-label="Próximo mês">›</button></div>';
@@ -1455,7 +1455,7 @@ function vHome(){
   {const bd=backupDays();
    if(bd===null||bd>=7)h+='<button class="note bkn" data-act="backup" aria-label="Baixar uma cópia dos dados">💾 '+(bd===null?'Você ainda não baixou uma cópia dos seus dados.':'Faz '+bd+' dias desde a última cópia dos seus dados.')+' Toque para baixar.</button>';}
   /* Início calmo: sem número gigante. Uma tabela simples do que vence neste mês + atalhos sem valores em destaque */
-  h+='<div class="up s2"><button data-act="tab" data-v="poder"><span class="nm"><b>💰 Quanto posso gastar</b></span><span class="vl mut">›</span></button><button data-act="tab" data-v="pagar"><span class="nm"><b>🧾 O que pagar no mês</b></span><span class="vl mut">›</span></button></div>';
+  h+='<div class="up s2"><button data-act="tab" data-v="poder"><span class="nm"><b>💰 Quanto posso gastar</b></span><span class="vl mut">›</span></button><button data-act="tab" data-v="pagar"><span class="nm"><b>🧾 O que pagar no mês</b></span><span class="vl mut">›</span></button><button data-act="tab" data-v="spend"><span class="nm"><b>📊 Para onde vai meu dinheiro</b><br><span class="mut" style="font-size:.95rem">Categorias, grupos e onde reduzir</span></span><span class="vl mut">›</span></button></div>';
   {const all=monthItems(ym),fz=i=>i.state==='Paga'||i.state==='Recebida';
    const abertos=all.filter(i=>!fz(i)),feitos=all.filter(fz);
    h+='<h2>Neste mês</h2>';
@@ -1469,14 +1469,14 @@ function vHome(){
   }
   {const ob=overdueBefore();
    if(ob.length){h+='<button class="note bkn" data-act="m-old" data-v="'+ob[0].mm+'">⚠️ Há '+ob.length+(ob.length===1?' item atrasado':' itens atrasados')+' de meses anteriores. Toque para ver.</button>';}}
-  if(g.semN>0)h+='<button class="note bkn" data-act="tab" data-v="spend">📝 '+g.semN+(g.semN===1?' gasto sem categoria':' gastos sem categoria')+'. Toque para revisar.</button>';
+  if(g.semN>0)h+='<button class="note bkn" data-act="tab" data-v="spend">📝 '+g.semN+(g.semN===1?' gasto esperando categoria':' gastos esperando categoria')+'. Toque para classificar.</button>';
   h+='<h2>Abrir</h2><div class="up s2">'
     +'<button data-act="tab" data-v="bills"><span class="nm"><b>Contas do mês</b></span><span class="vl mut">›</span></button>'
     +'<button data-act="tab" data-v="cards"><span class="nm"><b>Cartões</b><i>'+(cardsH.length?cardsH.length+(cardsH.length===1?' cartão':' cartões'):'nenhum')+'</i></span><span class="vl mut">›</span></button>'
     +'<button data-act="tab" data-v="stmt"><span class="nm"><b>Extrato</b></span><span class="vl mut">›</span></button>'
     +'<button data-act="tab" data-v="debts"><span class="nm"><b>Dívidas</b><i>'+(debts.length?debts.length+' em aberto':'nenhuma em aberto')+'</i></span><span class="vl mut">›</span></button>'
     +'<button data-act="st-go" data-f="in"><span class="nm"><b>Entradas</b></span><span class="vl mut">›</span></button>'
-    +'<button data-act="tab" data-v="spend"><span class="nm"><b>Gastos</b></span><span class="vl mut">›</span></button>'
+    +'<button data-act="tab" data-v="spend"><span class="nm"><b>Gastos e categorias</b></span><span class="vl mut">›</span></button>'
     +'</div>';
   if(S.remErr)h+='<div class="note"><span class="tag warn">Lembretes</span> Não consegui conferir os lembretes no Núcleo agora ('+esc(S.remErr)+').</div>';
   return h+'</div>';
@@ -2504,7 +2504,7 @@ function stRows(){
   return out;
 }
 /* ---------- Extrato: buscar, filtrar por entradas/gastos, mês e dia ---------- */
-const APP_V='v56';
+const APP_V='v57';
 const ST_FILTERS=[['all','Tudo'],['in','Entradas'],['out','Gastos'],['fat','Faturas pagas'],['tr','Transferências']];
 function stAll(){
   const out=stRows().map(e=>Object.assign({},e,{src:'extrato'}));
