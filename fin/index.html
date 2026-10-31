@@ -1572,6 +1572,7 @@ function vCfg(){
   h+='<h2>Segurança</h2>'+lkBlock('fin');
   h+='<h2>Aparência</h2>'+fsBlock();
   h+='<h2>Cópia de segurança</h2>'+backupBlock();
+  h+='<h2>Lixeira</h2><button class="btn" data-act="tab" data-v="trash">🗑️ Ver o que foi apagado</button><p class="hint">Tudo que você apaga vai para a Lixeira. Lá dá para ver e restaurar.</p>';
   h+='<h2>Atualizar</h2><p class="hint">“Atualizar dados” busca de novo os seus lançamentos no servidor (use se mexeu em outro aparelho ou o GPT gravou algo). “Atualizar o aplicativo” baixa a versão nova do próprio Financeiro (telas e ícone). Versão instalada: '+APP_V+'.</p>'
     +(S.upd?'<div class="note">'+esc(S.upd)+'</div>':'')
     +'<button class="btn" data-act="refresh">Atualizar dados</button><button class="btn sec" data-act="app-update">Atualizar o aplicativo (versão nova)</button>';
@@ -1581,6 +1582,94 @@ function vCfg(){
   h+='<p class="hint">Projeção parcial não é dinheiro disponível. O Financeiro só organiza e lembra: quem paga é você.</p></div>';
   return h;
 }
+/* ---------- Lixeira: o que foi apagado, para onde foi e como voltar ---------- */
+const TRASH_DAYS=30;
+const TRASH_PURGE_ON=false; /* só vira true depois que Marcelo autorizar e a limpeza automática estiver ligada no banco */
+const TKIND=Object.assign({stmt:'extrato importado'},UKIND);
+Api.loadTrash=async function(){
+  const r=await this.rest('fin_records?select=id,kind,version,data,deleted_at&deleted_at=not.is.null&order=deleted_at.desc&limit=500');
+  if(!r.ok){const j=await r.json().catch(()=>({}));throw new Error(j.message||('Não consegui abrir a Lixeira ('+r.status+').'));}
+  S.trash=await r.json();
+};
+Api.restore=async function(rec){
+  const r=await this.rest('fin_records?id=eq.'+rec.id+'&version=eq.'+rec.version+'&deleted_at=not.is.null',{method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify({deleted_at:null})});
+  if(!r.ok){const j=await r.json().catch(()=>({}));throw new Error(j.message||('Não consegui restaurar ('+r.status+').'));}
+  const j=await r.json();
+  if(!j.length)throw new Error('Este item mudou em outro aparelho. Abra a Lixeira de novo.');
+  await this.load();
+};
+function trashFind(id){return (S.recs||[]).find(x=>x.id===id)||(S.trash||[]).find(x=>x.id===id);}
+function trashName(x){
+  const d=x.data||{};
+  if(x.kind==='proposal')return d.cfg==='cats'?'Categorias que o app aprendeu':(d.cfg==='capacity'?'Quanto paga por mês nas dívidas':'Pendente');
+  if(x.kind==='billmonth'){const b=trashFind(d.billId);return (b&&b.data&&b.data.name?b.data.name:'Conta')+(d.ym?' · '+d.ym:'');}
+  if(x.kind==='invpay'){const c=trashFind(d.cardId);return 'Fatura paga'+(c&&c.data&&c.data.name?' · '+c.data.name:'')+(d.ym?' · '+d.ym:'');}
+  return d.creditor||d.name||d.desc||d.text||d.title||TKIND[x.kind]||'Item';
+}
+function trashLeft(x){
+  const ms=new Date(x.deleted_at).getTime()+TRASH_DAYS*86400000-Date.now();
+  return Math.max(0,Math.ceil(ms/86400000));
+}
+function trashWhen(x){
+  const d=new Date(x.deleted_at);
+  return 'apagado em '+pad(d.getDate())+'/'+pad(d.getMonth()+1)+'/'+d.getFullYear();
+}
+function trashSub(x){
+  const n=trashLeft(x);
+  return (TKIND[x.kind]||'item')+' · '+trashWhen(x)+(TRASH_PURGE_ON?' · some em '+n+(n===1?' dia':' dias'):'');
+}
+function vTrash(){
+  let h=header('Lixeira','<button class="ibtn" data-back="1" data-act="tab" data-v="cfg" aria-label="Voltar" title="Voltar">←</button>')+'<div class="wrap">';
+  if(!S.trashLoaded&&!S.trashBusy){
+    S.trashBusy=true;
+    setTimeout(async()=>{
+      try{await Api.loadTrash();S.trashErr='';}catch(e){S.trashErr=e.message||'erro';}
+      S.trashLoaded=true;S.trashBusy=false;
+      if(S.tab==='trash'&&!document.querySelector('.modal'))render();
+    },0);
+  }
+  h+='<p class="hint">'+(TRASH_PURGE_ON
+    ?'Os itens ficam aqui por '+TRASH_DAYS+' dias. Depois somem de vez. Toque em um item para ver e restaurar.'
+    :'Aqui ficam os itens que você apagou. Toque em um para ver e restaurar. A limpeza automática depois de '+TRASH_DAYS+' dias ainda não está ligada: por enquanto nada some de vez.')+'</p>';
+  if(!S.trashLoaded)return h+'<p class="hint" style="text-align:center">Carregando…</p></div>';
+  if(S.trashErr)return h+'<div class="err">'+esc(S.trashErr)+'</div><button class="btn" data-act="tr-reload">Tentar de novo</button></div>';
+  const L=S.trash||[];
+  if(!L.length)return h+'<div class="card"><b>A Lixeira está vazia.</b></div></div>';
+  const lim=S.trLim||60;
+  h+='<p class="hint">'+L.length+(L.length===1?' item':' itens')+' na Lixeira, do mais recente para o mais antigo.</p><div class="up s2">';
+  L.slice(0,lim).forEach(x=>{
+    const v=x.data&&x.data.amountC!=null?x.data.amountC:(x.data&&x.data.balanceC!=null?x.data.balanceC:null);
+    h+='<button data-act="tr-open" data-id="'+esc(x.id)+'"><span class="nm"><b>'+esc(trashName(x))+'</b><i>'+esc(trashSub(x))+'</i></span><span class="vl mut">'+(v!=null?esc(money(v)):'›')+'</span></button>';
+  });
+  h+='</div>';
+  if(L.length>lim)h+='<button class="btn sec" data-act="tr-more">Mostrar mais</button>';
+  return h+'</div>';
+}
+async function trashOpen(id){
+  const x=(S.trash||[]).find(r=>r.id===id);if(!x)return;
+  const lines=[trashName(x),'Tipo: '+(TKIND[x.kind]||'item'),trashWhen(x)];
+  const d=x.data||{};
+  if(d.amountC!=null)lines.push('Valor: '+money(d.amountC));
+  else if(d.balanceC!=null)lines.push('Saldo: '+money(d.balanceC));
+  if(TRASH_PURGE_ON)lines.push('Some de vez em '+trashLeft(x)+' dia(s).');
+  const m=modal('<h3>Item apagado</h3><div class="card sum">'+esc(lines.join('\n'))+'</div>'
+    +'<button class="btn" id="tr-ok">Restaurar</button><button class="btn sec" id="no">Voltar</button>');
+  m.querySelector('#no').onclick=()=>m.remove();
+  m.querySelector('#tr-ok').onclick=async()=>{
+    m.remove();
+    if(!await confirmBox('Restaurar este item?',[trashName(x),'Ele volta para onde estava.'],'Sim, restaurar'))return;
+    try{
+      U.mute++;
+      await Api.restore(x);
+      S.msg='';finToast('Restaurado.');
+    }catch(e){
+      const em=String(e.message||'erro').replace(/\.+$/,'');
+      S.msg='Não deu para restaurar: '+em+'.'+(/lixeira|não existe/.test(em)?' Restaure antes o cartão ou a conta dele.':'');
+    }finally{U.mute--;}
+    S.trashLoaded=false;render();
+  };
+}
+
 /* ---------- parcelas das dívidas mês a mês ---------- */
 const mdiff=(a,b)=>(+b.slice(0,4)-+a.slice(0,4))*12+(+b.slice(5,7)-+a.slice(5,7));
 const DOWS=['dom','seg','ter','qua','qui','sex','sáb'];
@@ -2590,7 +2679,7 @@ function stRows(){
   return out;
 }
 /* ---------- Extrato: buscar, filtrar por entradas/gastos, mês e dia ---------- */
-const APP_V='v60';
+const APP_V='v61';
 const ST_FILTERS=[['all','Tudo'],['in','Entradas'],['out','Gastos'],['fat','Faturas pagas'],['tr','Transferências']];
 function stAll(){
   const out=stRows().map(e=>Object.assign({},e,{src:'extrato'}));
@@ -2833,7 +2922,7 @@ function render(){
   if(!S.sess||!S.ready){return;}
   RO.reg={};
   let body;
-  if(S.tab==='home')body=vHome();else if(S.tab==='bills')body=vMonth();else if(S.tab==='cal')body=vCal();else if(S.tab==='contas')body=S.contaId?vConta():vContas();else if(S.tab==='cards')body=S.cardId?(S.cardDados?vCardDados():vCard()):vCards();else if(S.tab==='debts')body=vDebts();else if(S.tab==='rem')body=vRem();else if(S.tab==='notes')body=vNotes();else if(S.tab==='plan')body=vPlan();else if(S.tab==='stmt')body=vStmt();else if(S.tab==='spend')body=vGastos();else if(S.tab==='poder')body=vPoder();else if(S.tab==='pagar')body=vPagar();else if(S.tab==='cfg')body=vCfg();else body=vHome();
+  if(S.tab==='home')body=vHome();else if(S.tab==='bills')body=vMonth();else if(S.tab==='cal')body=vCal();else if(S.tab==='contas')body=S.contaId?vConta():vContas();else if(S.tab==='cards')body=S.cardId?(S.cardDados?vCardDados():vCard()):vCards();else if(S.tab==='debts')body=vDebts();else if(S.tab==='rem')body=vRem();else if(S.tab==='notes')body=vNotes();else if(S.tab==='plan')body=vPlan();else if(S.tab==='stmt')body=vStmt();else if(S.tab==='spend')body=vGastos();else if(S.tab==='poder')body=vPoder();else if(S.tab==='pagar')body=vPagar();else if(S.tab==='trash')body=vTrash();else if(S.tab==='cfg')body=vCfg();else body=vHome();
   if(S.tab!=='home'&&body.indexOf('data-back')<0)body='<div class="bkrow"><button class="bk" data-back="1" data-act="tab" data-v="home" aria-label="Voltar">← Voltar</button></div>'+body;
   a.innerHTML=body+(S.msg?'<div class="wrap"><div class="err">'+esc(S.msg)+'</div></div>':'')+tabs();
   roAfterRender();
@@ -2980,7 +3069,10 @@ document.addEventListener('click',async ev=>{
   const b=ev.target.closest('[data-act]');if(!b)return;
   const act=b.dataset.act,id=b.dataset.id,get=i=>S.recs.find(r=>r.id===i);
   S.msg='';
-  if(act==='tab'){S.contaId=null;S.cardDados=false;S.showNum=false;S.tab=b.dataset.v;if(S.tab!=='cards')S.cardId=null;if(S.tab==='cards'&&b.dataset.v==='cards')S.cardId=null;render();window.scrollTo(0,0);}
+  if(act==='tr-open')trashOpen(id);
+  else if(act==='tr-more'){S.trLim=(S.trLim||60)+60;render();}
+  else if(act==='tr-reload'){S.trashLoaded=false;S.trashErr='';render();}
+  else if(act==='tab'){if(b.dataset.v==='trash'){S.trashLoaded=false;S.trashErr='';S.trLim=60;}S.contaId=null;S.cardDados=false;S.showNum=false;S.tab=b.dataset.v;if(S.tab!=='cards')S.cardId=null;if(S.tab==='cards'&&b.dataset.v==='cards')S.cardId=null;render();window.scrollTo(0,0);}
   else if(act==='m-old'){S.mm=b.dataset.v;S.tab='bills';render();window.scrollTo(0,0);}
   else if(act==='rem-mode'){S.lt=b.dataset.v;render();}
   else if(act==='rem-new')frForm(null);
