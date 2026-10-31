@@ -70,3 +70,10 @@ Método: Supabase real (Postgres 17, PostgREST, GoTrue), contas reais de teste, 
 - Vence em 2026-10-31 02:57 UTC (≈23:57 BRT de 30/10). **Não estendi.**
 - Só o canal `claude` (MCP como postgres) grava sem login. Nenhuma integração usa fin_apply/credenciais ainda; helena sem mapeamento.
 - Se vencer: o MCP continua (session_user postgres, aceito pela v2.4); qualquer outra conexão sem login para de gravar.
+
+## v2.5 — correção do laço de repetição no conflito de versão (somente branch + projeto de TESTE)
+**v2.5 NÃO aplicada em produção.** Única diferença para a v2.4 (`diff` de 1 linha): `fin_apply` levanta o conflito de versão com `errcode='PT409'` em vez de `40001`. Arquivo: `fin/sql/fin_apply_v2_5.sql`.
+- Ensaio local (Postgres 16 com stubs): `bash tests/fin_apply/run_v2_4_all.sh v25` → 129 PASS / 0 FALHA (126 anteriores + 5.1 conflito=PT409, 5.2 não usa 40001, 5.3 registro inalterado). Controle negativo: a mesma suíte carregando a v2.4 FALHA em 5.1 e 5.2.
+- Projeto de teste (API real): `fin_apply` atualizada por migração (hash do corpo da função idêntico ao do ensaio local: md5 38af4eb1…, grants preservados). Lote b11: 12 updates simultâneos, mesma versão → 1×200 e 11×409 (corpo `code: PT409`), tempo máximo 1,7 s, 0 sessões ativas depois, 1 recibo e 1 histórico, registro na versão 3. **O laço da v2.4 (40001) não ocorreu.** Causa (PostgREST repete 40001) agora é consistente com a evidência, mas segue sem confirmação na documentação do PostgREST.
+- Resultado registrado por FCLD512; não é validação independente.
+- Executor `hml-runner` voltou a stub 410. Reversão no projeto hospedado continua NÃO executada (confirmação do SQL destrutivo cancelada automaticamente).

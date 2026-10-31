@@ -192,7 +192,7 @@ echo "--- ACHADO 4: reversões atômicas e sem apagar evidência"
 sc(){ $PQ -d "$1" -q -t -A -c "$2" 2>&1; }
 clone(){ $PQ -d postgres -q -c "drop database if exists $1" -c "create database $1 template t" >/dev/null 2>&1; }
 cnt4(){ sc "$1" "select (select count(*) from fin_records)||'/'||(select count(*) from fin_records_hist)||'/'||(select count(*) from fin_ops_log)||'/'||(select count(*) from fin_capture_items)"; }
-if [ "$MODE" = v24 ]; then RBP=$R/fin/sql/fin_apply_v2_4_rollback_preservando.sql; RBT=$R/fin/sql/fin_apply_v2_4_rollback_remover_tudo.sql
+if [ "$MODE" = v24 -o "$MODE" = v25 ]; then RBP=$R/fin/sql/fin_apply_v2_4_rollback_preservando.sql; RBT=$R/fin/sql/fin_apply_v2_4_rollback_remover_tudo.sql
 else RBP=$R/fin/sql/fin_apply_v2_3_rollback.sql; RBT=""; fi
 # 4.1 falha no meio (view dependente de fin_op_result) rodando SEM parar no erro: nada pode ficar pela metade
 clone t41; sc t41 "create view zz_dep as select public.fin_op_result('a','gpt','gpt') as r" >/dev/null
@@ -232,9 +232,18 @@ clone t45; f0=$(sc t45 "select count(*) from pg_proc where proname like 'fin_%' 
 ( $PQ -d t45 -q -c "begin; lock table fin_ops_log in access share mode; select pg_sleep(22); commit" >/dev/null 2>&1 ) & sleep 2
 ini=$(date +%s); out=$($PQ -d t45 -q -v ON_ERROR_STOP=1 -f $RBP 2>&1); rc=$?; fim=$(date +%s); wait
 f1=$(sc t45 "select count(*) from pg_proc where proname like 'fin_%' and pronamespace='public'::regnamespace")
-if [ "$MODE" = v24 ]; then
+if [ "$MODE" = v24 -o "$MODE" = v25 ]; then
   [ "$rc" != 0 ] && echo "$out"|grep -qi 'lock timeout\|tempo limite\|canceling statement' && [ "$f0" = "$f1" ] && [ $((fim-ini)) -le 20 ] && ok "4.5 trava ocupada: reversão desiste em $((fim-ini))s sem alterar nada" || ko "4.5 rc=$rc t=$((fim-ini))s f=$f0/$f1 :: $(echo "$out"|head -c 200)"
 else
   [ "$f0" = "$f1" ] && ok "4.5 (v2.3) funções intactas" || ko "4.5 v2.3 reversão não tem limite de espera nem atomicidade: esperou $((fim-ini))s e funções $f0->$f1"
+fi
+# 5 (v2.5) conflito de versão NÃO pode usar 40001 (o PostgREST repete essas transações em laço); precisa ser PT409 (HTTP 409)
+if [ "$MODE" = v25 ]; then
+  echo "--- v2.5: código do conflito de versão"
+  RID=$(q "select id from fin_records where owner='$A' and deleted_at is null limit 1"); VV=$(cv $RID)
+  sc=$($P -c "set request.jwt.claim.role='service_role'; do \$\$ begin perform fin_apply('op-v25-c1','gpt','[{\"op\":\"update\",\"id\":\"$RID\",\"expected_version\":$((VV+7)),\"data\":{\"balanceC\":1}}]'::jsonb); exception when others then raise notice 'SQLSTATE=%', sqlstate; end \$\$" 2>&1)
+  echo "$sc"|grep -q 'SQLSTATE=PT409' && ok "5.1 conflito de versão = PT409 (HTTP 409 no PostgREST, sem repetição)" || ko "5.1 $sc"
+  echo "$sc"|grep -q 'SQLSTATE=40001' && ko "5.2 ainda usa 40001" || ok "5.2 não usa 40001"
+  [ "$(cv $RID)" = "$VV" ] && ok "5.3 registro inalterado após conflito" || ko "5.3 versão mudou"
 fi
 echo FIM; [ -z "$FAIL" ] && echo TODOS_PASSARAM
