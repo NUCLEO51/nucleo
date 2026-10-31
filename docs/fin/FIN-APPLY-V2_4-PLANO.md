@@ -38,3 +38,35 @@ Duas consultas de leitura em `fin_records` (obrigatórios por tipo e tipos de to
 
 ## Próximo passo (depende de autorização do Marcelo e reauditoria)
 Homologar no projeto de teste, auditar (AUD512), e só então decidir a aplicação em produção.
+
+## Homologação v2.4 (commit 472ec1b) — projeto de TESTE do Supabase (qpatefninytydnsmkfjp)
+Autorizada por Marcelo exclusivamente no projeto de teste. **Produção: v2.4 NÃO aplicada. Nada foi alterado em produção nesta etapa** (só leituras).
+Método: Supabase real (Postgres 17, PostgREST, GoTrue), contas reais de teste, chamadas HTTP reais por um executor temporário (edge function, já desativado); cada resposta gravada em `hml_ev` e os registros conferidos no banco após cada lote. Resultado = **registrado por FCLD512; não é validação independente**.
+
+| Lote | Área | Resultado |
+|---|---|---|
+| b1_auth | autenticação real, token forjado, anon | OK (forjado e anon recusados) |
+| b2_canais | isolamento entre duas contas, permissão por canal | OK |
+| b3/b4/b5 | serviço com legado desligado / ligado / vencido | OK (service_role só passa com legado ligado e no prazo) |
+| b6 | repetição com permissão reduzida | OK (recusada) |
+| b7 | revogação | OK |
+| b8 | expiração | OK |
+| b9 | simultaneidade: mesma op_id, mesma captura, ops distintas (40 chamadas) | OK (1 gravação por op_id/captura) |
+| b10 | 12 updates simultâneos, mesma versão | **PARCIAL — ver achado** |
+
+### Achado novo (b10): conflito de versão vira laço de repetição via PostgREST
+- Das 12 chamadas, só 1 gravou (correto: versão 2, 1 histórico, 1 recibo). Integridade confirmada: nenhuma gravação parcial.
+- As outras 11 receberam "conflito de versão" (errcode 40001) e foram **repetidas automaticamente a cada ~1 s, por mais de 5 min**, sem terminar; só parou ao desativar o executor e encerrar as conexões do PostgREST. O pg_net desistiu por timeout de 120 s.
+- Causa provável (NÃO comprovada): PostgREST 14 repete transações com SQLSTATE 40001. Ainda não testado com outro código.
+- Proposta (v2.5, não feita): conflito de versão deve usar um código que NÃO é repetido e retorna HTTP 409 (ex.: errcode 'PT409'), com teste real. Até lá, não usar edição concorrente com mesma versão via REST. Em produção a fin_apply ainda não é usada por nenhuma integração.
+
+### Não executado / limites
+- **Reversão no projeto hospedado NÃO executada**: a confirmação da operação destrutiva (drop de tabelas/funções) foi cancelada automaticamente pelo cliente; não contornei. Reversão só provada no ensaio local (testes 4.1–4.5).
+- Caminho negativo "sessão não-postgres sem claim" não reproduzível no Supabase hospedado; só no ensaio local.
+- Persistência fina (strings `servico:<usuário>`, `updated_by` por canal) conferida nos lotes, sem relatório separado.
+- Limpeza: executor `hml-runner` substituído por stub 410 (sem token); config de legado do TESTE voltou a 'nao'. Permanecem no teste: usuários/atores de teste, schema `hml`, `hml_ev`, pg_net.
+
+### Dependência do acesso legado (produção, somente leitura)
+- Vence em 2026-10-31 02:57 UTC (≈23:57 BRT de 30/10). **Não estendi.**
+- Só o canal `claude` (MCP como postgres) grava sem login. Nenhuma integração usa fin_apply/credenciais ainda; helena sem mapeamento.
+- Se vencer: o MCP continua (session_user postgres, aceito pela v2.4); qualquer outra conexão sem login para de gravar.
