@@ -190,6 +190,13 @@ a.lnk{color:var(--accent);font-weight:800}
 .bk{font:inherit;font-size:1rem;font-weight:500;min-height:2.5rem;padding:0 1rem;border-radius:.8rem;background:#000;color:#FFD60A;border:1px solid #B88F00;cursor:pointer}
 .srt .chip{min-height:2.2rem;font-size:.88rem;padding:.25rem .7rem}
 .bk:active{filter:brightness(.85)}
+.cgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:.2rem;margin:.4rem 0}
+.cwk{text-align:center;color:var(--muted);font-size:.85rem;padding:.2rem 0}
+.cday{min-height:3.4rem;border-radius:.7rem;border:1px solid var(--line);background:var(--surface);color:var(--fg);display:flex;flex-direction:column;align-items:center;padding:.3rem 0;font:inherit;font-size:1rem;cursor:pointer}
+.cday.sel{outline:2px solid #FFD60A;outline-offset:-2px}.cday.tod b{color:#FFD60A}
+.cdots{display:flex;gap:.15rem;margin-top:.25rem;flex-wrap:wrap;justify-content:center;padding:0 .2rem}.cdot{width:.5rem;height:.5rem;border-radius:50%}
+.cdot.kin{background:#34c27a}.cdot.ksai{background:#ff5c5c}.cdot.kdue{background:#FFD60A}.cdot.kpaid{background:#6aa8ff}.cdot.krec{background:#2fd1c5}
+.clg{display:flex;flex-wrap:wrap;gap:.3rem .9rem;margin:.2rem 0 .5rem;font-size:.9rem;color:var(--muted)}.clg i{display:inline-block;width:.55rem;height:.55rem;border-radius:50%;margin-right:.3rem}
 </style>
 </head>
 <body>
@@ -620,7 +627,7 @@ function gastosRows(){
     Object.values(cardCalc(cr).inv).forEach(v=>{
       v.items.forEach(it=>{
         const d=it.rec.data;
-        if(/^Fatura aberta/.test(d.desc||'')||!it.amountC)return;
+        if(/^Fatura aberta/.test(d.desc||'')||d.entryType==='statement_balance'||!it.amountC)return;
         const when=it.parcela>1?dateOf(addMonths(it.date.slice(0,7),it.parcela-1),+it.date.slice(8,10)):it.date;
         out.push({i:it.rec.id,d:when,t:(d.desc||'')+(it.n>1?' ('+it.parcela+'/'+it.n+')':''),v:it.amountC,g:'',src:cr.data.name,card:true});
       });
@@ -1913,6 +1920,50 @@ function mRow(it){
     +'<span class="w"><b>'+esc(it.name)+'</b><i>'+esc(sub)+'</i></span>'
     +'<span class="v"><b'+(it.dir==='RECEBER'?' class="rc"':'')+'>'+(it.amountC==null?'—':(it.dir==='RECEBER'?'+ ':'')+money(it.amountC))+'</b><em class="tag '+it.cls+'">'+esc(it.state)+'</em></span></button>';
 }
+/* ---------- calendário: o que entrou, saiu, falta pagar, já foi pago ---------- */
+const CAL_F=[['all','Tudo'],['in','Entrou'],['sai','Saiu'],['due','Falta pagar'],['paid','Já pago'],['rec','A receber']];
+const CAL_L={in:'Entrou',sai:'Saiu',due:'Falta pagar',paid:'Já pago',rec:'A receber'};
+function calEvents(ym){
+  const ev=[];
+  stAll().forEach(e=>{if(!e.d||e.d.slice(0,7)!==ym)return;
+    ev.push({kind:e.c>0?'in':'sai',d:e.d,t:e.t,c:e.c,tipo:(e.src==='cartao'&&e.c>0?'Estorno no cartão':stKindLabel(e)),cat:e.g||'',onde:e.acct});});
+  monthItems(ym).forEach(it=>{if(!it.date)return;
+    const paid=it.cls==='ok',rec=it.dir==='RECEBER';
+    ev.push({kind:paid?'paid':(rec?'rec':'due'),d:it.date,it});});
+  return ev;
+}
+function calState(){if(!S.cal)S.cal={ym:ymOf(todayIso()),day:todayIso(),f:'all'};return S.cal;}
+function vCal(){
+  const c=calState(),ym=c.ym,ev=calEvents(ym).filter(e=>c.f==='all'||e.kind===c.f);
+  const by={};ev.forEach(e=>{(by[e.d]=by[e.d]||{})[e.kind]=true;});
+  const first=new Date(ym+'-01T12:00:00').getDay(),n=dim(ym),td=todayIso();
+  let h=header('Calendário',rbtn('cal-today','📍','Ir para hoje'))+'<div class="wrap"><button class="bk" data-back="1" data-act="tab" data-v="bills" aria-label="Voltar">← Voltar</button>';
+  h+='<div class="chips srt" role="group" aria-label="Filtrar">'+CAL_F.map(f=>'<button class="chip'+(c.f===f[0]?' on':'')+'" data-act="cal-f" data-v="'+f[0]+'">'+f[1]+'</button>').join('')+'</div>';
+  h+='<div class="spnav"><button class="btn sec" data-act="cal-prev" aria-label="Mês anterior">‹</button><b>'+esc(ymLabel(ym))+'</b><button class="btn sec" data-act="cal-next" aria-label="Próximo mês">›</button></div>';
+  h+='<div class="cgrid">'+['D','S','T','Q','Q','S','S'].map(x=>'<div class="cwk">'+x+'</div>').join('');
+  for(let i=0;i<first;i++)h+='<div></div>';
+  for(let d=1;d<=n;d++){
+    const iso=dateOf(ym,d),k=by[iso]||{};
+    h+='<button class="cday'+(iso===c.day?' sel':'')+(iso===td?' tod':'')+'" data-act="cal-day" data-d="'+iso+'" aria-label="Dia '+d+'"><b>'+d+'</b><span class="cdots">'+['in','sai','due','paid','rec'].filter(x=>k[x]).map(x=>'<i class="cdot k'+x+'"></i>').join('')+'</span></button>';
+  }
+  h+='</div><div class="clg"><span><i class="cdot kin"></i>Entrou</span><span><i class="cdot ksai"></i>Saiu</span><span><i class="cdot kdue"></i>Falta pagar</span><span><i class="cdot kpaid"></i>Já pago</span><span><i class="cdot krec"></i>A receber</span></div>';
+  const day=c.day&&c.day.slice(0,7)===ym?c.day:null;
+  if(!day){h+='<div class="card mut">Toque num dia para ver o que aconteceu nele.</div>';return h+'</div>';}
+  const dl=ev.filter(e=>e.d===day);S._calLin=[];
+  h+='<h2 style="margin-left:0">'+brDate(day).slice(0,5)+' · '+dowOf(day)+(day===td?' (hoje)':'')+'</h2>';
+  if(!dl.length)h+='<div class="card mut">Nada neste dia'+(c.f==='all'?'.':' para este filtro.')+'</div>';
+  const tin=dl.filter(e=>e.kind==='in').reduce((a,e)=>a+e.c,0),tsa=dl.filter(e=>e.kind==='sai').reduce((a,e)=>a-e.c,0);
+  if(tin||tsa)h+='<div class="card">'+(tin?'<div class="row"><span class="mut">Entrou no dia</span><b class="rc">+ '+money(tin)+'</b></div>':'')+(tsa?'<div class="row"><span class="mut">Saiu no dia</span><b>'+money(tsa)+'</b></div>':'')+'</div>';
+  ['in','sai','due','rec','paid'].forEach(kd=>{
+    const g=dl.filter(e=>e.kind===kd);if(!g.length)return;
+    h+='<h2 class="stday" style="margin-left:0">'+CAL_L[kd]+' ('+g.length+')</h2>';
+    if(kd==='in'||kd==='sai'){
+      g.sort((a,b)=>Math.abs(b.c)-Math.abs(a.c)).forEach(e=>{const ix=S._calLin.push({t:e.t,d:e.d,c:e.c,tipo:e.tipo,cat:e.cat,onde:e.onde})-1;
+        h+='<button class="item" data-act="cal-det" data-ix="'+ix+'"><div class="row"><span class="t">'+esc(e.t||'(sem descrição)')+'</span><b class="'+(e.c>0?'rc':'')+'">'+(e.c>0?'+ ':'')+money(Math.abs(e.c))+'</b></div><div class="mut">'+esc(e.tipo)+(e.onde?' · '+esc(e.onde):'')+'</div></button>';});
+    }else h+='<div class="tbl" role="table">'+g.map(e=>mRow(e.it)).join('')+'</div>';
+  });
+  return h+'</div>';
+}
 function vMonth(){
   const cur=ymOf(todayIso()),ym=S.mm||cur,all=monthItems(ym);
   const feita=i=>i.state==='Paga'||i.state==='Recebida',rcv=i=>i.dir==='RECEBER';
@@ -1922,7 +1973,7 @@ function vMonth(){
   const shown0=S.mf==='pay'?pagar.filter(i=>!feita(i)):(S.mf==='rec'?receber.filter(i=>!feita(i)):(S.mf==='done'?all.filter(feita):all));
   const mmode=roMode('month',shown0,false),shown=mmode==='def'?shown0:sortGroup(shown0,mmode,GM);
   RO.reg['month']={col:'',items:shown,pref:'month',manual:false,mode:mmode};
-  let h=header('Mês',rbtn('bill-new','+','Nova conta')+rbtn('bill-read','📷','Ler boleto ou fatura')+sortBtn())+'<div class="wrap">';
+  let h=header('Mês',rbtn('tab','🗓️','Calendário','cal')+rbtn('bill-new','+','Nova conta')+rbtn('bill-read','📷','Ler boleto ou fatura')+sortBtn())+'<div class="wrap">';
   h+='<div class="mnav"><button class="arr" data-act="m-prev" aria-label="Mês anterior">‹</button><button class="mid" data-act="m-today">'+esc(ymLabel(ym))+(ym===cur?' · este mês':'')+'</button><button class="arr" data-act="m-next" aria-label="Próximo mês">›</button></div>';
   h+='<div class="card sum3"><div><div class="mut">A pagar</div><b>'+money(tP)+'</b></div><div><div class="mut">Já pago</div><b>'+money(pP)+'</b></div><div><div class="mut">Falta pagar</div><b>'+money(tP-pP)+'</b></div></div>';
   if(receber.length)h+='<div class="card sum3"><div><div class="mut">A receber</div><b class="rc">'+money(tR)+'</b></div><div><div class="mut">Já recebido</div><b class="rc">'+money(pR)+'</b></div><div><div class="mut">Falta receber</div><b class="rc">'+money(tR-pR)+'</b></div></div><div class="hint" style="margin:-.2rem .3rem .4rem">O que falta: você recebe '+money(tR-pR)+' e paga '+money(tP-pP)+' (diferença '+money((tR-pR)-(tP-pP))+').</div>';
@@ -2268,7 +2319,7 @@ function stRows(){
   return out;
 }
 /* ---------- Extrato: buscar, filtrar por entradas/gastos, mês e dia ---------- */
-const APP_V='v47';
+const APP_V='v48';
 const ST_FILTERS=[['all','Tudo'],['in','Entradas'],['out','Gastos'],['fat','Faturas pagas'],['tr','Transferências']];
 function stAll(){
   const out=stRows().map(e=>Object.assign({},e,{src:'extrato'}));
@@ -2498,7 +2549,7 @@ function render(){
   if(!S.sess||!S.ready){return;}
   RO.reg={};
   let body;
-  if(S.tab==='home')body=vHome();else if(S.tab==='bills')body=vMonth();else if(S.tab==='contas')body=S.contaId?vConta():vContas();else if(S.tab==='cards')body=S.cardId?(S.cardDados?vCardDados():vCard()):vCards();else if(S.tab==='debts')body=vDebts();else if(S.tab==='rem')body=vRem();else if(S.tab==='notes')body=vNotes();else if(S.tab==='plan')body=vPlan();else if(S.tab==='stmt')body=vStmt();else if(S.tab==='spend')body=vGastos();else if(S.tab==='cfg')body=vCfg();else body=vHome();
+  if(S.tab==='home')body=vHome();else if(S.tab==='bills')body=vMonth();else if(S.tab==='cal')body=vCal();else if(S.tab==='contas')body=S.contaId?vConta():vContas();else if(S.tab==='cards')body=S.cardId?(S.cardDados?vCardDados():vCard()):vCards();else if(S.tab==='debts')body=vDebts();else if(S.tab==='rem')body=vRem();else if(S.tab==='notes')body=vNotes();else if(S.tab==='plan')body=vPlan();else if(S.tab==='stmt')body=vStmt();else if(S.tab==='spend')body=vGastos();else if(S.tab==='cfg')body=vCfg();else body=vHome();
   if(S.tab!=='home'&&body.indexOf('data-back')<0)body='<div class="bkrow"><button class="bk" data-back="1" data-act="tab" data-v="home" aria-label="Voltar">← Voltar</button></div>'+body;
   a.innerHTML=body+(S.msg?'<div class="wrap"><div class="err">'+esc(S.msg)+'</div></div>':'')+tabs();
   roAfterRender();
@@ -2720,6 +2771,11 @@ document.addEventListener('click',async ev=>{
   else if(act==='bill-open'){const r=get(id);billMonthForm({r,bill:get(r.data.billId)});}
   else if(act==='card-new')cardForm(null);
   else if(act==='card-edit')cardForm(get(id));
+  else if(act==='cal-f'){calState().f=b.dataset.v;render();}
+  else if(act==='cal-day'){calState().day=b.dataset.d;render();}
+  else if(act==='cal-prev'||act==='cal-next'){const c=calState();c.ym=addMonths(c.ym,act==='cal-prev'?-1:1);c.day=(c.ym===ymOf(todayIso()))?todayIso():null;render();}
+  else if(act==='cal-today'){const c=calState();c.ym=ymOf(todayIso());c.day=todayIso();render();}
+  else if(act==='cal-det'){const x=(S._calLin||[])[+b.dataset.ix];if(x)detalheModal(x);}
   else if(act==='conta'){S.contaId=id;S.showNum=false;render();window.scrollTo(0,0);}
   else if(act==='conta-list'){S.contaId=null;render();window.scrollTo(0,0);}
   else if(act==='conta-new')contaForm(null);
