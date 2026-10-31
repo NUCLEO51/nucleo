@@ -654,7 +654,7 @@ function detalheModal(x){
 }
 function gastosRows(){
   const out=[];
-  stRows().forEach(e=>{if(e.k==='EXPENSE'&&e.c<0)out.push({i:e.i,d:e.d,t:e.t||'',v:-e.c,g:e.g||'',src:e.acct});});
+  stRows().forEach(e=>{if(e.k==='EXPENSE'&&e.c<0)out.push({i:e.i,d:e.d,t:e.t||'',v:-e.c,g:e.g||'',src:e.acct,by:e.holder||''});});
   /* compras no cartão: cada parcela entra no mês dela (a 1ª no mês da compra); estorno abate */
   byKind('card').forEach(cr=>{
     Object.values(cardCalc(cr).inv).forEach(v=>{
@@ -662,7 +662,7 @@ function gastosRows(){
         const d=it.rec.data;
         if(/^Fatura aberta/.test(d.desc||'')||d.entryType==='statement_balance'||!it.amountC)return;
         const when=it.parcela>1?dateOf(addMonths(it.date.slice(0,7),it.parcela-1),+it.date.slice(8,10)):it.date;
-        out.push({i:it.rec.id,d:when,t:(d.desc||'')+(it.n>1?' ('+it.parcela+'/'+it.n+')':''),v:it.amountC,g:'',src:cr.data.name,card:true});
+        out.push({i:it.rec.id,d:when,t:(d.desc||'')+(it.n>1?' ('+it.parcela+'/'+it.n+')':''),v:it.amountC,g:'',src:cr.data.name,card:true,by:it.by||''});
       });
     });
   });
@@ -671,7 +671,7 @@ function gastosRows(){
 const srcLbl=r=>r.card?'Cartão '+r.src:(r.src||'—');
 function incRows(){
   const out=[];
-  stRows().forEach(e=>{if((e.k==='INCOME'||e.k==='LOAN_DISBURSEMENT')&&e.c>0)out.push({i:e.i,d:e.d,t:e.t||'',v:e.c,g:e.g||'',src:e.acct,inc:true});});
+  stRows().forEach(e=>{if((e.k==='INCOME'||e.k==='LOAN_DISBURSEMENT')&&e.c>0)out.push({i:e.i,d:e.d,t:e.t||'',v:e.c,g:e.g||'',src:e.acct,inc:true,by:e.holder||''});});
   return out;
 }
 function gastosMes(ym){
@@ -699,7 +699,8 @@ function gRow(r){
   return '<button class="item" data-act="sp-pick" data-i="'+esc(r.i)+'"><div class="row"><span class="t">'+esc(r.t||'(sem descrição)')+'</span><b>'+money(r.v)+'</b></div><div class="mut">'+brDate(r.d)+' · '+(k?esc(k.c)+(k.s?' › '+esc(k.s):'')+(k.auto?' <span class="mut">('+(k.learned?'aprendida':'sugerida')+')</span>':''):'<span style="color:var(--warn,#ffb300)">sem categoria</span>')+'</div></button>';
 }
 const SP_PER=[['m','Mês'],['3','3 meses'],['12','12 meses'],['all','Tudo']];
-const SP_DIM=[['cat','Categoria'],['grp','Grupo'],['lug','Lugar'],['org','Origem']];
+const SP_DIM=[['cat','Categoria'],['grp','Grupo'],['lug','Lugar'],['org','Origem'],['quem','Quem']];
+const quemLbl=r=>{const b=String(r.by||'').trim();return b?b.charAt(0).toUpperCase()+b.slice(1).toLowerCase():'Não informado';};
 function spRange(sp){
   const cur=ymOf(todayIso());
   if(sp.per==='3')return {a:addMonths(cur,-2),b:cur,pa:addMonths(cur,-5),pb:addMonths(cur,-3),n:3};
@@ -716,7 +717,7 @@ function spAgg(rows,dim){
   const m={};let total=0;
   rows.forEach(r=>{
     const k=catOf(r);total+=r.v;
-    let key=dim==='cat'?(k?k.c:'Sem categoria'):dim==='grp'?grpOf(k):dim==='lug'?lugLbl(r):srcLbl(r);
+    let key=dim==='cat'?(k?k.c:'Sem categoria'):dim==='grp'?grpOf(k):dim==='lug'?lugLbl(r):dim==='quem'?quemLbl(r):srcLbl(r);
     const sub=dim==='cat'?(k&&k.s?k.s:'(sem subcategoria)'):(k?k.c+(k.s?' › '+k.s:''):'Sem categoria');
     const o=m[key]=m[key]||{c:key,v:0,n:0,subs:{},items:[]};
     o.v+=r.v;o.n++;o.subs[sub]=(o.subs[sub]||0)+r.v;o.items.push(r);
@@ -741,6 +742,72 @@ function spInsights(rows,prevAgg,agg){
   }
   return L;
 }
+
+/* ---------- Raio-X: quando entra, quando sai, janelas sem dinheiro, faturas ---------- */
+const DOW_L=['domingo','segunda','terça','quarta','quinta','sexta','sábado'];
+function rxBar(label,v,max,extra){const pct=max>0?Math.max(3,Math.round(100*v/max)):0;return '<div class="row" style="margin-top:.45rem"><span>'+label+'</span><b>'+money(v)+'</b></div>'+(extra?'<div class="mut">'+extra+'</div>':'')+'<div class="plan-bar" style="margin:.15rem 0 .2rem"><i style="width:'+pct+'%"></i></div>';}
+function rxSections(sp,R){
+  const td=todayIso(),out=spRows(sp,'out',R.a,R.b),inn=spRows(sp,'in',R.a,R.b).filter(r=>r.d<=td);
+  const sum=a=>a.reduce((x,r)=>x+r.v,0),pc=(v,t)=>t?Math.round(100*v/t)+'%':'—';
+  let h='';
+  /* 1) começo, meio e fim do mês */
+  const ph=d=>{const n=+d.slice(8,10);return n<=10?0:n<=20?1:2;},PN=['Início (dia 1 a 10)','Meio (dia 11 a 20)','Fim (dia 21 a 31)'];
+  const po=[0,0,0],pi=[0,0,0];out.forEach(r=>po[ph(r.d)]+=r.v);inn.forEach(r=>pi[ph(r.d)]+=r.v);
+  const to=sum(out),ti=sum(inn);
+  if(to||ti){
+    const mo=po.indexOf(Math.max(...po)),mi=pi.indexOf(Math.max(...pi));
+    let b='<b>Saídas</b>'+PN.map((n,i)=>rxBar(n,po[i],Math.max(...po),pc(po[i],to)+' do que saiu')).join('');
+    if(ti)b+='<p style="margin:.8rem 0 0"><b>Entradas</b></p>'+PN.map((n,i)=>rxBar(n,pi[i],Math.max(...pi),pc(pi[i],ti)+' do que entrou')).join('');
+    const dw=[0,0,0,0,0,0,0];out.forEach(r=>dw[new Date(r.d+'T12:00:00').getDay()]+=r.v);
+    b+='<p style="margin:.8rem 0 0"><b>Gastos por dia da semana</b></p>'+DOW_L.map((n,i)=>rxBar(n,dw[i],Math.max(...dw))).join('');
+    if(ti&&mo!==mi)b+='<div class="note" style="margin-top:.6rem">O dinheiro entra mais no '+PN[mi].split(' (')[0].toLowerCase()+' do mês, mas você gasta mais no '+PN[mo].split(' (')[0].toLowerCase()+'. Vale segurar os gastos até o dinheiro entrar.</div>';
+    h+=xGroup('rx-fase','🗓️','Começo, meio e fim do mês',to?'Você mais gasta no '+PN[mo].split(' (')[0].toLowerCase()+' ('+pc(po[mo],to)+')':'Quando o dinheiro entra',money(to),b);
+  }
+  /* 2) dias que mais entrou e mais saiu */
+  const byDay=a=>{const m={};a.forEach(r=>{const o=m[r.d]=m[r.d]||{d:r.d,v:0,n:0,t:[]};o.v+=r.v;o.n++;if(o.t.length<3)o.t.push(r.t);});return Object.values(m).sort((x,y)=>y.v-x.v);};
+  const dOut=byDay(out).slice(0,5),dIn=byDay(inn).slice(0,5);
+  if(dOut.length||dIn.length){
+    const li=(x,inc)=>'<button class="item" data-act="rx-day" data-d="'+x.d+'"><div class="row"><span class="t">'+brDate(x.d)+' · '+dowOf(x.d)+'</span><b'+(inc?' class="rc"':'')+'>'+(inc?'+ ':'')+money(x.v)+'</b></div><div class="mut">'+x.n+(x.n===1?' lançamento':' lançamentos')+': '+esc(x.t.join(', '))+(x.n>3?'…':'')+'</div></button>';
+    const dom={};inn.forEach(r=>{const n=+r.d.slice(8,10);dom[n]=(dom[n]||0)+r.v;});
+    const domTop=Object.keys(dom).sort((a,b)=>dom[b]-dom[a]).slice(0,3);
+    let b=(dIn.length?'<p style="margin:.2rem 0"><b>Dias que mais entrou dinheiro</b></p>'+dIn.map(x=>li(x,true)).join('')+(domTop.length?'<p class="hint">Dias do mês em que costuma entrar: '+domTop.map(n=>'dia '+n+' ('+money(dom[n])+')').join(', ')+'.</p>':''):'')
+      +(dOut.length?'<p style="margin:.6rem 0 .2rem"><b>Dias que mais gastou</b></p>'+dOut.map(x=>li(x,false)).join(''):'');
+    h+=xGroup('rx-dias','🏆','Dias que mais entrou e mais gastou',dOut.length?'Maior gasto: '+brDate(dOut[0].d)+' ('+money(dOut[0].v)+')':'',dOut.length?money(dOut[0].v):'',b);
+  }
+  /* 3) janelas sem dinheiro entrando: do último dinheiro que entrou até o próximo */
+  const allIn=spRows(sp,'in','0000-00','9999-99').filter(r=>r.d<=td).map(r=>r.d),allOut=spRows(sp,'out','0000-00','9999-99');
+  const ds=[...new Set(allIn)].sort();
+  if(ds.length){
+    const dd=(a,b)=>Math.round((new Date(b+'T12:00:00')-new Date(a+'T12:00:00'))/864e5);
+    const gaps=[];for(let i=0;i<ds.length;i++){const a=ds[i],b=i+1<ds.length?ds[i+1]:td,n=dd(a,b);if(n>=7)gaps.push({a,b,n,now:i+1===ds.length});}
+    gaps.forEach(g=>{g.v=allOut.filter(r=>r.d>g.a&&r.d<=g.b).reduce((x,r)=>x+r.v,0);g.dia=Math.round(g.v/Math.max(1,g.n));});
+    const top=gaps.sort((x,y)=>y.n-x.n).slice(0,4);
+    if(top.length){
+      const b=top.map(g=>'<div class="xr"><div class="row"><span class="t">'+brDate(g.a)+' → '+(g.now?'hoje':brDate(g.b))+'</span><b>'+g.n+' dias</b></div><div class="mut">Sem nenhuma entrada'+(g.now?' (ainda em andamento)':'')+'. Gastou '+money(g.v)+' nesse tempo, cerca de '+money(g.dia)+' por dia.</div></div>').join('')
+        +'<p class="hint">São os períodos em que não entrou dinheiro. Nessas janelas vale gastar menos por dia: o que sai aqui geralmente vira fatura ou cheque especial.</p>'
+        +'<p class="hint">Conta só o que está nos extratos importados. Se faltar algum extrato de conta, a janela pode parecer maior do que foi.</p>';
+      h+=xGroup('rx-jan','🕳️','Janelas sem dinheiro entrando','Mais longa: '+top[0].n+' dias'+(top[0].now?' (em andamento)':''),top.length+(top.length===1?' janela':' janelas'),b,top[0].now?'bad':'');
+    }
+  }
+  /* 4) faturas dos cartões: compras de cada fatura importada, variação e o que já está comprometido */
+  {const F={};
+   byKind('stmt').forEach(r=>{const a=String(r.data.account||'');const m=/fatura\s+(\d{4}-\d{2})/i.exec(a);if(!m)return;const lb=stAcctLabel(r.data);
+     const g=(r.data.entries||[]).filter(e=>e.k==='EXPENSE').reduce((x,e)=>x-e.c,0),pg=(r.data.entries||[]).filter(e=>e.k==='CARD_SETTLEMENT').reduce((x,e)=>x-e.c,0);
+     (F[lb]=F[lb]||[]).push({ym:m[1],g,pg,aberta:/aberta/i.test(a)});});
+   let b='',fut=0;
+   Object.keys(F).forEach(lb=>{const v=F[lb].sort((x,y)=>x.ym<y.ym?-1:1);
+     b+='<p style="margin:.3rem 0 0"><b>'+esc(lb)+'</b></p>';
+     v.forEach((x,i)=>{const p=i?v[i-1].g:null,vr=p?Math.round(100*(x.g-p)/p):null;
+       b+='<div class="row" style="margin-top:.35rem"><span>Vence '+ymShort(x.ym)+(x.aberta?' <span class="mut">· aberta</span>':'')+'</span><b>'+money(x.g)+(vr!=null?' <span class="mut" style="font-weight:400">'+(vr>0?'↑':'↓')+Math.abs(vr)+'%</span>':'')+'</b></div>'+(x.pg?'<div class="mut">Pagamento lançado nela: '+money(x.pg)+'</div>':'');});
+   });
+   byKind('card').forEach(cr=>{const k=cardCalc(cr);Object.values(k.inv).forEach(x=>{if(x.ym>k.openYm&&!x.paid)fut+=x.totalC;});});
+   if(b){
+     b+='<p class="hint">Valor = compras e débitos de cada fatura (sem o saldo que veio da fatura anterior), como no extrato do banco.</p>';
+     if(fut)b+='<div class="note" style="margin-top:.6rem">Já comprometido em faturas futuras (parcelas lançadas no app): '+money(fut)+'.</div>';
+     h+=xGroup('rx-fat','💳','Faturas dos cartões','Compras de cada fatura e quanto variou',Object.keys(F).length+(Object.keys(F).length===1?' cartão':' cartões'),b);
+   }}
+  return h?'<h2 style="margin-left:0">Raio-X do período</h2>'+h:'';
+}
 function vGastos(){
   S.sp=S.sp||{};const sp=S.sp;sp.ym=sp.ym||ymOf(todayIso());sp.per=sp.per||'m';sp.dir=sp.dir||'out';sp.dim=sp.dim||'cat';
   const R=spRange(sp),inc=sp.dir==='in',sm=sp.sort||'dnew';
@@ -749,7 +816,7 @@ function vGastos(){
   const other=spRows(sp,inc?'out':'in',R.a,R.b).reduce((a,r)=>a+r.v,0);
   const sem=rows.filter(r=>!catOf(r));
   const allSrc=[...new Set(gastosRows().concat(incRows()).map(srcLbl))].sort();
-  let h=header(inc?'Entradas e categorias':'Gastos e categorias','<button class="ibtn" data-back="1" data-act="tab" data-v="home" aria-label="Voltar" title="Voltar">←</button>')+'<div class="wrap">';
+  let h=header('Raio-X financeiro','<button class="ibtn" data-back="1" data-act="tab" data-v="home" aria-label="Voltar" title="Voltar">←</button>')+'<div class="wrap">';
   h+='<div class="chips" role="group" aria-label="Tipo">'+[['out','Saídas (gastos)'],['in','Entradas']].map(x=>'<button class="chip'+(sp.dir===x[0]?' on':'')+'" data-act="sp-dir" data-v="'+x[0]+'">'+x[1]+'</button>').join('')+'</div>';
   h+='<div class="chips" role="group" aria-label="Período">'+SP_PER.map(x=>'<button class="chip'+(sp.per===x[0]?' on':'')+'" data-act="sp-per" data-v="'+x[0]+'">'+x[1]+'</button>').join('')+'</div>';
   if(sp.per==='m')h+='<div class="spnav"><button class="btn sec" data-act="sp-prev" aria-label="Mês anterior">‹</button><b>'+esc(ymLabel(sp.ym))+'</b><button class="btn sec" data-act="sp-next" aria-label="Próximo mês">›</button></div>';
@@ -763,6 +830,8 @@ function vGastos(){
     +(prev&&prev.total?(()=>{const dif=agg.total-prev.total;return '<div class="row"><span class="mut">Diferença</span><b style="color:'+((dif>0)!==inc?'var(--danger,#ff5c5c)':'#34c27a')+'">'+(dif>0?'+':'−')+money(Math.abs(dif))+'</b></div>';})():'')+'</div>';
   if(sem.length){const sv=sem.reduce((a,r)=>a+r.v,0);h+='<div class="note"><b>'+sem.length+(sem.length===1?' lançamento sem categoria':' lançamentos sem categoria')+'</b> ('+money(sv)+'). Categorize uma vez e o Financeiro lembra os parecidos.</div><button class="btn" data-act="sp-queue">Categorizar agora</button>';}
   if(!inc){const L=spInsights(rows,prev,agg);if(L.length)h+='<div class="card"><b>💡 Onde dá para reduzir</b>'+L.map(x=>'<p style="margin:.5rem 0 0">'+x+'</p>').join('')+'</div>';}
+  h+=rxSections(sp,R);
+  h+='<h2 style="margin-left:0">'+(inc?'Entradas':'Gastos')+' por '+({cat:'categoria',grp:'grupo',lug:'lugar',org:'origem',quem:'pessoa'}[sp.dim])+'</h2>';
   const colMap={};let ci=0;agg.list.forEach(x=>{colMap[x.c]=x.c==='Sem categoria'?SEMCOL:PAL[ci++%PAL.length];});const colOf=c=>colMap[c]||SEMCOL;
   const selI=sp.cat&&agg.list.find(x=>x.c===sp.cat);
   h+='<div class="card donutbox">'+donutSvg(agg.list,colOf,agg.total,sp.cat)+'<div class="donutc">'+(selI?'<span class="mut" style="max-width:9rem;text-align:center;line-height:1.15">'+esc(selI.c)+'</span><b>'+money(selI.v)+'</b><span class="mut">'+Math.round(100*selI.v/agg.total)+'% do total</span>':'<b>'+money(agg.total)+'</b><span class="mut">'+(sp.per==='m'?'no mês':'no período')+' · toque numa cor</span>')+'</div></div>';
@@ -1455,7 +1524,7 @@ function vHome(){
   {const bd=backupDays();
    if(bd===null||bd>=7)h+='<button class="note bkn" data-act="backup" aria-label="Baixar uma cópia dos dados">💾 '+(bd===null?'Você ainda não baixou uma cópia dos seus dados.':'Faz '+bd+' dias desde a última cópia dos seus dados.')+' Toque para baixar.</button>';}
   /* Início calmo: sem número gigante. Uma tabela simples do que vence neste mês + atalhos sem valores em destaque */
-  h+='<div class="up s2"><button data-act="tab" data-v="poder"><span class="nm"><b>💰 Quanto posso gastar</b></span><span class="vl mut">›</span></button><button data-act="tab" data-v="pagar"><span class="nm"><b>🧾 O que pagar no mês</b></span><span class="vl mut">›</span></button><button data-act="tab" data-v="spend"><span class="nm"><b>📊 Para onde vai meu dinheiro</b><br><span class="mut" style="font-size:.95rem">Categorias, grupos e onde reduzir</span></span><span class="vl mut">›</span></button></div>';
+  h+='<div class="up s2"><button data-act="tab" data-v="poder"><span class="nm"><b>💰 Quanto posso gastar</b></span><span class="vl mut">›</span></button><button data-act="tab" data-v="pagar"><span class="nm"><b>🧾 O que pagar no mês</b></span><span class="vl mut">›</span></button><button data-act="tab" data-v="spend"><span class="nm"><b>🩻 Raio-X financeiro</b><br><span class="mut" style="font-size:.95rem">Entradas, saídas, categorias, dias e onde reduzir</span></span><span class="vl mut">›</span></button></div>';
   {const all=monthItems(ym),fz=i=>i.state==='Paga'||i.state==='Recebida';
    const abertos=all.filter(i=>!fz(i)),feitos=all.filter(fz);
    h+='<h2>Neste mês</h2>';
@@ -1476,7 +1545,7 @@ function vHome(){
     +'<button data-act="tab" data-v="stmt"><span class="nm"><b>Extrato</b></span><span class="vl mut">›</span></button>'
     +'<button data-act="tab" data-v="debts"><span class="nm"><b>Dívidas</b><i>'+(debts.length?debts.length+' em aberto':'nenhuma em aberto')+'</i></span><span class="vl mut">›</span></button>'
     +'<button data-act="st-go" data-f="in"><span class="nm"><b>Entradas</b></span><span class="vl mut">›</span></button>'
-    +'<button data-act="tab" data-v="spend"><span class="nm"><b>Gastos e categorias</b></span><span class="vl mut">›</span></button>'
+    +'<button data-act="tab" data-v="spend"><span class="nm"><b>Raio-X financeiro</b></span><span class="vl mut">›</span></button>'
     +'</div>';
   if(S.remErr)h+='<div class="note"><span class="tag warn">Lembretes</span> Não consegui conferir os lembretes no Núcleo agora ('+esc(S.remErr)+').</div>';
   return h+'</div>';
@@ -2500,11 +2569,11 @@ function stAcctLabel(d){
 }
 function stRows(){
   const out=[];
-  byKind('stmt').forEach(r=>{const lb=stAcctLabel(r.data);r.data.entries.forEach(e=>out.push(Object.assign({acct:lb,acctFull:r.data.account},e)));});
+  byKind('stmt').forEach(r=>{const lb=stAcctLabel(r.data);r.data.entries.forEach(e=>out.push(Object.assign({acct:lb,acctFull:r.data.account,holder:r.data.holder||''},e)));});
   return out;
 }
 /* ---------- Extrato: buscar, filtrar por entradas/gastos, mês e dia ---------- */
-const APP_V='v57';
+const APP_V='v58';
 const ST_FILTERS=[['all','Tudo'],['in','Entradas'],['out','Gastos'],['fat','Faturas pagas'],['tr','Transferências']];
 function stAll(){
   const out=stRows().map(e=>Object.assign({},e,{src:'extrato'}));
@@ -2958,6 +3027,7 @@ document.addEventListener('click',async ev=>{
   else if(act==='sp-cat'){S.sp.cat=(S.sp.cat===b.dataset.c?null:b.dataset.c);render();}
   else if(act==='hp-toggle'){S.hp=!S.hp;render();}
   else if(act==='sp-sort'){S.sp=S.sp||{ym:ymOf(todayIso()),cat:null,all:false};S.sp.sort=(S.sp.sort===b.dataset.v?null:b.dataset.v);render();}
+  else if(act==='rx-day'){S.st=stState();S.st.day=b.dataset.d;S.st.fs=[];S.st.cats=[];S.st.grps=[];S.st.accts=[];S.st.q='';S.st.lim=60;S.tab='stmt';render();window.scrollTo(0,0);}
   else if(act==='sp-learn'){learnModal();}
   else if(act==='sp-seg'){S.sp.cat=(S.sp.cat===b.dataset.c?null:b.dataset.c);render();}
   else if(act==='sp-all'){S.sp.all=!S.sp.all;render();}
