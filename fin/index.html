@@ -88,7 +88,7 @@ h2.stday{font-size:1rem;margin:1rem 0 .1rem;color:var(--muted)}
 .spnav .btn{width:4.2rem;margin:0}
 .donutbox{position:relative;display:flex;justify-content:center}
 .donut{width:15rem;height:15rem}
-.donutc{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none}
+.donutc{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none}.dcin{pointer-events:auto;cursor:pointer;width:9.5rem;height:9.5rem;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
 .dot{display:inline-block;width:.9rem;height:.9rem;border-radius:50%;margin-right:.5rem}
 .item.on{outline:2px solid var(--accent)}
 .seg4{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-top:.4rem}
@@ -851,9 +851,9 @@ function vGastos(){
   h+='<h2 style="margin-left:0">'+(inc?'Entradas':'Gastos')+' por '+({cat:'categoria',grp:'grupo',lug:'lugar',org:'origem',quem:'pessoa'}[sp.dim])+'</h2>';
   const colMap={};let ci=0;agg.list.forEach(x=>{colMap[x.c]=x.c==='Sem categoria'?SEMCOL:PAL[ci++%PAL.length];});const colOf=c=>colMap[c]||SEMCOL;
   const selI=sp.cat&&agg.list.find(x=>x.c===sp.cat);
-  h+='<div class="card donutbox">'+donutSvg(agg.list,colOf,agg.total,sp.cat)+'<div class="donutc">'+(selI?'<span class="mut" style="max-width:9rem;text-align:center;line-height:1.15">'+esc(selI.c)+'</span><b>'+money(selI.v)+'</b><span class="mut">'+Math.round(100*selI.v/agg.total)+'% do total</span>':'<b>'+money(agg.total)+'</b><span class="mut">'+(sp.per==='m'?'no mês':'no período')+' · toque numa cor</span>')+'</div></div>';
-  h+='<p class="hint" style="margin:.2rem 0">Ordenar os lançamentos por:</p>'+sortChips(sp.sort||'','sp-sort');
-  const lst=agg.list.slice();
+  h+='<div class="card donutbox">'+donutSvg(agg.list,colOf,agg.total,sp.cat)+'<div class="donutc"><div class="dcin" data-act="sp-seg-clear" role="button" aria-label="Voltar ao total">'+(selI?'<span class="mut" style="max-width:9rem;text-align:center;line-height:1.15">'+esc(selI.c)+'</span><b>'+money(selI.v)+'</b><span class="mut">'+Math.round(100*selI.v/agg.total)+'% do total</span><span class="mut" style="font-size:.8rem">toque aqui: ver o total</span>':'<b>'+money(agg.total)+'</b><span class="mut">'+(sp.per==='m'?'no mês':'no período')+'</span><span class="mut" style="font-size:.8rem">toque numa cor</span>')+'</div></div></div>';
+  h+='<p class="hint" style="margin:.2rem 0">Ordenar a lista abaixo por:</p>'+sortChips(sp.sort||'','sp-sort');
+  const lst=sp.sort?sortBy(agg.list,sm,x=>x.v,x=>x.items.reduce((a,r)=>r.d>a?r.d:a,''),x=>x.c):agg.list.slice();
   lst.forEach((x,i)=>{
     const p=prev&&prev.list.find(y=>y.c===x.c),d=p?x.v-p.v:null;
     const open=sp.cat===x.c;
@@ -2590,7 +2590,7 @@ function stRows(){
   return out;
 }
 /* ---------- Extrato: buscar, filtrar por entradas/gastos, mês e dia ---------- */
-const APP_V='v59';
+const APP_V='v60';
 const ST_FILTERS=[['all','Tudo'],['in','Entradas'],['out','Gastos'],['fat','Faturas pagas'],['tr','Transferências']];
 function stAll(){
   const out=stRows().map(e=>Object.assign({},e,{src:'extrato'}));
@@ -3047,6 +3047,7 @@ document.addEventListener('click',async ev=>{
   else if(act==='rx-tot'){const rec=get(id);if(rec){const d=rec.data;form('Total da fatura no banco',[{k:'statementTotalC',label:'Total da fatura (como está no PDF ou app do banco)',type:'money',req:true,hint:'É o “total a pagar” impresso na fatura, já com o saldo anterior.'},{k:'futureInstallmentsC',label:'Parcelas para as próximas faturas (opcional)',type:'money'}],{statementTotalC:d.statementTotalC,futureInstallmentsC:d.futureInstallmentsC},{summary:o=>[d.account,'Total: '+money(o.statementTotalC),'Parcelas futuras: '+(o.futureInstallmentsC==null?'—':money(o.futureInstallmentsC))],save:async o=>{await Api.update(rec,Object.assign({},d,{statementTotalC:o.statementTotalC,futureInstallmentsC:o.futureInstallmentsC==null?(d.futureInstallmentsC==null?null:d.futureInstallmentsC):o.futureInstallmentsC}));}});}}
   else if(act==='rx-day'){S.st=stState();S.st.day=b.dataset.d;S.st.fs=[];S.st.cats=[];S.st.grps=[];S.st.accts=[];S.st.q='';S.st.lim=60;S.tab='stmt';render();window.scrollTo(0,0);}
   else if(act==='sp-learn'){learnModal();}
+  else if(act==='sp-seg-clear'){if(S.sp&&S.sp.cat){S.sp.cat=null;render();}}
   else if(act==='sp-seg'){S.sp.cat=(S.sp.cat===b.dataset.c?null:b.dataset.c);render();}
   else if(act==='sp-all'){S.sp.all=!S.sp.all;render();}
   else if(act==='sp-dir'){S.sp=S.sp||{};S.sp.dir=b.dataset.v;S.sp.cat=null;render();}
