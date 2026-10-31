@@ -606,7 +606,7 @@ const gSortRows=(rows,mode)=>sortBy(rows,mode||'dnew',r=>r.v,r=>r.d,r=>{const k=
 /* janela "o que é isto?" para uma linha de extrato ou de fatura */
 function detalheModal(x){
   const rows=[['Descrição',x.t||'(sem descrição)'],['Data',x.d?brDate(x.d)+' · '+dowOf(x.d):''],['Valor',x.c==null?'':(x.c>0?'+ ':'')+money(Math.abs(x.c))],['Tipo',x.tipo||''],['Categoria',x.cat||''],['Onde',x.onde||''],['Parcela',x.parcela||''],['Quem',x.by||'']].filter(r=>r[1]);
-  const m=modal('<h3>O que é este lançamento</h3><div class="card">'+rows.map(r=>'<div class="row"><span class="mut">'+r[0]+'</span><b style="text-align:right;white-space:pre-wrap;word-break:break-word">'+esc(r[1])+'</b></div>').join('')+'</div>'
+  const m=modal('<h3>O que é este lançamento</h3><div class="card">'+rows.map(r=>'<div class="row" style="align-items:flex-start;gap:.8rem"><span class="mut" style="white-space:nowrap;flex:none">'+r[0]+'</span><b style="text-align:right;white-space:pre-wrap!important;word-break:break-word;min-width:0">'+esc(r[1])+'</b></div>').join('')+'</div>'
     +(x.editId?'<button class="btn" id="dt-ed">Editar este lançamento</button>':'')+(x.delFn?'<button class="btn bad" id="dt-del">Apagar este lançamento</button>':'')+'<button class="btn sec" id="no">Fechar</button>');
   m.querySelector('#no').onclick=()=>m.remove();
   const dl=m.querySelector('#dt-del');if(dl)dl.onclick=()=>{m.remove();x.delFn();};
