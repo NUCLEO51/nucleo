@@ -845,7 +845,7 @@ function vGastos(){
     +'<div class="row"><span class="mut">'+(inc?'Saiu no período':'Entrou no período')+'</span><b>'+money(other)+'</b></div>'
     +(prev&&prev.total?'<div class="row"><span class="mut">Período anterior</span><b>'+money(prev.total)+'</b></div>':'')
     +(prev&&prev.total?(()=>{const dif=agg.total-prev.total;return '<div class="row"><span class="mut">Diferença</span><b style="color:'+((dif>0)!==inc?'var(--danger,#ff5c5c)':'#34c27a')+'">'+(dif>0?'+':'−')+money(Math.abs(dif))+'</b></div>';})():'')+'</div>';
-  if(sem.length){const sv=sem.reduce((a,r)=>a+r.v,0);h+='<div class="note"><b>'+sem.length+(sem.length===1?' lançamento sem categoria':' lançamentos sem categoria')+'</b> ('+money(sv)+'). Categorize uma vez e o Financeiro lembra os parecidos.</div><button class="btn" data-act="sp-queue">Categorizar agora</button>';}
+  if(sem.length){const sv=sem.reduce((a,r)=>a+r.v,0);h+='<div class="note"><b>'+sem.length+(sem.length===1?' lançamento sem categoria':' lançamentos sem categoria')+'</b> '+(sp.per==='m'?'em '+esc(ymLabel(sp.ym)):sp.per==='all'?'em todo o período':'nos últimos '+R.n+' meses')+((sp.src||[]).length?' (só a origem escolhida)':'')+' ('+money(sv)+'). Categorize uma vez e o Financeiro lembra os parecidos.</div><button class="btn" data-act="sp-queue">Categorizar agora</button>';}
   if(!inc){const L=spInsights(rows,prev,agg);if(L.length)h+='<div class="card"><b>💡 Onde dá para reduzir</b>'+L.map(x=>'<p style="margin:.5rem 0 0">'+x+'</p>').join('')+'</div>';}
   h+=rxSections(sp,R);
   h+='<h2 style="margin-left:0">'+(inc?'Entradas':'Gastos')+' por '+({cat:'categoria',grp:'grupo',lug:'lugar',org:'origem',quem:'pessoa'}[sp.dim])+'</h2>';
@@ -1555,7 +1555,7 @@ function vHome(){
   }
   {const ob=overdueBefore();
    if(ob.length){h+='<button class="note bkn" data-act="m-old" data-v="'+ob[0].mm+'">⚠️ Há '+ob.length+(ob.length===1?' item atrasado':' itens atrasados')+' de meses anteriores. Toque para ver.</button>';}}
-  if(g.semN>0)h+='<button class="note bkn" data-act="tab" data-v="spend">📝 '+g.semN+(g.semN===1?' gasto esperando categoria':' gastos esperando categoria')+'. Toque para classificar.</button>';
+  if(g.semN>0)h+='<button class="note bkn" data-act="home-sem" data-ym="'+ym+'">📝 '+g.semN+(g.semN===1?' gasto esperando categoria':' gastos esperando categoria')+' em '+esc(ymLabel(ym))+'. Toque para classificar.</button>';
   h+='<h2>Abrir</h2><div class="up s2">'
     +'<button data-act="tab" data-v="bills"><span class="nm"><b>Contas do mês</b></span><span class="vl mut">›</span></button>'
     +'<button data-act="tab" data-v="cards"><span class="nm"><b>Cartões</b><i>'+(cardsH.length?cardsH.length+(cardsH.length===1?' cartão':' cartões'):'nenhum')+'</i></span><span class="vl mut">›</span></button>'
@@ -2679,7 +2679,7 @@ function stRows(){
   return out;
 }
 /* ---------- Extrato: buscar, filtrar por entradas/gastos, mês e dia ---------- */
-const APP_V='v61';
+const APP_V='v62';
 const ST_FILTERS=[['all','Tudo'],['in','Entradas'],['out','Gastos'],['fat','Faturas pagas'],['tr','Transferências']];
 function stAll(){
   const out=stRows().map(e=>Object.assign({},e,{src:'extrato'}));
@@ -3072,6 +3072,7 @@ document.addEventListener('click',async ev=>{
   if(act==='tr-open')trashOpen(id);
   else if(act==='tr-more'){S.trLim=(S.trLim||60)+60;render();}
   else if(act==='tr-reload'){S.trashLoaded=false;S.trashErr='';render();}
+  else if(act==='home-sem'){S.sp={ym:b.dataset.ym,per:'m',dir:'out',dim:'cat'};S.contaId=null;S.cardId=null;S.tab='spend';render();window.scrollTo(0,0);}
   else if(act==='tab'){if(b.dataset.v==='trash'){S.trashLoaded=false;S.trashErr='';S.trLim=60;}S.contaId=null;S.cardDados=false;S.showNum=false;S.tab=b.dataset.v;if(S.tab!=='cards')S.cardId=null;if(S.tab==='cards'&&b.dataset.v==='cards')S.cardId=null;render();window.scrollTo(0,0);}
   else if(act==='m-old'){S.mm=b.dataset.v;S.tab='bills';render();window.scrollTo(0,0);}
   else if(act==='rem-mode'){S.lt=b.dataset.v;render();}
