@@ -1416,7 +1416,10 @@ function modal(html){
   };
   return m;
 }
+/* confirmações: por padrão só pergunta antes de apagar/zerar. Em Ajustes dá para ligar “perguntar sempre”. */
+const askAlways=()=>lsGet('fin-confirm')==='1';
 function confirmBox(title,lines,okLabel,bad){
+  if(!bad&&!askAlways())return Promise.resolve(true);
   return new Promise(res=>{
     const m=modal('<h3>'+esc(title)+'</h3><div class="card sum">'+esc((lines||[]).join('\n'))+'</div>'
       +'<button class="btn'+(bad?' bad':'')+'" id="cf-ok">'+esc(okLabel||'Sim, salvar')+'</button><button class="btn sec" id="cf-no">Voltar</button>');
@@ -1777,10 +1780,11 @@ function vCfg(){
   let h=header('Ajustes','<button class="ibtn" data-back="1" data-act="tab" data-v="home" aria-label="Voltar" title="Voltar">←</button>')+'<div class="wrap">';
   h+='<h2>Segurança</h2>'+lkBlock('fin');
   h+='<h2>Aparência</h2>'+fsBlock();
+  h+='<h2>Confirmações</h2><div class="card"><button class="btn'+(askAlways()?'':' sec')+'" data-act="ask-toggle" aria-pressed="'+askAlways()+'">'+(askAlways()?'Perguntar antes de salvar: LIGADO':'Perguntar antes de salvar: DESLIGADO')+'</button><p class="hint">Desligado: salva direto. Apagar e zerar sempre perguntam uma vez, e o que se apaga vai para a Lixeira.</p></div>';
   h+='<h2>Cópia de segurança</h2>'+backupBlock();
   h+='<h2>Grupos e categorias</h2><button class="btn" data-act="cg-open">🗂️ Criar e editar grupos e categorias</button><p class="hint">Crie, renomeie, mude de grupo ou esconda. Antes de salvar o app sempre pergunta.</p>';
   h+='<h2>Lixeira</h2><button class="btn" data-act="tab" data-v="trash">🗑️ Ver o que foi apagado</button><p class="hint">Tudo que você apaga vai para a Lixeira. Lá dá para ver e restaurar.</p>';
-  h+='<h2>Começar do zero</h2><button class="btn sec" data-act="zero">🧹 Zerar o aplicativo (guarda só as dívidas)</button><p class="hint">Manda tudo para a Lixeira, menos as dívidas e as categorias. O app pergunta duas vezes.</p>';
+  h+='<h2>Começar do zero</h2><button class="btn sec" data-act="zero">🧹 Zerar o aplicativo (guarda só as dívidas)</button><p class="hint">Manda tudo para a Lixeira, menos as dívidas e as categorias. O app pergunta uma vez.</p>';
   h+='<h2>Atualizar</h2><p class="hint">“Atualizar dados” busca de novo os seus lançamentos no servidor (use se mexeu em outro aparelho ou o GPT gravou algo). “Atualizar o aplicativo” baixa a versão nova do próprio Financeiro (telas e ícone). Versão instalada: '+APP_V+'.</p>'
     +(S.upd?'<div class="note">'+esc(S.upd)+'</div>':'')
     +'<button class="btn" data-act="refresh">Atualizar dados</button><button class="btn sec" data-act="app-update">Atualizar o aplicativo (versão nova)</button>';
@@ -1804,8 +1808,8 @@ async function zeroRun(){
   l1.push('Ficam só as '+pl.debts.length+' dívidas: '+pl.debts.map(d=>d.data.creditor||'dívida').join(' e ')+'.');
   l1.push('Ficam também as suas categorias e grupos.');
   if(pl.conta)l1.push('A conta do Santander continua cadastrada, vazia, esperando o extrato do banco.');
-  if(!await confirmBox('Zerar o aplicativo?',l1,'Continuar',true))return;
-  if(!await confirmBox('Confirma mesmo?',['Nada é apagado de vez: tudo fica na Lixeira e dá para restaurar.','Nada é pago nem alterado no banco.'],'Sim, zerar tudo',true))return;
+  l1.push('Nada é apagado de vez: tudo fica na Lixeira.');
+  if(!await confirmBox('Zerar o aplicativo?',l1,'Sim, zerar tudo',true))return;
   let ok=0;
   try{
     /* conta nova e vazia primeiro: se algo falhar, a antiga ainda está aqui */
@@ -2994,7 +2998,7 @@ function stRows(){
   return out;
 }
 /* ---------- Extrato: buscar, filtrar por entradas/gastos, mês e dia ---------- */
-const APP_V='v68';
+const APP_V='v69';
 const ST_FILTERS=[['all','Tudo'],['in','Entradas'],['out','Gastos'],['fat','Faturas pagas'],['tr','Transferências']];
 function stAll(){
   const out=stRows().map(e=>Object.assign({},e,{src:'extrato'}));
@@ -3457,6 +3461,7 @@ document.addEventListener('click',async ev=>{
   else if(act==='rx-day'){S.st=stState();S.st.day=b.dataset.d;S.st.fs=[];S.st.cats=[];S.st.grps=[];S.st.accts=[];S.st.q='';S.st.lim=60;S.tab='stmt';render();window.scrollTo(0,0);}
   else if(act==='sp-learn'){learnModal();}
   else if(act==='zero'){zeroRun();}
+  else if(act==='ask-toggle'){lsSet('fin-confirm',askAlways()?'0':'1');render();}
   else if(act==='cg-open'){S.catsFrom=S.tab;S.tab='cats';render();window.scrollTo(0,0);}
   else if(act==='cg-newcat')cgNewCat();
   else if(act==='cg-newgrp')cgNewGrp();

@@ -6,7 +6,7 @@ const { chromium } = require('playwright');
   const p=await b.newPage({viewport:{width:390,height:800}});
   const errs=[];p.on('pageerror',e=>errs.push(String(e)));p.on('console',m=>{if(m.type()==='error')errs.push(m.text())});
   await p.route('**/*',r=>r.request().url().startsWith('http://localhost:8099')?r.continue():r.abort());
-  await p.goto('http://localhost:8099/fin/index.html');
+  await p.addInitScript(()=>localStorage.setItem('fin-confirm','1'));await p.goto('http://localhost:8099/fin/index.html');
   const res=await p.evaluate(async()=>{
     const out={};const wait=ms=>new Promise(r=>setTimeout(r,ms));
     const dias=n=>new Date(Date.now()-n*86400000).toISOString();
