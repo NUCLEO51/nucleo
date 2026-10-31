@@ -746,6 +746,17 @@ function spInsights(rows,prevAgg,agg){
 /* ---------- Raio-X: quando entra, quando sai, janelas sem dinheiro, faturas ---------- */
 const DOW_L=['domingo','segunda','terça','quarta','quinta','sexta','sábado'];
 function rxBar(label,v,max,extra){const pct=max>0?Math.max(3,Math.round(100*v/max)):0;return '<div class="row" style="margin-top:.45rem"><span>'+label+'</span><b>'+money(v)+'</b></div>'+(extra?'<div class="mut">'+extra+'</div>':'')+'<div class="plan-bar" style="margin:.15rem 0 .2rem"><i style="width:'+pct+'%"></i></div>';}
+/* conferência de cada fatura importada: anterior − pagamentos + compras = total do banco */
+function fatConfere(){
+  const F={};
+  byKind('stmt').forEach(r=>{const d=r.data,a=String(d.account||'');const m=/fatura\s+(\d{4}-\d{2})/i.exec(a);if(!m)return;const lb=stAcctLabel(d);
+    const E=d.entries||[],pg=-E.filter(e=>e.k==='CARD_SETTLEMENT').reduce((x,e)=>x+e.c,0),compras=-E.filter(e=>e.k!=='CARD_SETTLEMENT').reduce((x,e)=>x+e.c,0);
+    (F[lb]=F[lb]||[]).push({id:r.id,ym:m[1],pg:pg||0,compras:compras||0,banco:d.statementTotalC==null?null:d.statementTotalC,futBanco:d.futureInstallmentsC||0,aberta:/aberta/i.test(a)||d.status==='aberta'});});
+  Object.keys(F).forEach(lb=>{const v=F[lb].sort((x,y)=>x.ym<y.ym?-1:1);
+    v.forEach((x,i)=>{const pv=i?v[i-1]:null;x.ant=pv?(pv.banco!=null?pv.banco:pv.calc):0;x.calc=x.ant-x.pg+x.compras;
+      x.st=x.aberta?'aberta':x.banco==null?'sem':Math.abs(x.calc-x.banco)<=1?'ok':'bad';});});
+  return F;
+}
 function rxSections(sp,R){
   const td=todayIso(),out=spRows(sp,'out',R.a,R.b),inn=spRows(sp,'in',R.a,R.b).filter(r=>r.d<=td);
   const sum=a=>a.reduce((x,r)=>x+r.v,0),pc=(v,t)=>t?Math.round(100*v/t)+'%':'—';
@@ -790,21 +801,27 @@ function rxSections(sp,R){
     }
   }
   /* 4) faturas dos cartões: compras de cada fatura importada, variação e o que já está comprometido */
-  {const F={};
-   byKind('stmt').forEach(r=>{const a=String(r.data.account||'');const m=/fatura\s+(\d{4}-\d{2})/i.exec(a);if(!m)return;const lb=stAcctLabel(r.data);
-     const g=(r.data.entries||[]).filter(e=>e.k==='EXPENSE').reduce((x,e)=>x-e.c,0),pg=(r.data.entries||[]).filter(e=>e.k==='CARD_SETTLEMENT').reduce((x,e)=>x-e.c,0);
-     (F[lb]=F[lb]||[]).push({ym:m[1],g,pg,aberta:/aberta/i.test(a)});});
-   let b='',fut=0;
-   Object.keys(F).forEach(lb=>{const v=F[lb].sort((x,y)=>x.ym<y.ym?-1:1);
-     b+='<p style="margin:.3rem 0 0"><b>'+esc(lb)+'</b></p>';
-     v.forEach((x,i)=>{const p=i?v[i-1].g:null,vr=p?Math.round(100*(x.g-p)/p):null;
-       b+='<div class="row" style="margin-top:.35rem"><span>Vence '+ymShort(x.ym)+(x.aberta?' <span class="mut">· aberta</span>':'')+'</span><b>'+money(x.g)+(vr!=null?' <span class="mut" style="font-weight:400">'+(vr>0?'↑':'↓')+Math.abs(vr)+'%</span>':'')+'</b></div>'+(x.pg?'<div class="mut">Pagamento lançado nela: '+money(x.pg)+'</div>':'');});
+  {const F=fatConfere();
+   let b='',fut=0,nOk=0,nBad=0,nSem=0;
+   Object.keys(F).forEach(lb=>{const v=F[lb];
+     b+='<p style="margin:.5rem 0 0"><b>'+esc(lb)+'</b></p>';
+     v.forEach((x,i)=>{const p=i?v[i-1].compras:null,vr=p?Math.round(100*(x.compras-p)/p):null;
+       if(x.st==='ok')nOk++;else if(x.st==='bad')nBad++;else if(x.st==='sem')nSem++;
+       const tag=x.st==='ok'?'<span class="tag ok">✓ confere</span>':x.st==='bad'?'<span class="tag bad">⚠️ diferença</span>':x.st==='sem'?'<span class="tag warn">sem total do banco</span>':'<span class="tag">aberta</span>';
+       const det='<div class="xr"><div class="row"><span>Saldo da fatura anterior</span><b>'+money(x.ant)+'</b></div><div class="row"><span>− Pagamentos</span><b>'+money(x.pg)+'</b></div><div class="row"><span>+ Compras, juros e tarifas</span><b>'+money(x.compras)+'</b></div><div class="row"><span>= Total que o app calcula</span><b>'+money(x.calc)+'</b></div><div class="row"><span>Total que o banco informou</span><b>'+(x.banco==null?'—':money(x.banco))+'</b></div>'
+         +(x.st==='bad'?'<div class="mut" style="color:var(--danger)">Diferença de '+money(Math.abs(x.calc-x.banco))+': falta ou sobra algum lançamento nesta fatura. Confira com o PDF.</div>':'')
+         +(x.st==='aberta'?'<div class="mut">Fatura ainda aberta: o banco só fecha o total no fechamento. Até lá, aqui aparecem só as compras novas.</div>':'')
+         +(x.futBanco?'<div class="row"><span>Parcelas futuras (banco)</span><b>'+money(x.futBanco)+'</b></div>':'')
+         +'<button class="btn sec" data-act="rx-tot" data-id="'+x.id+'" style="margin-top:.4rem">'+(x.banco==null?'Informar o total do banco':'Corrigir o total do banco')+'</button></div>';
+       const key='rx-f-'+x.id;
+       b+='<button class="item" data-act="x-tog" data-k="'+key+'" style="margin-top:.35rem"><div class="row"><span class="t">Vence '+ymShort(x.ym)+'</span><b>'+money(x.st==='aberta'?x.compras:(x.banco!=null?x.banco:x.calc))+'</b></div><div class="mut">'+tag+' Compras '+money(x.compras)+(vr!=null?' ('+(vr>0?'↑':'↓')+Math.abs(vr)+'%)':'')+' <span style="float:right">'+(xOpen(key)?'▾':'▸')+'</span></div></button>'+(xOpen(key)?det:'');
+     });
    });
    byKind('card').forEach(cr=>{const k=cardCalc(cr);Object.values(k.inv).forEach(x=>{if(x.ym>k.openYm&&!x.paid)fut+=x.totalC;});});
    if(b){
-     b+='<p class="hint">Valor = compras e débitos de cada fatura (sem o saldo que veio da fatura anterior), como no extrato do banco.</p>';
+     b+='<p class="hint">Conferência: saldo anterior − pagamentos + compras tem que dar o total impresso pelo banco. ✓ quer dizer que todos os lançamentos da fatura estão no app.</p>';
      if(fut)b+='<div class="note" style="margin-top:.6rem">Já comprometido em faturas futuras (parcelas lançadas no app): '+money(fut)+'.</div>';
-     h+=xGroup('rx-fat','💳','Faturas dos cartões','Compras de cada fatura e quanto variou',Object.keys(F).length+(Object.keys(F).length===1?' cartão':' cartões'),b);
+     h+=xGroup('rx-fat','💳','Faturas dos cartões (conferência)',nBad?nBad+' com diferença: confira':(nOk?nOk+' conferida(s) com o banco':'Total, variação e conferência'),(nBad?'⚠️ ':'')+Object.keys(F).length+(Object.keys(F).length===1?' cartão':' cartões'),b,nBad?'bad':'');
    }}
   return h?'<h2 style="margin-left:0">Raio-X do período</h2>'+h:'';
 }
@@ -2573,7 +2590,7 @@ function stRows(){
   return out;
 }
 /* ---------- Extrato: buscar, filtrar por entradas/gastos, mês e dia ---------- */
-const APP_V='v58';
+const APP_V='v59';
 const ST_FILTERS=[['all','Tudo'],['in','Entradas'],['out','Gastos'],['fat','Faturas pagas'],['tr','Transferências']];
 function stAll(){
   const out=stRows().map(e=>Object.assign({},e,{src:'extrato'}));
@@ -3027,6 +3044,7 @@ document.addEventListener('click',async ev=>{
   else if(act==='sp-cat'){S.sp.cat=(S.sp.cat===b.dataset.c?null:b.dataset.c);render();}
   else if(act==='hp-toggle'){S.hp=!S.hp;render();}
   else if(act==='sp-sort'){S.sp=S.sp||{ym:ymOf(todayIso()),cat:null,all:false};S.sp.sort=(S.sp.sort===b.dataset.v?null:b.dataset.v);render();}
+  else if(act==='rx-tot'){const rec=get(id);if(rec){const d=rec.data;form('Total da fatura no banco',[{k:'statementTotalC',label:'Total da fatura (como está no PDF ou app do banco)',type:'money',req:true,hint:'É o “total a pagar” impresso na fatura, já com o saldo anterior.'},{k:'futureInstallmentsC',label:'Parcelas para as próximas faturas (opcional)',type:'money'}],{statementTotalC:d.statementTotalC,futureInstallmentsC:d.futureInstallmentsC},{summary:o=>[d.account,'Total: '+money(o.statementTotalC),'Parcelas futuras: '+(o.futureInstallmentsC==null?'—':money(o.futureInstallmentsC))],save:async o=>{await Api.update(rec,Object.assign({},d,{statementTotalC:o.statementTotalC,futureInstallmentsC:o.futureInstallmentsC==null?(d.futureInstallmentsC==null?null:d.futureInstallmentsC):o.futureInstallmentsC}));}});}}
   else if(act==='rx-day'){S.st=stState();S.st.day=b.dataset.d;S.st.fs=[];S.st.cats=[];S.st.grps=[];S.st.accts=[];S.st.q='';S.st.lim=60;S.tab='stmt';render();window.scrollTo(0,0);}
   else if(act==='sp-learn'){learnModal();}
   else if(act==='sp-seg'){S.sp.cat=(S.sp.cat===b.dataset.c?null:b.dataset.c);render();}
