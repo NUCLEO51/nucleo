@@ -195,7 +195,7 @@ a.lnk{color:var(--accent);font-weight:800}
 .cday{min-height:3.4rem;border-radius:.7rem;border:1px solid var(--line);background:var(--surface);color:var(--fg);display:flex;flex-direction:column;align-items:center;padding:.3rem 0;font:inherit;font-size:1rem;cursor:pointer}
 .cday.sel{outline:2px solid #FFD60A;outline-offset:-2px}.cday.tod b{color:#FFD60A}
 .cdots{display:flex;gap:.15rem;margin-top:.25rem;flex-wrap:wrap;justify-content:center;padding:0 .2rem}.cdot{width:.5rem;height:.5rem;border-radius:50%}
-.cdot.kin{background:#34c27a}.cdot.ksai{background:#ff5c5c}.cdot.kdue{background:#FFD60A}.cdot.kpaid{background:#6aa8ff}.cdot.krec{background:#2fd1c5}
+.cdot.kin{background:#34c27a}.cdot.ksai{background:#ff5c5c}.cdot.kdue{background:#FFD60A}.cdot.kpaid{background:#6aa8ff}.cdot.krec{background:#C77DFF}
 .clg{display:flex;flex-wrap:wrap;gap:.3rem .9rem;margin:.2rem 0 .5rem;font-size:.9rem;color:var(--muted)}.clg i{display:inline-block;width:.55rem;height:.55rem;border-radius:50%;margin-right:.3rem}
 .fgrid{display:grid;grid-template-columns:1fr 1fr;gap:.5rem .6rem;margin:.4rem 0}
 .fl{display:flex;flex-direction:column;gap:.2rem;min-width:0}.fl>span{font-size:.85rem;color:var(--muted)}
@@ -1924,25 +1924,42 @@ function mRow(it){
     +'<span class="w"><b>'+esc(it.name)+'</b><i>'+esc(sub)+'</i></span>'
     +'<span class="v"><b'+(it.dir==='RECEBER'?' class="rc"':'')+'>'+(it.amountC==null?'—':(it.dir==='RECEBER'?'+ ':'')+money(it.amountC))+'</b><em class="tag '+it.cls+'">'+esc(it.state)+'</em></span></button>';
 }
+/* escolher várias opções numa lista (como o seletor do iPhone, mas com marcas) */
+function multiPick(title,opts,sel){
+  return new Promise(res=>{
+    const cur=new Set(sel||[]);
+    const body=()=>opts.map((o,i)=>'<button class="item mpo'+(cur.has(o[0])?' on':'')+'" data-i="'+i+'" style="display:flex;justify-content:space-between;align-items:center;gap:.6rem"><span>'+esc(o[1])+'</span><b>'+(cur.has(o[0])?'✓':'')+'</b></button>').join('');
+    const m=modal('<h3>'+esc(title)+'</h3><p class="hint">Toque para marcar uma ou mais opções.</p><div id="mp-l">'+body()+'</div><button class="btn" id="mp-ok">Aplicar</button><button class="btn sec" id="mp-cl">Limpar seleção</button><button class="btn sec" id="no">Voltar</button>');
+    const draw=()=>{m.querySelector('#mp-l').innerHTML=body();bind();};
+    const bind=()=>m.querySelectorAll('.mpo').forEach(b=>b.onclick=()=>{const v=opts[+b.dataset.i][0];cur.has(v)?cur.delete(v):cur.add(v);draw();});
+    bind();
+    m.querySelector('#mp-ok').onclick=()=>{m.remove();res([...cur]);};
+    m.querySelector('#mp-cl').onclick=()=>{cur.clear();draw();};
+    m.querySelector('#no').onclick=()=>{m.remove();res(null);};
+  });
+}
+const multiTxt=(opts,sel,all)=>{const l=(sel||[]).map(v=>(opts.find(o=>o[0]===v)||[0,v])[1]);return !l.length?all:(l.length<=2?l.join(' + '):l.length+' selecionados');};
 /* ---------- calendário: o que entrou, saiu, falta pagar, já foi pago ---------- */
 const CAL_F=[['all','Tudo'],['in','Entrou'],['sai','Saiu'],['due','Falta pagar'],['paid','Já pago'],['rec','A receber']];
 const CAL_L={in:'Entrou',sai:'Saiu',due:'Falta pagar',paid:'Já pago',rec:'A receber'};
 function calEvents(ym){
   const ev=[];
+  const hoje=todayIso();
   stAll().forEach(e=>{if(!e.d||e.d.slice(0,7)!==ym)return;
-    ev.push({kind:e.c>0?'in':'sai',d:e.d,t:e.t,c:e.c,tipo:(e.src==='cartao'&&e.c>0?'Estorno no cartão':stKindLabel(e)),cat:e.g||'',onde:e.acct});});
+    const fut=e.d>hoje;
+    ev.push({kind:fut?(e.c>0?'rec':'due'):(e.c>0?'in':'sai'),d:e.d,t:e.t,c:e.c,tipo:(e.src==='cartao'&&e.c>0?'Estorno no cartão':stKindLabel(e)),cat:e.g||'',onde:e.acct});});
   monthItems(ym).forEach(it=>{if(!it.date)return;
     const paid=it.cls==='ok',rec=it.dir==='RECEBER';
     ev.push({kind:paid?'paid':(rec?'rec':'due'),d:it.date,it});});
   return ev;
 }
-function calState(){if(!S.cal)S.cal={ym:ymOf(todayIso()),day:todayIso(),f:'all'};return S.cal;}
+function calState(){if(!S.cal)S.cal={ym:ymOf(todayIso()),day:todayIso(),fs:[]};if(!S.cal.fs)S.cal.fs=[];return S.cal;}
 function vCal(){
-  const c=calState(),ym=c.ym,ev=calEvents(ym).filter(e=>c.f==='all'||e.kind===c.f);
+  const c=calState(),ym=c.ym,ev=calEvents(ym).filter(e=>!c.fs.length||c.fs.indexOf(e.kind)>=0);
   const by={};ev.forEach(e=>{(by[e.d]=by[e.d]||{})[e.kind]=true;});
   const first=new Date(ym+'-01T12:00:00').getDay(),n=dim(ym),td=todayIso();
   let h=header('Calendário',rbtn('cal-today','📍','Ir para hoje'))+'<div class="wrap"><button class="bk" data-back="1" data-act="tab" data-v="bills" aria-label="Voltar">← Voltar</button>';
-  h+='<div class="chips srt" role="group" aria-label="Filtrar">'+CAL_F.map(f=>'<button class="chip'+(c.f===f[0]?' on':'')+'" data-act="cal-f" data-v="'+f[0]+'">'+f[1]+'</button>').join('')+'</div>';
+  h+='<div class="chips srt" role="group" aria-label="Filtrar">'+CAL_F.map(f=>'<button class="chip'+((f[0]==='all'?!c.fs.length:c.fs.indexOf(f[0])>=0)?' on':'')+'" data-act="cal-f" data-v="'+f[0]+'">'+f[1]+'</button>').join('')+'</div>';
   h+='<div class="spnav"><button class="btn sec" data-act="cal-prev" aria-label="Mês anterior">‹</button><b>'+esc(ymLabel(ym))+'</b><button class="btn sec" data-act="cal-next" aria-label="Próximo mês">›</button></div>';
   h+='<div class="cgrid">'+['D','S','T','Q','Q','S','S'].map(x=>'<div class="cwk">'+x+'</div>').join('');
   for(let i=0;i<first;i++)h+='<div></div>';
@@ -1955,16 +1972,16 @@ function vCal(){
   if(!day){h+='<div class="card mut">Toque num dia para ver o que aconteceu nele.</div>';return h+'</div>';}
   const dl=ev.filter(e=>e.d===day);S._calLin=[];
   h+='<h2 style="margin-left:0">'+brDate(day).slice(0,5)+' · '+dowOf(day)+(day===td?' (hoje)':'')+'</h2>';
-  if(!dl.length)h+='<div class="card mut">Nada neste dia'+(c.f==='all'?'.':' para este filtro.')+'</div>';
+  if(!dl.length)h+='<div class="card mut">Nada neste dia'+(!c.fs.length?'.':' para este filtro.')+'</div>';
   const tin=dl.filter(e=>e.kind==='in').reduce((a,e)=>a+e.c,0),tsa=dl.filter(e=>e.kind==='sai').reduce((a,e)=>a-e.c,0);
   if(tin||tsa)h+='<div class="card">'+(tin?'<div class="row"><span class="mut">Entrou no dia</span><b class="rc">+ '+money(tin)+'</b></div>':'')+(tsa?'<div class="row"><span class="mut">Saiu no dia</span><b>'+money(tsa)+'</b></div>':'')+'</div>';
   ['in','sai','due','rec','paid'].forEach(kd=>{
     const g=dl.filter(e=>e.kind===kd);if(!g.length)return;
     h+='<h2 class="stday" style="margin-left:0">'+CAL_L[kd]+' ('+g.length+')</h2>';
-    if(kd==='in'||kd==='sai'){
-      g.sort((a,b)=>Math.abs(b.c)-Math.abs(a.c)).forEach(e=>{const ix=S._calLin.push({t:e.t,d:e.d,c:e.c,tipo:e.tipo,cat:e.cat,onde:e.onde})-1;
-        h+='<button class="item" data-act="cal-det" data-ix="'+ix+'"><div class="row"><span class="t">'+esc(e.t||'(sem descrição)')+'</span><b class="'+(e.c>0?'rc':'')+'">'+(e.c>0?'+ ':'')+money(Math.abs(e.c))+'</b></div><div class="mut">'+esc(e.tipo)+(e.onde?' · '+esc(e.onde):'')+'</div></button>';});
-    }else h+='<div class="tbl" role="table">'+g.map(e=>mRow(e.it)).join('')+'</div>';
+    const mv=g.filter(e=>!e.it).sort((a,b)=>Math.abs(b.c)-Math.abs(a.c)),ob=g.filter(e=>e.it);
+    mv.forEach(e=>{const ix=S._calLin.push({t:e.t,d:e.d,c:e.c,tipo:e.tipo,cat:e.cat,onde:e.onde})-1;
+      h+='<button class="item" data-act="cal-det" data-ix="'+ix+'"><div class="row"><span class="t">'+esc(e.t||'(sem descrição)')+'</span><b class="'+(e.c>0?'rc':'')+'">'+(e.c>0?'+ ':'')+money(Math.abs(e.c))+'</b></div><div class="mut">'+esc(e.tipo)+(e.onde?' · '+esc(e.onde):'')+'</div></button>';});
+    if(ob.length)h+='<div class="tbl" role="table">'+ob.map(e=>mRow(e.it)).join('')+'</div>';
   });
   return h+'</div>';
 }
@@ -1974,7 +1991,7 @@ function vMonth(){
   const pagar=all.filter(i=>!rcv(i)),receber=all.filter(rcv),fazer=all.filter(i=>!feita(i));
   const sum=l=>l.reduce((a,i)=>a+(i.amountC||0),0);
   const tP=sum(pagar),pP=sum(pagar.filter(feita)),tR=sum(receber),pR=sum(receber.filter(feita)),semV=fazer.filter(i=>i.amountC==null).length;
-  const shown0=S.mf==='pay'?pagar.filter(i=>!feita(i)):(S.mf==='rec'?receber.filter(i=>!feita(i)):(S.mf==='done'?all.filter(feita):all));
+  const mfs=S.mfs||[],shown0=!mfs.length?all:all.filter(i=>(mfs.indexOf('pay')>=0&&!rcv(i)&&!feita(i))||(mfs.indexOf('rec')>=0&&rcv(i)&&!feita(i))||(mfs.indexOf('done')>=0&&feita(i)));
   const mmode=roMode('month',shown0,false),shown=mmode==='def'?shown0:sortGroup(shown0,mmode,GM);
   RO.reg['month']={col:'',items:shown,pref:'month',manual:false,mode:mmode};
   let h=header('Mês',rbtn('tab','🗓️','Calendário','cal')+rbtn('bill-new','+','Nova conta')+rbtn('bill-read','📷','Ler boleto ou fatura')+sortBtn())+'<div class="wrap">';
@@ -1983,7 +2000,7 @@ function vMonth(){
   if(receber.length)h+='<div class="card sum3"><div><div class="mut">A receber</div><b class="rc">'+money(tR)+'</b></div><div><div class="mut">Já recebido</div><b class="rc">'+money(pR)+'</b></div><div><div class="mut">Falta receber</div><b class="rc">'+money(tR-pR)+'</b></div></div><div class="hint" style="margin:-.2rem .3rem .4rem">O que falta: você recebe '+money(tR-pR)+' e paga '+money(tP-pP)+' (diferença '+money((tR-pR)-(tP-pP))+').</div>';
   if(semV)h+='<div class="hint" style="margin:-.2rem .3rem .4rem">'+semV+' sem valor não entra na soma.</div>';
   if(ym===cur){const ob=overdueBefore();if(ob.length)h+='<button class="note bkn" data-act="m-old" data-v="'+ob[0].mm+'">⚠️ Há '+ob.length+(ob.length===1?' item atrasado':' itens atrasados')+' de meses anteriores ('+money(ob.reduce((a,i)=>a+(i.amountC||0),0))+'). Toque para ver.</button>';}
-  h+='<div class="chips2">'+[['all','Tudo',all.length],['pay','A pagar',pagar.filter(i=>!feita(i)).length]].concat(receber.length?[['rec','A receber',receber.filter(i=>!feita(i)).length]]:[]).concat([['done','Feitas',all.filter(feita).length]]).map(f=>'<button data-act="m-filter" data-v="'+f[0]+'" class="'+(S.mf===f[0]?'on':'')+'">'+f[1]+'<small>'+f[2]+'</small></button>').join('')+'</div>';
+  h+='<div class="chips2">'+[['all','Tudo',all.length],['pay','A pagar',pagar.filter(i=>!feita(i)).length]].concat(receber.length?[['rec','A receber',receber.filter(i=>!feita(i)).length]]:[]).concat([['done','Feitas',all.filter(feita).length]]).map(f=>'<button data-act="m-filter" data-v="'+f[0]+'" class="'+((f[0]==='all'?!(S.mfs||[]).length:(S.mfs||[]).indexOf(f[0])>=0)?'on':'')+'">'+f[1]+'<small>'+f[2]+'</small></button>').join('')+'</div>';
   if(!all.length)h+='<div class="card mut">Nada vence neste mês. Contas, faturas de cartão e parcelas de dívidas aparecem aqui sozinhas.</div>';
   else if(!shown.length)h+='<div class="card mut">Nada nesta lista.</div>';
   else h+='<div class="tbl" role="table"><div class="tr th" role="row"><span>Dia</span><span>O que</span><span>Valor</span></div>'+shown.map(mRow).join('')+'</div>';
@@ -2330,7 +2347,7 @@ function stRows(){
   return out;
 }
 /* ---------- Extrato: buscar, filtrar por entradas/gastos, mês e dia ---------- */
-const APP_V='v50';
+const APP_V='v51';
 const ST_FILTERS=[['all','Tudo'],['in','Entradas'],['out','Gastos'],['fat','Faturas pagas'],['tr','Transferências']];
 function stAll(){
   const out=stRows().map(e=>Object.assign({},e,{src:'extrato'}));
@@ -2351,13 +2368,13 @@ function stMatchQ(e,q){
   return q.split(/\s+/).filter(Boolean).every(w=>hay.indexOf(w)>=0);
 }
 function stState(){
-  if(!S.st)S.st={q:'',f:'all',ym:ymOf(todayIso()),day:'',lim:60};
+  if(!S.st)S.st={q:'',f:'all',fs:[],cats:[],accts:[],ym:ymOf(todayIso()),day:'',lim:60};if(!S.st.fs)S.st.fs=[];if(!S.st.cats)S.st.cats=[];if(!S.st.accts)S.st.accts=[];
   return S.st;
 }
 const stCatName=e=>{const k=catOf({i:e.i,t:e.t,g:e.g});return k?k.c:(e.g||'');};
 function stFiltered(){
   const st=stState(),q=stNorm(st.q);
-  return stAll().filter(e=>e.d&&(!st.day?(st.ym==='all'||e.d.slice(0,7)===st.ym):e.d===st.day)&&stMatchF(e,st.f)&&(!st.cat||(st.cat==='__sem'?!stCatName(e):stCatName(e)===st.cat))&&(!st.acct||e.acct===st.acct)&&stMatchQ(e,q))
+  return stAll().filter(e=>e.d&&(!st.day?(st.ym==='all'||e.d.slice(0,7)===st.ym):e.d===st.day)&&(!(st.fs||[]).length||st.fs.some(f=>stMatchF(e,f)))&&(!(st.cats||[]).length||st.cats.indexOf(stCatName(e)||'__sem')>=0)&&(!(st.accts||[]).length||st.accts.indexOf(e.acct)>=0)&&stMatchQ(e,q))
     ;
 }
 function stSorted(){
@@ -2403,15 +2420,17 @@ function vStmt(){
   let h=header('Extrato',rbtn('stmt-pick','📥','Importar extrato do Mobills (.xlsx)'))+'<div class="wrap"><input type="file" id="stfile" accept=".xlsx" hidden>';
   h+='<input id="stq" class="stq" type="search" inputmode="search" autocomplete="off" placeholder="Buscar: mercado, posto, pix, 50,00, 12/10…" value="'+esc(st.q)+'" aria-label="Buscar lançamentos">';
   const all=stAll(),cats=[...new Set(all.map(stCatName).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt-BR')),accts=[...new Set(all.map(e=>e.acct).filter(Boolean))].sort(),yms=[...new Set(all.filter(e=>e.d).map(e=>e.d.slice(0,7)).concat([ymOf(todayIso())]))].sort().reverse();
+  S._stOpts={fs:ST_FILTERS.slice(1),cats:[['__sem','Sem categoria']].concat(cats.map(c=>[c,c])),accts:accts.map(a=>[a,a])};
+  const msel=(k,label,opts,cur)=>'<label class="fl"><span>'+label+'</span><button type="button" class="fsel" data-act="st-multi" data-k="'+k+'" style="text-align:left;overflow:hidden;white-space:nowrap">'+esc(multiTxt(opts,cur,'Todos'))+'</button></label>';
   const sel=(k,label,opts,cur)=>'<label class="fl"><span>'+label+'</span><select class="fsel" data-st="'+k+'" aria-label="'+label+'">'+opts.map(o=>'<option value="'+esc(o[0])+'"'+(String(cur)===String(o[0])?' selected':'')+'>'+esc(o[1])+'</option>').join('')+'</select></label>';
   h+='<div class="fgrid">'
-    +sel('f','Mostrar',ST_FILTERS,st.f)
+    +msel('fs','Mostrar',ST_FILTERS.slice(1),st.fs)
     +sel('sort','Ordenar por',[['','Data nova'],['vmax','Maior valor'],['vmin','Menor valor'],['cat','Categoria A–Z'],['dold','Data antiga']],st.sort||'')
-    +sel('cat','Categoria',[['','Todas'],['__sem','Sem categoria']].concat(cats.map(c=>[c,c])),st.cat||'')
-    +sel('acct','Conta ou cartão',[['','Todos']].concat(accts.map(a=>[a,a])),st.acct||'')
+    +msel('cats','Categoria',[['__sem','Sem categoria']].concat(cats.map(c=>[c,c])),st.cats)
+    +msel('accts','Conta ou cartão',accts.map(a=>[a,a]),st.accts)
     +sel('ym','Mês',[['all','Todos os meses']].concat(yms.map(y=>[y,ymShort(y)])),st.ym)
     +'<label class="fl"><span>Dia</span><input id="std" class="fsel" type="date" value="'+esc(st.day)+'" aria-label="Escolher um dia"></label></div>';
-  h+='<div class="chips">'+((st.q||st.day||st.f!=='all'||st.cat||st.acct||st.sort||st.ym!==ymOf(todayIso()))?'<button class="chip" data-act="st-clear">Limpar filtros</button>':'')+'</div>';
+  h+='<div class="chips">'+((st.q||st.day||(st.fs||[]).length||(st.cats||[]).length||(st.accts||[]).length||st.sort||st.ym!==ymOf(todayIso()))?'<button class="chip" data-act="st-clear">Limpar filtros</button>':'')+'</div>';
   h+='<div id="stlist">'+stListHtml()+'</div>';
   h+='<button class="btn sec" data-act="stmt-pick">📥 Importar extrato do Mobills</button><p class="hint">No Mobills: Relatório de transações → exportar em Excel. Importar de novo o mesmo período não duplica. Renda, empréstimo, transferência e fatura paga não entram em “Gastos”.</p>';
   return h+'</div>';
@@ -2735,14 +2754,15 @@ document.addEventListener('click',async ev=>{
         if(window.caches){const ks=await caches.keys();await Promise.all(ks.map(k=>caches.delete(k)));}}catch(e){}
       location.reload();
     }}
-  else if(act==='st-go'){S.st=stState();S.st.f=b.dataset.f||'all';S.st.q='';S.st.day='';S.st.cat='';S.st.acct='';S.st.ym=ymOf(todayIso());S.st.lim=60;S.tab='stmt';render();window.scrollTo(0,0);}
+  else if(act==='st-go'){S.st=stState();S.st.fs=(b.dataset.f&&b.dataset.f!=='all')?[b.dataset.f]:[];S.st.q='';S.st.day='';S.st.cats=[];S.st.accts=[];S.st.ym=ymOf(todayIso());S.st.lim=60;S.tab='stmt';render();window.scrollTo(0,0);}
   else if(act==='st-f'){const t=stState();t.f=b.dataset.v;t.lim=60;render();}
   else if(act==='st-prev'||act==='st-next'){const t=stState();t.day='';t.lim=60;const cur=t.ym==='all'?ymOf(todayIso()):t.ym;t.ym=addMonths(cur,act==='st-prev'?-1:1);render();}
   else if(act==='st-all'){const t=stState();t.day='';t.ym=(t.ym==='all')?ymOf(todayIso()):'all';t.lim=60;render();}
+  else if(act==='st-multi'){const t=stState(),k=b.dataset.k,o=(S._stOpts||{})[k]||[];const r=await multiPick({fs:'Mostrar',cats:'Categoria',accts:'Conta ou cartão'}[k],o,t[k]);if(r){t[k]=r;t.lim=60;render();}}
   else if(act==='st-sort'){const t=stState();t.sort=(t.sort===b.dataset.v?null:b.dataset.v);t.lim=60;render();}
   else if(act==='st-det'){const e=stSorted()[+b.dataset.ix];if(e){const k=catOf({i:e.i,t:e.t,g:e.g});detalheModal({t:e.t,d:e.d,c:e.c,tipo:(e.src==='cartao'&&e.c>0?'Estorno no cartão':stKindLabel(e)),cat:k?k.c+(k.s?' › '+k.s:''):(e.g||''),onde:e.acctFull||e.acct});}}
   else if(act==='st-more'){const t=stState();t.lim+=60;render();}
-  else if(act==='st-clear'){const t=stState();t.q='';t.f='all';t.day='';t.cat='';t.acct='';t.sort=null;t.ym=ymOf(todayIso());t.lim=60;render();}
+  else if(act==='st-clear'){const t=stState();t.q='';t.fs=[];t.day='';t.cats=[];t.accts=[];t.sort=null;t.ym=ymOf(todayIso());t.lim=60;render();}
   else if(act==='logout'){if(await confirmBox('Sair do Financeiro?',['Você terá que entrar de novo.'],'Sim, sair')){Api.saveSess(null);lsSet('fin-cache','');location.reload();}}
   else if(act==='demo-on'){
     if(await confirmBox('Carregar exemplos de teste?',['Cria 2 cartões, 6 compras, 4 contas e 2 dívidas FALSOS.','Todos têm “(teste)” no nome.','Dá para apagar tudo de uma vez depois.'],'Sim, carregar')){
@@ -2760,7 +2780,7 @@ document.addEventListener('click',async ev=>{
   else if(act==='m-prev'){S.mm=addMonths(S.mm||ymOf(todayIso()),-1);render();}
   else if(act==='m-next'){S.mm=addMonths(S.mm||ymOf(todayIso()),1);render();}
   else if(act==='m-today'){S.mm=null;render();}
-  else if(act==='m-filter'){S.mf=b.dataset.v;render();}
+  else if(act==='m-filter'){const v=b.dataset.v;S.mfs=S.mfs||[];if(v==='all')S.mfs=[];else{const i=S.mfs.indexOf(v);if(i>=0)S.mfs.splice(i,1);else S.mfs.push(v);}render();}
   else if(act==='h-done'){S.hDone=!S.hDone;render();}
   else if(act==='m-open'){
     const k=b.dataset.k,ym=b.dataset.ym;
@@ -2789,7 +2809,7 @@ document.addEventListener('click',async ev=>{
   else if(act==='bill-open'){const r=get(id);billMonthForm({r,bill:get(r.data.billId)});}
   else if(act==='card-new')cardForm(null);
   else if(act==='card-edit')cardForm(get(id));
-  else if(act==='cal-f'){calState().f=b.dataset.v;render();}
+  else if(act==='cal-f'){const c=calState(),v=b.dataset.v;if(v==='all')c.fs=[];else{const i=c.fs.indexOf(v);if(i>=0)c.fs.splice(i,1);else c.fs.push(v);}render();}
   else if(act==='cal-day'){calState().day=b.dataset.d;render();}
   else if(act==='cal-prev'||act==='cal-next'){const c=calState();c.ym=addMonths(c.ym,act==='cal-prev'?-1:1);c.day=(c.ym===ymOf(todayIso()))?todayIso():null;render();}
   else if(act==='cal-today'){const c=calState();c.ym=ymOf(todayIso());c.day=todayIso();render();}
