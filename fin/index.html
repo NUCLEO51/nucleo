@@ -201,6 +201,7 @@ a.lnk{color:var(--accent);font-weight:800}
 .fl{display:flex;flex-direction:column;gap:.2rem;min-width:0}.fl>span{font-size:.85rem;color:var(--muted)}
 .fsel{-webkit-appearance:none;appearance:none;display:block;max-width:100%;text-align:left;width:100%;min-height:2.7rem;font:inherit;font-size:.95rem;font-weight:500;border-radius:.8rem;background:#000;color:#FFD60A;border:1px solid #B88F00;padding:0 .5rem;box-sizing:border-box;min-width:0;text-overflow:ellipsis}
 .card .row.kv{align-items:flex-start;gap:.8rem}.card .row.kv>span:first-child{white-space:normal;min-width:min-content}.card .row.kv>b{text-align:right;flex:none;white-space:nowrap!important}.card .row.kv.wrapv>span:first-child{white-space:nowrap;flex:none}.card .row.kv.wrapv>b{flex:0 1 auto;white-space:normal!important;overflow-wrap:break-word;min-width:0}
+.xg{margin:.2rem 0}.xb{margin:0 0 .6rem .6rem;padding-left:.6rem;border-left:2px solid #444}.xr{padding:.5rem 0;border-bottom:1px solid #333}.xr:last-child{border:0}
 </style>
 </head>
 <body>
@@ -1357,6 +1358,7 @@ function vHome(){
   {const bd=backupDays();
    if(bd===null||bd>=7)h+='<button class="note bkn" data-act="backup" aria-label="Baixar uma cópia dos dados">💾 '+(bd===null?'Você ainda não baixou uma cópia dos seus dados.':'Faz '+bd+' dias desde a última cópia dos seus dados.')+' Toque para baixar.</button>';}
   /* Início calmo: sem número gigante. Uma tabela simples do que vence neste mês + atalhos sem valores em destaque */
+  h+='<div class="up s2"><button data-act="tab" data-v="poder"><span class="nm"><b>💰 Quanto posso gastar</b></span><span class="vl mut">›</span></button><button data-act="tab" data-v="pagar"><span class="nm"><b>🧾 O que pagar no mês</b></span><span class="vl mut">›</span></button></div>';
   {const all=monthItems(ym),fz=i=>i.state==='Paga'||i.state==='Recebida';
    const abertos=all.filter(i=>!fz(i)),feitos=all.filter(fz);
    h+='<h2>Neste mês</h2>';
@@ -2111,6 +2113,62 @@ function vCardDados(){
   }else h+='<div class="card mut">Ainda não há tarifas salvas para este cartão.</div>';
   return h+'</div>';
 }
+
+/* ---------- quanto posso gastar / o que pagar no mês ---------- */
+function xOpen(k){S.xo=S.xo||{};return !!S.xo[k];}
+function xGroup(key,ic,title,sub,totalTxt,body,cls){
+  const o=xOpen(key);
+  return '<div class="xg"><button class="item" data-act="x-tog" data-k="'+key+'" aria-expanded="'+o+'"><div class="row"><span class="t">'+ic+' '+esc(title)+'</span><b'+(cls?' class="'+cls+'"':'')+'>'+totalTxt+'</b></div><div class="mut">'+sub+' <span style="float:right;font-size:1.3rem">'+(o?'▾':'▸')+'</span></div></button>'+(o?'<div class="xb">'+body+'</div>':'')+'</div>';
+}
+function poderCalc(){
+  const L={din:[],od:[],cd:[]};let din=0,od=0,cd=0,fut=0,semOd=0,semLim=0;
+  S.recs.filter(isConta).forEach(r=>{const d=r.data,sd=contaSaldo(d),ok=sd.ok;fut+=sd.fut;
+    const cash=Math.max(ok,0),used=ok<0?-ok:0,lim=d.overdraftC;
+    din+=cash;L.din.push({n:d.account,c:cash,note:ok<0?'Saldo negativo: você está usando o cheque especial':(sd.fut?'A entrar depois de hoje: '+(sd.fut>0?'+ ':'− ')+money(Math.abs(sd.fut)):'Saldo hoje')});
+    if(lim==null){if(ok<0)semOd++;L.od.push({n:d.account,c:0,note:'Limite de cheque especial não informado (Contas › Editar)',unk:true});}
+    else{const av=Math.max(0,lim-used);od+=av;L.od.push({n:d.account,c:av,note:'Limite '+money(lim)+(used?' · já usando '+money(used):' · sem uso')});}
+  });
+  byKind('card').forEach(cr=>{const k=cardCalc(cr),lim=cr.data.limitC;
+    if(lim==null){semLim++;L.cd.push({n:cr.data.name,c:0,note:'Limite não informado (Cartões › Editar)',unk:true});return;}
+    const av=Math.max(0,k.avail);cd+=av;L.cd.push({n:cr.data.name,c:av,note:'Limite '+money(lim)+' · usado/comprometido '+money(k.used)});});
+  const ym=ymOf(todayIso()),pg=monthItems(ym).filter(i=>i.dir!=='RECEBER'&&i.state!=='Paga'&&i.state!=='Recebida');
+  const pagar=pg.reduce((a,i)=>a+(i.amountC||0),0),pagarSem=pg.filter(i=>i.amountC==null).length;
+  return {L,din,od,cd,fut,semOd,semLim,pagar,pagarSem,total:din+od+cd};
+}
+function poderRows(a){return a.map(x=>'<div class="xr"><div class="row"><span class="t">'+esc(x.n)+'</span><b'+(x.unk?' class="mut"':'')+'>'+(x.unk?'—':money(x.c))+'</b></div><div class="mut">'+esc(x.note)+'</div></div>').join('')||'<div class="mut" style="padding:.5rem 0">Nada cadastrado ainda.</div>';}
+function vPoder(){
+  const P=poderCalc(),sobra=P.din-P.pagar;
+  let h=header('Quanto posso gastar')+'<div class="wrap"><button class="bk" data-back="1" data-act="tab" data-v="home" aria-label="Voltar">← Voltar</button>';
+  h+='<button class="card" data-act="x-all" style="width:100%;text-align:left"><div class="mut">Tudo que você pode usar agora (dinheiro + limites)</div><div class="big" style="font-size:2rem">'+money(P.total)+'</div><div class="mut">Toque para abrir/fechar todos os detalhes</div></button>';
+  h+='<div class="card"><div class="row kv"><span class="mut">💵 Dinheiro seu (contas)</span><b>'+money(P.din)+'</b></div><div class="row kv"><span class="mut">🏦 Cheque especial (é limite)</span><b>'+money(P.od)+'</b></div><div class="row kv"><span class="mut">💳 Limite dos cartões (é limite)</span><b>'+money(P.cd)+'</b></div></div>';
+  h+=xGroup('p-din','💵','Dinheiro nas contas','Seu de verdade, sem juros',money(P.din),poderRows(P.L.din));
+  h+=xGroup('p-od','🏦','Cheque especial','Limite: cobra juros se usar',money(P.od),poderRows(P.L.od));
+  h+=xGroup('p-cd','💳','Limite dos cartões','Limite livre, não é dinheiro: vira fatura',money(P.cd),poderRows(P.L.cd));
+  h+='<h2 style="margin-left:0">Depois de pagar o mês</h2><div class="card"><div class="row kv"><span class="mut">Ainda falta pagar neste mês</span><b>'+money(P.pagar)+'</b></div><div class="row kv"><span class="mut">Dinheiro seu − o que falta pagar</span><b'+(sobra<0?' style="color:var(--danger)"':'')+'>'+(sobra<0?'− ':'')+money(Math.abs(sobra))+'</b></div>'+(sobra<0?'<div class="mut">Seu dinheiro não cobre tudo: faltam '+money(-sobra)+'. Só dá usando cheque especial ou cartão.</div>':'<div class="mut">Isso sobra só do seu dinheiro, sem usar limite.</div>')+(P.pagarSem?'<div class="mut">'+P.pagarSem+' item(ns) sem valor definido não entraram na conta.</div>':'')+'</div>';
+  if(P.fut)h+='<div class="note">Ainda vai '+(P.fut>0?'entrar':'sair')+' '+money(Math.abs(P.fut))+' nas contas (data futura, ex.: cheque a compensar). Não está contado acima.</div>';
+  if(P.semOd||P.semLim)h+='<div class="note">⚠️ '+(P.semOd?P.semOd+' conta(s) negativa(s) sem limite de cheque especial informado. ':'')+(P.semLim?P.semLim+' cartão(ões) sem limite informado. ':'')+'Preencha para o total ficar certo.</div>';
+  h+='<p class="hint">Limite de cartão e cheque especial não são seu dinheiro: usar gera fatura ou juros. O Financeiro só mostra, não paga nada.</p>';
+  return h+'</div>';
+}
+function vPagar(){
+  S.pm=S.pm||ymOf(todayIso());const ym=S.pm,td=todayIso();
+  const all=monthItems(ym).filter(i=>i.dir!=='RECEBER'),fz=i=>i.state==='Paga',abertos=all.filter(i=>!fz(i)),feitos=all.filter(fz);
+  const sum=a=>a.reduce((x,i)=>x+(i.amountC||0),0),sem=abertos.filter(i=>i.amountC==null).length;
+  let h=header('O que pagar no mês')+'<div class="wrap"><button class="bk" data-back="1" data-act="tab" data-v="home" aria-label="Voltar">← Voltar</button>';
+  h+='<div class="row" style="align-items:center;justify-content:space-between;margin:.4rem 0"><button class="btn sec" data-act="pg-prev" style="width:auto">‹</button><b>'+esc(ymLabel(ym))+'</b><button class="btn sec" data-act="pg-next" style="width:auto">›</button></div>';
+  h+='<button class="card" data-act="x-all" data-p="1" style="width:100%;text-align:left"><div class="mut">Falta pagar em '+esc(ymLabel(ym))+'</div><div class="big" style="font-size:2rem">'+money(sum(abertos))+'</div><div class="mut">Já pago: '+money(sum(feitos))+(sem?' · '+sem+' sem valor':'')+' · toque para abrir/fechar tudo</div></button>';
+  const G=[['Cartão','💳','Faturas dos cartões'],['Conta','🧾','Contas (luz, água, etc.)']];
+  const outros=abertos.filter(i=>i.tipo!=='Cartão'&&i.tipo!=='Conta'),usados=abertos.filter(i=>i.tipo==='Cartão'||i.tipo==='Conta');
+  const grp=(key,ic,title,lst)=>{if(!lst.length)return '';const late=lst.filter(i=>i.date<td).length;
+    return xGroup(key+ym,ic,title,lst.length+(lst.length===1?' item':' itens')+(late?' · '+late+' atrasado(s)':''),money(sum(lst)),'<div class="tbl" role="table">'+lst.map(mRow).join('')+'</div>',late?'bad':'');};
+  h+=grp('g-c','💳','Faturas dos cartões',abertos.filter(i=>i.tipo==='Cartão'));
+  h+=grp('g-b','🧾','Contas da casa e outras',abertos.filter(i=>i.tipo==='Conta'));
+  h+=grp('g-d','📉','Dívidas e parcelas',outros);
+  if(!abertos.length)h+='<div class="card mut">Nada falta pagar neste mês.</div>';
+  if(feitos.length)h+=xGroup('g-p'+ym,'✅','Já pagas',feitos.length+' item(ns)',money(sum(feitos)),'<div class="tbl" role="table">'+feitos.map(mRow).join('')+'</div>','ok');
+  h+='<p class="hint">Toque num grupo para abrir; toque numa linha para ver os detalhes.</p>';
+  return h+'</div>';
+}
 /* ---------- contas bancárias (extrato por conta; sem mudar o banco: usa o mesmo registro de extrato) ---------- */
 const isConta=r=>r.kind==='stmt'&&!r.data.cardId&&!/fatura/i.test(r.data.account||'');
 function contaSaldo(d){const t=todayIso();let ok=d.openingC==null?0:d.openingC,fut=0;(d.entries||[]).forEach(e=>{if(e.d<=t)ok+=e.c;else fut+=e.c;});return {ok,fut};}
@@ -2133,6 +2191,7 @@ function vConta(){
   h+='<div class="card"><div class="row kv wrapv"><span class="mut">Nome</span><b>'+esc(d.account)+'</b></div>'+(d.bank?'<div class="row kv"><span class="mut">Banco</span><b>'+esc(d.bank)+'</b></div>':'')
     +(d.agency?'<div class="row kv"><span class="mut">Agência</span><b>'+esc(d.agency)+'</b></div>':'')
     +'<div class="row kv"><span class="mut">Conta</span><b>'+esc(num)+'</b></div>'
+    +(d.overdraftC!=null?'<div class="row kv"><span class="mut">Cheque especial (limite)</span><b>'+money(d.overdraftC)+'</b></div>':'')
     +'<div class="row kv"><span class="mut">'+(d.openingC==null?'Movimento até hoje':'Saldo calculado hoje')+'</span><b>'+money(sd.ok)+'</b></div>'
     +(sd.fut?'<div class="row kv"><span class="mut">A entrar / sair depois de hoje</span><b>'+(sd.fut>0?'+ ':'− ')+money(Math.abs(sd.fut))+'</b></div>':'')
     +(d.openingC==null?'<div class="hint">Sem saldo inicial informado, este valor é só a soma dos lançamentos. Informe o saldo em Editar.</div>':'')+'</div>';
@@ -2155,12 +2214,13 @@ async function contaForm(rec){
     {k:'bank',label:'Banco',type:'text'},
     {k:'agency',label:'Agência',type:'text'},
     {k:'number',label:'Número da conta (opcional)',type:'text',hint:'Fica guardado só na sua conta. Nunca senha nem token.'},
-    {k:'openingC',label:'Saldo inicial (opcional)',type:'money',hint:'Saldo da conta antes dos lançamentos desta lista. O app soma os lançamentos a ele.'}
+    {k:'openingC',label:'Saldo inicial (opcional)',type:'money',hint:'Saldo da conta antes dos lançamentos desta lista. O app soma os lançamentos a ele.'},
+    {k:'overdraftC',label:'Limite do cheque especial (opcional)',type:'money',hint:'Deixe vazio se a conta não tem. Entra na tela “Quanto posso gastar”.'}
   ],Object.assign({},d),{
-    summary:o=>['Conta: '+o.account,'Banco: '+(o.bank||'—'),'Agência: '+(o.agency||'—'),'Saldo inicial: '+(o.openingC==null?'—':money(o.openingC))],
+    summary:o=>['Conta: '+o.account,'Banco: '+(o.bank||'—'),'Agência: '+(o.agency||'—'),'Saldo inicial: '+(o.openingC==null?'—':money(o.openingC)),'Cheque especial: '+(o.overdraftC==null?'—':money(o.overdraftC))],
     save:async o=>{
       if(rec)await Api.update(rec,Object.assign({},d,o));
-      else await Api.create('stmt',{account:o.account,bank:o.bank||'',agency:o.agency||'',number:o.number||'',tipo:'conta_corrente',holder:'MARCELO',status:'aberta',source:'app-conta-'+Date.now().toString(36),openingC:o.openingC==null?null:o.openingC,entries:[]});
+      else await Api.create('stmt',{account:o.account,bank:o.bank||'',agency:o.agency||'',number:o.number||'',tipo:'conta_corrente',holder:'MARCELO',status:'aberta',source:'app-conta-'+Date.now().toString(36),openingC:o.openingC==null?null:o.openingC,overdraftC:o.overdraftC==null?null:o.overdraftC,entries:[]});
     }});
 }
 async function contaLanc(rec){
@@ -2347,7 +2407,7 @@ function stRows(){
   return out;
 }
 /* ---------- Extrato: buscar, filtrar por entradas/gastos, mês e dia ---------- */
-const APP_V='v52';
+const APP_V='v53';
 const ST_FILTERS=[['all','Tudo'],['in','Entradas'],['out','Gastos'],['fat','Faturas pagas'],['tr','Transferências']];
 function stAll(){
   const out=stRows().map(e=>Object.assign({},e,{src:'extrato'}));
@@ -2586,7 +2646,7 @@ function render(){
   if(!S.sess||!S.ready){return;}
   RO.reg={};
   let body;
-  if(S.tab==='home')body=vHome();else if(S.tab==='bills')body=vMonth();else if(S.tab==='cal')body=vCal();else if(S.tab==='contas')body=S.contaId?vConta():vContas();else if(S.tab==='cards')body=S.cardId?(S.cardDados?vCardDados():vCard()):vCards();else if(S.tab==='debts')body=vDebts();else if(S.tab==='rem')body=vRem();else if(S.tab==='notes')body=vNotes();else if(S.tab==='plan')body=vPlan();else if(S.tab==='stmt')body=vStmt();else if(S.tab==='spend')body=vGastos();else if(S.tab==='cfg')body=vCfg();else body=vHome();
+  if(S.tab==='home')body=vHome();else if(S.tab==='bills')body=vMonth();else if(S.tab==='cal')body=vCal();else if(S.tab==='contas')body=S.contaId?vConta():vContas();else if(S.tab==='cards')body=S.cardId?(S.cardDados?vCardDados():vCard()):vCards();else if(S.tab==='debts')body=vDebts();else if(S.tab==='rem')body=vRem();else if(S.tab==='notes')body=vNotes();else if(S.tab==='plan')body=vPlan();else if(S.tab==='stmt')body=vStmt();else if(S.tab==='spend')body=vGastos();else if(S.tab==='poder')body=vPoder();else if(S.tab==='pagar')body=vPagar();else if(S.tab==='cfg')body=vCfg();else body=vHome();
   if(S.tab!=='home'&&body.indexOf('data-back')<0)body='<div class="bkrow"><button class="bk" data-back="1" data-act="tab" data-v="home" aria-label="Voltar">← Voltar</button></div>'+body;
   a.innerHTML=body+(S.msg?'<div class="wrap"><div class="err">'+esc(S.msg)+'</div></div>':'')+tabs();
   roAfterRender();
@@ -2818,6 +2878,9 @@ document.addEventListener('click',async ev=>{
   else if(act==='cal-today'){const c=calState();c.ym=ymOf(todayIso());c.day=todayIso();render();}
   else if(act==='cal-det'){const x=(S._calLin||[])[+b.dataset.ix];if(x)detalheModal(x);}
   else if(act==='conta'){S.contaId=id;S.showNum=false;render();window.scrollTo(0,0);}
+  else if(act==='x-tog'){S.xo=S.xo||{};S.xo[b.dataset.k]=!S.xo[b.dataset.k];render();}
+  else if(act==='x-all'){S.xo=S.xo||{};const ks=[...document.querySelectorAll('.xg [data-act=x-tog]')].map(e=>e.dataset.k);const any=ks.some(k=>S.xo[k]);const keys=b.dataset.p?ks:['p-din','p-od','p-cd'];keys.forEach(k=>S.xo[k]=!any);render();}
+  else if(act==='pg-prev'||act==='pg-next'){S.pm=addMonths(S.pm||ymOf(todayIso()),act==='pg-prev'?-1:1);render();}
   else if(act==='conta-list'){S.contaId=null;render();window.scrollTo(0,0);}
   else if(act==='conta-new')contaForm(null);
   else if(act==='conta-edit')contaForm(get(id));
