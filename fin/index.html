@@ -2886,7 +2886,7 @@ function stRows(){
   return out;
 }
 /* ---------- Extrato: buscar, filtrar por entradas/gastos, mês e dia ---------- */
-const APP_V='v64';
+const APP_V='v65';
 const ST_FILTERS=[['all','Tudo'],['in','Entradas'],['out','Gastos'],['fat','Faturas pagas'],['tr','Transferências']];
 function stAll(){
   const out=stRows().map(e=>Object.assign({},e,{src:'extrato'}));
@@ -2962,8 +2962,8 @@ function vStmt(){
   let h=header('Extrato',rbtn('stmt-pick','📥','Importar extrato do Mobills (.xlsx)'))+'<div class="wrap"><input type="file" id="stfile" accept=".xlsx" hidden>';
   h+='<button class="btn sec" data-act="cg-open">🗂️ Criar e editar grupos e categorias</button>';
   h+='<input id="stq" class="stq" type="search" inputmode="search" autocomplete="off" placeholder="Buscar: mercado, posto, pix, 50,00, 12/10…" value="'+esc(st.q)+'" aria-label="Buscar lançamentos">';
-  const all=stAll(),cats=[...new Set(all.map(stCatName).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt-BR')),accts=[...new Set(all.map(e=>e.acct).filter(Boolean))].sort(),yms=[...new Set(all.filter(e=>e.d).map(e=>e.d.slice(0,7)).concat([ymOf(todayIso())]))].sort().reverse();
-  S._stOpts={fs:ST_FILTERS.slice(1),cats:[['__sem','Sem categoria']].concat(cats.map(c=>[c,c])),accts:accts.map(a=>[a,a]),grps:['Gastos fixos','Alimentação','Casa','Transporte','Saúde','Lazer e pessoal','Filhos','Juros, taxas e saques','Outros','Sem categoria','Entradas','Faturas pagas e transferências'].map(g=>[g,g])};
+  const all=stAll(),cats=[...new Set(all.map(stCatName).filter(Boolean).concat(Object.keys(catTree())))].sort((a,b)=>a.localeCompare(b,'pt-BR')),accts=[...new Set(all.map(e=>e.acct).filter(Boolean))].sort(),yms=[...new Set(all.filter(e=>e.d).map(e=>e.d.slice(0,7)).concat([ymOf(todayIso())]))].sort().reverse();
+  S._stOpts={fs:ST_FILTERS.slice(1),cats:[['__sem','Sem categoria']].concat(cats.map(c=>[c,c])),accts:accts.map(a=>[a,a]),grps:grpAll().concat(['Sem categoria','Entradas','Faturas pagas e transferências']).map(g=>[g,g])};
   const msel=(k,label,opts,cur)=>'<label class="fl"><span>'+label+'</span><button type="button" class="fsel" data-act="st-multi" data-k="'+k+'" style="text-align:left;overflow:hidden;white-space:nowrap">'+esc(multiTxt(opts,cur,'Todos'))+'</button></label>';
   const sel=(k,label,opts,cur)=>'<label class="fl"><span>'+label+'</span><select class="fsel" data-st="'+k+'" aria-label="'+label+'">'+opts.map(o=>'<option value="'+esc(o[0])+'"'+(String(cur)===String(o[0])?' selected':'')+'>'+esc(o[1])+'</option>').join('')+'</select></label>';
   h+='<div class="fgrid">'
