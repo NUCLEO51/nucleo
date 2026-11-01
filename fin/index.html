@@ -2389,6 +2389,7 @@ function fichaDebt(rec,ymHint){
   const totalPaid=sch.filter(s=>s.paid).reduce((a,s)=>a+(s.amt||0),0);
   let h='<h3>'+esc(x.creditor)+'</h3><div class="card">';
   h+=frow('O que é',(rv?'Dinheiro a receber':'Dívida')+(x.kindD?' · '+x.kindD:''));
+  if(x.grupo)h+=frow('Grupo',x.grupo);
   if(x.cat)h+=frow('Categoria',x.cat);
   h+=frow(rv?'Quem deve a você':'Para quem você deve',x.creditor);
   if(x.holder)h+=frow('Titular',x.holder);
@@ -2472,7 +2473,7 @@ function monthItems(ym){
     else if(debtAmt(x,ym)==null){state='Sem valor';cls='warn';}
     else if(date<td){if(x.status==='ATRASADA'){state='Em atraso';cls='bad';}else{state='Confirmar';cls='warn';}}
     else state=rv?'A receber':'A pagar';
-    out.push({k:'debt',id:d.id,ym,date,name:x.creditor,tipo:(rv?'A receber':'Dívida')+(x.kindD?' · '+x.kindD:'')+(x.cat?' · '+x.cat:''),amountC:debtAmt(x,ym),state,cls,dir:rv?'RECEBER':'PAGAR'});
+    out.push({k:'debt',id:d.id,ym,date,name:x.creditor,tipo:(rv?'A receber':'Dívida')+(x.kindD?' · '+x.kindD:'')+(x.grupo?' · '+x.grupo:'')+(x.cat?' · '+x.cat:''),amountC:debtAmt(x,ym),state,cls,dir:rv?'RECEBER':'PAGAR'});
   });
   return out.sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:(a.name<b.name?-1:1));
 }
@@ -3079,7 +3080,7 @@ function stRows(){
   return out;
 }
 /* ---------- Extrato: buscar, filtrar por entradas/gastos, mês e dia ---------- */
-const APP_V='v74';
+const APP_V='v75';
 const ST_FILTERS=[['all','Tudo'],['in','Entradas'],['out','Gastos'],['fat','Faturas pagas'],['tr','Transferências']];
 function stAll(){
   const out=stRows().map(e=>Object.assign({},e,{src:'extrato'}));
@@ -3127,7 +3128,7 @@ function stListHtml(){
     +(sum.fat?'<div class="row"><span class="mut">Fatura de cartão paga</span><b>'+money(sum.fat)+'</b></div>':'')
     +(sum.tr?'<div class="row"><span class="mut">Transferências (saldo)</span><b>'+money(sum.tr)+'</b></div>':'')+'</div>';
   if(!rows.length){
-    h+='<div class="card mut">'+(stAll().length?'Nada encontrado com esses filtros. Tente outro mês, “Tudo” ou apague o que escreveu.':'Nenhum extrato importado ainda. Toque em “Importar extrato do Mobills” abaixo.')+'</div>';
+    h+='<div class="card mut">'+(stAll().length?'Nada encontrado com esses filtros. Tente outro mês, “Tudo” ou apague o que escreveu.':'Nenhum extrato importado ainda. Toque em “Importar extrato do banco” abaixo.')+'</div>';
   }
   let last='';
   const porData=!st.sort||st.sort==='dnew'||st.sort==='dold';
@@ -3140,8 +3141,9 @@ function stListHtml(){
   /* contas, cartões e dívidas cadastrados que combinam com a busca */
   if(q){
     const hits=[];
-    byKind('bill').forEach(r=>{if(stNorm(r.data.name).indexOf(q)>=0)hits.push(['bills','Conta',r.data.name,r.data.amountC]);});
-    byKind('debt').forEach(r=>{if(stNorm(r.data.creditor).indexOf(q)>=0)hits.push(['debts',r.data.dir==='RECEBER'?'A receber':'Dívida',r.data.creditor,r.data.balanceC]);});
+    const gc=d=>[d.grupo,d.cat].filter(Boolean).join(' · ');
+    byKind('bill').forEach(r=>{if(stNorm(r.data.name+' '+(r.data.grupo||'')+' '+(r.data.cat||'')).indexOf(q)>=0)hits.push(['bills','Conta'+(gc(r.data)?' · '+gc(r.data):''),r.data.name,r.data.amountC]);});
+    byKind('debt').forEach(r=>{const d=r.data;if(stNorm(d.creditor+' '+(d.grupo||'')+' '+(d.cat||'')+' '+(d.kindD||'')+' '+(d.note||'')).indexOf(q)>=0)hits.push(['debts',(d.dir==='RECEBER'?'A receber de':'Dívida com')+(gc(d)?' · '+gc(d):''),d.creditor,d.balanceC]);});
     byKind('card').forEach(r=>{if(stNorm(r.data.name).indexOf(q)>=0)hits.push(['cards','Cartão',r.data.name,null]);});
     byKind('charge').forEach(r=>{if(stNorm(r.data.desc).indexOf(q)>=0)hits.push(['cards','Compra no cartão',r.data.desc,r.data.totalC]);});
     ibList().forEach(r=>{if(stNorm(r.data&&r.data.text).indexOf(q)>=0)hits.push(['notes','Anotação',r.data.text,null]);});
@@ -3332,10 +3334,16 @@ function render(){
 /* ---------- ações ---------- */
 const DAY={type:'int',min:1,max:31};
 const catOptions=()=>[['','Sem categoria']].concat(Object.keys(catTree()).map(c=>[c,c]));
+/* Grupo = pessoa ou assunto (ex.: Elisa). Junto com a Categoria, deixa achar tudo na lupa */
+function grupoList(){const m={};['debt','bill'].forEach(k=>byKind(k).forEach(r=>{const g=String((r.data&&r.data.grupo)||'').trim();if(g)m[g]=1;}));return Object.keys(m).sort((a,b)=>a.localeCompare(b,'pt-BR'));}
+const grupoFields=()=>[{k:'grupo',label:'Grupo (pessoa ou assunto, para achar na lupa)',type:'select',opts:[['','Sem grupo']].concat(grupoList().map(g=>[g,g])).concat([['__novo','➕ Criar um grupo novo…']])},
+  {k:'grupoNovo',label:'Nome do grupo novo (só se escolheu “Criar um grupo novo”)',type:'text',hint:'Ex.: Elisa, Casa, Carro.'}];
+function grupoFix(o){if(o.grupo==='__novo'||(!o.grupo&&o.grupoNovo))o.grupo=String(o.grupoNovo||'').trim();delete o.grupoNovo;o.grupo=o.grupo||'';return '';}
 async function billForm(rec,preset){
   const d=rec?rec.data:Object.assign({recurring:true,variable:false},preset||{});
   return form(rec?'Editar conta':'Nova conta',[
     {k:'name',label:'Nome (ex.: Luz)',type:'text',req:true},
+    ...grupoFields(),
     {k:'cat',label:'Categoria (para achar no filtro)',type:'select',opts:catOptions()},
     {k:'dueDay',label:'Vence todo dia',type:'int',min:1,max:31,req:true},
     {k:'variable',label:'O valor muda todo mês',type:'check'},
@@ -3343,7 +3351,7 @@ async function billForm(rec,preset){
     {k:'recurring',label:'Repete todo mês',type:'check'},
     {k:'account',label:'Conta bancária que paga (opcional)',type:'text',hint:'Ex.: Bradesco.'}
   ],Object.assign({},d),{
-    validate:o=>o.variable?null:null,
+    validate:o=>{grupoFix(o);return null;},
     summary:o=>['Conta: '+o.name,'Vence dia '+o.dueDay,o.variable?'Valor muda todo mês (o app cobra)':'Valor: '+money(o.amountC),o.recurring?'Repete todo mês':'Só neste mês','Conta bancária: '+(o.account||'não informada')],
     save:async o=>{
       const data={name:o.name,cat:o.cat||'',dueDay:o.dueDay,variable:o.variable,amountC:o.variable?null:o.amountC,recurring:o.recurring,account:o.account||'',startYm:rec?rec.data.startYm:((preset&&preset.startYm)||ymOf(todayIso()))};
@@ -3450,11 +3458,13 @@ async function debtForm(rec,preset){
     {k:'firstDue',label:'1ª parcela vence em (opcional)',type:'date',hint:'Só se a primeira parcela ainda não venceu. A planilha do mês começa nesta data.'},
     {k:'status',label:'Situação',type:'select',opts:[['ATIVA','Ativa'],['ATRASADA','Atrasada'],['PAGA','Paga'],['DESCONHECIDA','Não sei']]},
     {k:'kindD',label:'Tipo',type:'select',opts:[['','Não definido'],['Consignado','Consignado'],['Empréstimo','Empréstimo'],['Cartão','Cartão'],['Loja/carnê','Loja/carnê'],['Outro','Outro']]},
+    ...grupoFields(),
     {k:'cat',label:'Categoria (para achar no filtro)',type:'select',opts:catOptions()},
     {k:'account',label:'Conta de onde sai o pagamento (opcional)',type:'text'},
     {k:'note',label:'Observação',type:'text'}
   ],Object.assign({dir:'PAGAR'},d),{
     validate:o=>{
+      grupoFix(o);
       if((o.firstInstC!=null||o.nInst!=null)&&!o.firstDue)return 'Para usar parcelas diferentes ou o total de parcelas, preencha “1ª parcela vence em”.';
       if(o.firstInstC!=null&&o.installC==null)return 'Preencha também o valor das próximas parcelas.';
       if(o.balanceC==null&&o.nInst&&o.installC!=null)o.balanceC=(o.firstInstC!=null?o.firstInstC:o.installC)+(o.nInst-1)*o.installC;
