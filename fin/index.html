@@ -2702,6 +2702,38 @@ function vPoder(){
   h+='<p class="hint">Limite de cartão e cheque especial não são seu dinheiro: usar gera fatura ou juros. O Financeiro só mostra, não paga nada.</p>';
   return h+'</div>';
 }
+/* ---------- Previsões de juros, tarifas e IOF (só estimativa: não soma em dívidas nem em "falta pagar") ---------- */
+const PREV_CATS=['Juros e tarifas do banco','Juros e tarifas do cartão'];
+function prevData(){
+  const td=todayIso(),cur=ymOf(td),nx=cur,past=[];for(let i=6;i>=1;i--)past.push(addMonths(cur,-i));
+  const L={};
+  gastosRows().forEach(r=>{
+    if(!r.d||r.d>td)return;const c=catOf(r);if(!c)return;
+    const isP=PREV_CATS.indexOf(c.c)>=0||(c.c==='Impostos e taxas'&&c.s==='Tarifas e IOF');if(!isP)return;
+    const grp=c.c==='Impostos e taxas'?'Impostos e taxas':c.c,key=grp+'|'+(c.s||'Outras');
+    const o=L[key]||(L[key]={grp,sub:c.s||'Outras',m:{},n:0});o.m[ymOf(r.d)]=(o.m[ymOf(r.d)]||0)+r.v;o.n++;
+  });
+  const list=Object.keys(L).map(k=>{
+    const o=L[k],last3=past.slice(-3).map(y=>o.m[y]||0),avg=Math.round(last3.reduce((a,b)=>a+b,0)/3);
+    return {grp:o.grp,sub:o.sub,m:o.m,n:o.n,avg,min:Math.min.apply(null,last3),max:Math.max.apply(null,last3),cur:o.m[cur]||0,hist:past.map(y=>[y,o.m[y]||0])};
+  }).filter(x=>x.avg>0||x.cur>0).sort((a,b)=>b.avg-a.avg);
+  return {list,cur,nx,total:list.reduce((a,x)=>a+x.avg,0),min:list.reduce((a,x)=>a+x.min,0),max:list.reduce((a,x)=>a+x.max,0)};
+}
+function vPrev(){
+  const P=prevData();
+  let h=header('Previsões de juros e tarifas')+'<div class="wrap"><button class="bk" data-back="1" data-act="tab" data-v="pagar" aria-label="Voltar">← Voltar</button>';
+  h+='<div class="note"><b>Só uma estimativa.</b> O banco só avisa quando lança. Estes valores vêm da média dos últimos 3 meses e <b>não entram</b> em Falta pagar, Dívidas nem no saldo.</div>';
+  if(!P.list.length)return h+'<div class="card mut">Ainda não há juros, tarifas ou IOF nos extratos para prever. Importe o extrato do banco e eles aparecem aqui.</div></div>';
+  h+='<div class="card"><div class="mut">Reserva sugerida para '+esc(ymLabel(P.nx))+' (estimativa)</div><div class="big" style="font-size:2rem">'+money(P.total)+'</div><div class="mut">Pode variar de '+money(P.min)+' a '+money(P.max)+', conforme os últimos 3 meses. Já cobrado em '+esc(ymLabel(P.cur))+': '+money(P.list.reduce((a,x)=>a+x.cur,0))+'.</div></div>';
+  let g='';
+  P.list.forEach(x=>{
+    if(x.grp!==g){g=x.grp;const t=P.list.filter(y=>y.grp===g).reduce((a,y)=>a+y.avg,0);h+='<h2 style="margin-left:0">'+esc(g)+' · '+money(t)+'</h2>';}
+    const mx=Math.max.apply(null,x.hist.map(z=>z[1]).concat([x.cur,1]));
+    h+='<div class="card"><div class="row"><b>'+esc(x.sub)+'</b><b>'+money(x.avg)+'</b></div><div class="mut">Previsto para '+esc(ymLabel(P.nx))+(x.min!==x.max?' · de '+money(x.min)+' a '+money(x.max):'')+' · este mês até agora: '+money(x.cur)+'</div>'
+      +x.hist.map(z=>'<div class="row" style="margin-top:.25rem"><span class="mut">'+esc(ymLabel(z[0]))+'</span><span>'+(z[1]?money(z[1]):'—')+'</span></div><div class="plan-bar" style="margin:.05rem 0"><i style="width:'+(z[1]?Math.max(3,Math.round(100*z[1]/mx)):0)+'%"></i></div>').join('')+'</div>';
+  });
+  return h+'<p class="hint">Meses passados mostram o valor que o banco realmente cobrou. A previsão só usa lançamentos já feitos nos extratos e nas faturas.</p></div>';
+}
 function vPagar(){
   S.pm=S.pm||ymOf(todayIso());const ym=S.pm,td=todayIso();
   const all=monthItems(ym).filter(i=>i.dir!=='RECEBER'),fz=i=>i.state==='Paga',abertos=all.filter(i=>!fz(i)),feitos=all.filter(fz);
@@ -2717,6 +2749,7 @@ function vPagar(){
   h+=grp('g-b','🧾','Contas da casa e outras',abertos.filter(i=>i.tipo==='Conta'));
   h+=grp('g-d','📉','Dívidas e parcelas',outros);
   if(!abertos.length)h+='<div class="card mut">Nada falta pagar neste mês.</div>';
+  h+='<button class="btn sec" data-act="tab" data-v="prev">🔮 Previsões de juros, tarifas e IOF (não soma aqui)</button>';
   if(feitos.length)h+=xGroup('g-p'+ym,'✅','Já pagas',feitos.length+' item(ns)',money(sum(feitos)),'<div class="tbl" role="table">'+feitos.map(mRow).join('')+'</div>','ok');
   h+='<p class="hint">Toque num grupo para abrir; toque numa linha para ver os detalhes.</p>';
   return h+'</div>';
@@ -3041,7 +3074,7 @@ function stRows(){
   return out;
 }
 /* ---------- Extrato: buscar, filtrar por entradas/gastos, mês e dia ---------- */
-const APP_V='v71';
+const APP_V='v72';
 const ST_FILTERS=[['all','Tudo'],['in','Entradas'],['out','Gastos'],['fat','Faturas pagas'],['tr','Transferências']];
 function stAll(){
   const out=stRows().map(e=>Object.assign({},e,{src:'extrato'}));
@@ -3285,7 +3318,7 @@ function render(){
   if(!S.sess||!S.ready){return;}
   RO.reg={};
   let body;
-  if(S.tab==='home')body=vHome();else if(S.tab==='bills')body=vMonth();else if(S.tab==='cal')body=vCal();else if(S.tab==='contas')body=S.contaId?vConta():vContas();else if(S.tab==='cards')body=S.cardId?(S.cardDados?vCardDados():vCard()):vCards();else if(S.tab==='debts')body=vDebts();else if(S.tab==='rem')body=vRem();else if(S.tab==='notes')body=vNotes();else if(S.tab==='plan')body=vPlan();else if(S.tab==='stmt')body=vStmt();else if(S.tab==='spend')body=vGastos();else if(S.tab==='poder')body=vPoder();else if(S.tab==='pagar')body=vPagar();else if(S.tab==='trash')body=vTrash();else if(S.tab==='cats')body=vCats();else if(S.tab==='cfg')body=vCfg();else body=vHome();
+  if(S.tab==='home')body=vHome();else if(S.tab==='bills')body=vMonth();else if(S.tab==='cal')body=vCal();else if(S.tab==='contas')body=S.contaId?vConta():vContas();else if(S.tab==='cards')body=S.cardId?(S.cardDados?vCardDados():vCard()):vCards();else if(S.tab==='debts')body=vDebts();else if(S.tab==='rem')body=vRem();else if(S.tab==='notes')body=vNotes();else if(S.tab==='plan')body=vPlan();else if(S.tab==='stmt')body=vStmt();else if(S.tab==='spend')body=vGastos();else if(S.tab==='poder')body=vPoder();else if(S.tab==='pagar')body=vPagar();else if(S.tab==='prev')body=vPrev();else if(S.tab==='trash')body=vTrash();else if(S.tab==='cats')body=vCats();else if(S.tab==='cfg')body=vCfg();else body=vHome();
   if(S.tab!=='home'&&body.indexOf('data-back')<0)body='<div class="bkrow"><button class="bk" data-back="1" data-act="tab" data-v="home" aria-label="Voltar">← Voltar</button></div>'+body;
   a.innerHTML=body+(S.msg?'<div class="wrap"><div class="err">'+esc(S.msg)+'</div></div>':'')+tabs();
   roAfterRender();
