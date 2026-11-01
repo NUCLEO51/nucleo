@@ -1831,7 +1831,6 @@ function vCfg(){
   h+='<h2>Cópia de segurança</h2>'+backupBlock();
   h+='<h2>Grupos e categorias</h2><button class="btn" data-act="cg-open">🗂️ Criar e editar grupos e categorias</button><p class="hint">Crie, renomeie, mude de grupo ou esconda. Antes de salvar o app sempre pergunta.</p>';
   h+='<h2>Lixeira</h2><button class="btn" data-act="tab" data-v="trash">🗑️ Ver o que foi apagado</button><p class="hint">Tudo que você apaga vai para a Lixeira. Lá dá para ver e restaurar.</p>';
-  h+='<h2>Começar do zero</h2><button class="btn sec" data-act="zero">🧹 Zerar o aplicativo (guarda só as dívidas)</button><p class="hint">Manda tudo para a Lixeira, menos as dívidas e as categorias. O app pergunta uma vez.</p>';
   h+='<h2>Atualizar</h2><p class="hint">“Atualizar dados” busca de novo os seus lançamentos no servidor (use se mexeu em outro aparelho ou o GPT gravou algo). “Atualizar o aplicativo” baixa a versão nova do próprio Financeiro (telas e ícone). Versão instalada: '+APP_V+'.</p>'
     +(S.upd?'<div class="note">'+esc(S.upd)+'</div>':'')
     +'<button class="btn" data-act="refresh">Atualizar dados</button><button class="btn sec" data-act="app-update">Atualizar o aplicativo (versão nova)</button>';
@@ -1840,31 +1839,6 @@ function vCfg(){
   h+='<p class="hint" style="text-align:center"><a class="lnk" href="../">Abrir o Núcleo</a></p>';
   h+='<p class="hint">Projeção parcial não é dinheiro disponível. O Financeiro só organiza e lembra: quem paga é você.</p></div>';
   return h;
-}
-/* ---------- Começar do zero: manda tudo para a Lixeira, menos as dívidas e as configurações ---------- */
-function zeroPlan(){
-  const keep=r=>r.kind==='debt'||(r.kind==='proposal'&&r.data&&(r.data.cfg==='cats'||r.data.cfg==='sortprefs'||r.data.cfg==='capacity'));
-  const go=S.recs.filter(r=>!keep(r)),debts=S.recs.filter(r=>r.kind==='debt');
-  const conta=go.find(r=>r.kind==='stmt'&&!r.data.cardId&&!/fatura/i.test(r.data.account||'')&&/santander/i.test(r.data.account||''))||null;
-  return {go:go,debts:debts,conta:conta};
-}
-async function zeroRun(){
-  const pl=zeroPlan();
-  const n={};pl.go.forEach(r=>{const k=TKIND[r.kind]||r.kind;n[k]=(n[k]||0)+1;});
-  const l1=['Vão para a Lixeira ('+pl.go.length+' itens):'].concat(Object.keys(n).map(k=>k+': '+n[k]));
-  l1.push('Ficam só as '+pl.debts.length+' dívidas: '+pl.debts.map(d=>d.data.creditor||'dívida').join(' e ')+'.');
-  l1.push('Ficam também as suas categorias e grupos.');
-  if(pl.conta)l1.push('A conta do Santander continua cadastrada, vazia, esperando o extrato do banco.');
-  l1.push('Nada é apagado de vez: tudo fica na Lixeira.');
-  if(!await confirmBox('Zerar o aplicativo?',l1,'Sim, zerar tudo',true))return;
-  let ok=0;
-  try{
-    /* conta nova e vazia primeiro: se algo falhar, a antiga ainda está aqui */
-    if(pl.conta){const d=pl.conta.data;await Api.create('stmt',{account:d.account,bank:d.bank||'',agency:d.agency||'',number:d.number||'',tipo:d.tipo||'conta_corrente',holder:d.holder||'MARCELO',status:'aberta',source:'app-zero-'+Date.now().toString(36),openingC:null,overdraftC:null,entries:[]});}
-    for(const r of pl.go.slice()){await Api.remove(r);ok++;}
-    S.msg='Pronto. '+ok+' itens foram para a Lixeira.';
-  }catch(e){S.msg='Parei no meio ('+ok+' de '+pl.go.length+'): '+e.message;try{await Api.load();}catch(z){}}
-  render();
 }
 /* ---------- Lixeira: o que foi apagado, para onde foi e como voltar ---------- */
 const TRASH_DAYS=30;
@@ -3005,7 +2979,7 @@ function stRows(){
   return out;
 }
 /* ---------- Extrato: buscar, filtrar por entradas/gastos, mês e dia ---------- */
-const APP_V='v77';
+const APP_V='v78';
 const ST_FILTERS=[['all','Tudo'],['in','Entradas'],['out','Gastos'],['fat','Faturas pagas'],['tr','Transferências']];
 function stAll(){
   const out=stRows().map(e=>Object.assign({},e,{src:'extrato'}));
@@ -3486,7 +3460,6 @@ document.addEventListener('click',async ev=>{
   else if(act==='rx-tot'){const rec=get(id);if(rec){const d=rec.data;form('Total da fatura no banco',[{k:'statementTotalC',label:'Total da fatura (como está no PDF ou app do banco)',type:'money',req:true,hint:'É o “total a pagar” impresso na fatura, já com o saldo anterior.'},{k:'futureInstallmentsC',label:'Parcelas para as próximas faturas (opcional)',type:'money'}],{statementTotalC:d.statementTotalC,futureInstallmentsC:d.futureInstallmentsC},{summary:o=>[d.account,'Total: '+money(o.statementTotalC),'Parcelas futuras: '+(o.futureInstallmentsC==null?'—':money(o.futureInstallmentsC))],save:async o=>{await Api.update(rec,Object.assign({},d,{statementTotalC:o.statementTotalC,futureInstallmentsC:o.futureInstallmentsC==null?(d.futureInstallmentsC==null?null:d.futureInstallmentsC):o.futureInstallmentsC}));}});}}
   else if(act==='rx-day'){S.st=stState();S.st.day=b.dataset.d;S.st.fs=[];S.st.cats=[];S.st.grps=[];S.st.accts=[];S.st.q='';S.st.lim=60;S.tab='stmt';render();window.scrollTo(0,0);}
   else if(act==='sp-learn'){learnModal();}
-  else if(act==='zero'){zeroRun();}
   else if(act==='ask-toggle'){lsSet('fin-confirm',askAlways()?'0':'1');render();}
   else if(act==='cg-open'){S.catsFrom=S.tab;S.tab='cats';render();window.scrollTo(0,0);}
   else if(act==='cg-newcat')cgNewCat();
