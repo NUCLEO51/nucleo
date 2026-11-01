@@ -631,7 +631,7 @@ function catTree(){
   Object.keys(f).forEach(c=>{if(f[c].hidden)return;t[c]=f[c].subs.filter(x=>!x.hidden).map(x=>x.n);});
   return t;
 }
-/* categoria de um gasto: 1) a que você escolheu só para ele, 2) a regra do lugar, 3) a do Mobills (se for uma categoria conhecida) */
+/* categoria de um gasto: 1) a que você escolheu só para ele, 2) a regra do lugar, 3) a categoria já guardada no lançamento (se for conhecida) */
 /* o app generaliza o que você ensinou: se toda vez que apareceu a palavra “drogaria” você disse Saúde, as próximas “drogaria” já vêm como Saúde */
 const _learnC=new WeakMap();
 function learnTok(d,inc){
@@ -2860,18 +2860,10 @@ function vDebts(){
 }
 
 
-/* ---------- extratos (Mobills .xlsx) ---------- */
+/* ---------- extratos (Excel do banco) ---------- */
 const ST_KIND={INCOME:'Renda',EXPENSE:'Gasto',TRANSFER:'Transferência',CARD_SETTLEMENT:'Pagou fatura',LOAN_DISBURSEMENT:'Empréstimo recebido'};
 const stNorm=x=>String(x==null?'':x).normalize('NFD').replace(/[̀-ͯ]/g,'').trim().toLowerCase();
 function fnv(str){let h=0x811c9dc5;for(let i=0;i<str.length;i++){h^=str.charCodeAt(i);h=Math.imul(h,0x01000193)>>>0;}return h.toString(16).padStart(8,'0');}
-function stClassify(desc,cat,c){
-  const d=stNorm(desc),k=stNorm(cat);
-  if(c>0){if(k==='salario'||k==='renda extra')return 'INCOME';if(d.startsWith('credito liberado'))return 'LOAN_DISBURSEMENT';return 'TRANSFER';}
-  if(k==='transferencia enviada'||k==='pix'||k==='investimento')return 'TRANSFER';
-  if(d.indexOf('fatura')>=0)return 'CARD_SETTLEMENT';
-  return 'EXPENSE';
-}
-/* leitor mínimo de .xlsx (primeira planilha, só valores) */
 async function xlsxRows(buf){
   if(buf.byteLength>5000000)throw new Error('Arquivo grande demais.');
   if(typeof DecompressionStream==='undefined')throw new Error('Este navegador não abre .xlsx. Use o Safari atualizado.');
@@ -2916,58 +2908,6 @@ async function xlsxRows(buf){
     rows.push(row);
   }
   return rows;
-}
-/* Mobills "Relatório de transações": Data, Descrição, Valor, Conta, Categoria, Subcategoria, Tags */
-function mobillsParse(rows){
-  const H=['data','descricao','valor','conta','categoria','subcategoria','tags'];
-  const head=(rows[0]||[]).map(stNorm);
-  if(H.some((h,i)=>head[i]!==h))throw new Error('As colunas não são as do relatório de transações do Mobills (Data, Descrição, Valor, Conta, Categoria, Subcategoria, Tags).');
-  const body=[];rows.slice(1).forEach((r,i)=>{if(r.some(c=>c!==null&&c!==''))body.push({r:r,line:i+2});});
-  if(!body.length)throw new Error('O arquivo não tem lançamentos.');
-  if(body.length>10000)throw new Error('Lançamentos demais (máximo 10.000).');
-  const occ={},accts={};
-  body.forEach(x=>{
-    const r=x.r,line=x.line,m=typeof r[0]==='string'?/^(\d{2})\/(\d{2})\/(\d{4})$/.exec(r[0].trim()):null;
-    if(!m)throw new Error('Data inválida na linha '+line+'.');
-    const date=m[3]+'-'+m[2]+'-'+m[1];if(isNaN(new Date(date+'T00:00:00Z'))||new Date(date+'T00:00:00Z').toISOString().slice(0,10)!==date)throw new Error('Data inválida na linha '+line+'.');
-    const v=r[2],c=Math.round(v*100);
-    if(typeof v!=='number'||!isFinite(v)||Math.abs(v*100-c)>1e-6||c===0)throw new Error('Valor inválido na linha '+line+'.');
-    const acct=String(r[3]==null?'':r[3]).trim();if(!acct)throw new Error('Conta ausente na linha '+line+'.');
-    const desc=String(r[1]==null?'':r[1]),cat=String(r[4]==null?'':r[4]);
-    const content=JSON.stringify([date,c,stNorm(desc),stNorm(acct),stNorm(cat),stNorm(r[5])]);
-    occ[content]=(occ[content]||0)+1;
-    (accts[acct]=accts[acct]||[]).push({i:date+'-'+fnv(content)+'-'+occ[content],d:date,c:c,k:stClassify(desc,cat,c),t:desc.slice(0,80),g:cat.slice(0,40)});
-  });
-  return {accts:accts,rows:body.length,dupGroups:Object.keys(occ).filter(k=>occ[k]>1).length};
-}
-/* nomes que o Mobills usa para contas que o Financeiro já tem cadastradas com outro nome */
-const ST_ALIAS={'Santander - C.Corrente':'Santander · Conta Corrente (final 2450-3)'};
-function stPlan(parsed){
-  const out=[];
-  for(const name of Object.keys(parsed.accts)){
-    const ents=parsed.accts[name];
-    const rec=S.recs.find(r=>r.kind==='stmt'&&r.data.account===name)||(ST_ALIAS[name]?S.recs.find(r=>r.kind==='stmt'&&r.data.account===ST_ALIAS[name]):null)||null;
-    const old={};(rec?rec.data.entries:[]).forEach(e=>{old[e.i]=e;});
-    let add=0,same=0;
-    for(const e of ents){
-      const o=old[e.i];
-      if(o){if(o.c!==e.c||o.d!==e.d||o.k!==e.k)throw new Error('Conflito: um lançamento já salvo veio diferente. Nada foi gravado.');same++;}
-      else add++;
-    }
-    out.push({name:name,rec:rec,ents:ents,add:add,same:same});
-  }
-  return out;
-}
-async function stApply(plan){
-  for(const x of plan){
-    if(!x.add)continue;
-    const have={};(x.rec?x.rec.data.entries:[]).forEach(e=>{have[e.i]=1;});
-    const merged=(x.rec?x.rec.data.entries.slice():[]).concat(x.ents.filter(e=>!have[e.i]));
-    merged.sort((a,b)=>a.d<b.d?-1:a.d>b.d?1:0);
-    /* conta que já existe: mantém nome, banco, agência e observações; só os lançamentos mudam */
-    const data=x.rec?Object.assign({},x.rec.data,{entries:merged}):{account:x.name,source:'mobills',entries:merged};
-    if(x.rec)await Api.update(x.rec,data);else await Api.create('stmt',data);
-  }
 }
 /* ---------- Extrato do próprio banco (Santander): Data, Descrição, Valor, Saldo ---------- */
 function bankIsFmt(rows){return rows.some(r=>r&&['data','descricao','valor','saldo'].every((h,i)=>stNorm(r[i])===h));}
@@ -3016,7 +2956,7 @@ function bankPlan(b){
   if(cand.length!==1)throw new Error(cand.length?'Achei mais de uma conta com final '+key.slice(0,4)+'-'+key.slice(4)+'.':'Não achei a conta cadastrada com final '+key.slice(0,4)+'-'+key.slice(4)+'. Cadastre em Contas e tente de novo.');
   const rec=cand[0],old=rec.data.entries||[];
   const keep=old.filter(e=>e.d<b.from||e.d>b.to),drop=old.filter(e=>e.d>=b.from&&e.d<=b.to);
-  /* guarda a categoria que o Mobills já tinha dado a lançamentos de mesmo dia e valor */
+  /* guarda a categoria que o lançamento já tinha, quando o mesmo dia e valor voltam no novo extrato */
   const pool={};drop.forEach(e=>{if(e.g){const k=e.d+'|'+e.c;(pool[k]=pool[k]||[]).push(e.g);}});
   const ents=b.ents.map(e=>{const k=e.d+'|'+e.c,g=pool[k]&&pool[k].length?pool[k].shift():'';return Object.assign({},e,{g:g});});
   const merged=keep.concat(ents).sort((a,c)=>a.d<c.d?-1:a.d>c.d?1:0);
@@ -3046,26 +2986,11 @@ async function bankImport(rows){
   }
 }
 async function stImport(file){
-  let parsed,rows;
+  let rows;
   try{rows=await xlsxRows(await file.arrayBuffer());}
   catch(e){S.msg='Não consegui ler o arquivo: '+e.message;render();return;}
   if(bankIsFmt(rows)){await bankImport(rows);return;}
-  try{parsed=mobillsParse(rows);}
-  catch(e){S.msg='Não consegui ler o arquivo: '+e.message;render();return;}
-  const names=Object.keys(parsed.accts);
-  const dates=[].concat.apply([],names.map(n=>parsed.accts[n].map(e=>e.d))).sort();
-  const cnt={};names.forEach(n=>parsed.accts[n].forEach(e=>{cnt[e.k]=(cnt[e.k]||0)+1;}));
-  const first=[
-    parsed.rows+' lançamentos, de '+brDate(dates[0])+' até '+brDate(dates[dates.length-1])+'.',
-    'Contas no arquivo: '+names.join(', ')+'.'
-  ].concat(Object.keys(ST_KIND).filter(k=>cnt[k]).map(k=>ST_KIND[k]+': '+cnt[k]));
-  if(parsed.dupGroups)first.push('Há '+parsed.dupGroups+' grupo(s) de linhas iguais. Elas ficam como lançamentos separados.');
-  let pl;
-  try{pl=stPlan(parsed);}catch(e){S.msg=e.message;render();return;}
-  if(await confirmBox('Importar extrato do Mobills?',first.concat(pl.map(x=>(x.rec&&x.rec.data.account!==x.name?x.name+' → '+x.rec.data.account:x.name)+': '+x.add+' novos, '+x.same+' já existiam')).concat(['Nada é pago nem alterado no banco.']),'Sim, importar')){
-    try{await stApply(pl);}catch(e){S.msg=e.message;}
-    render();
-  }
+  S.msg='Este arquivo não é um extrato de banco. O Financeiro lê o extrato do Santander em Excel (colunas Data, Descrição, Valor e Saldo).';render();
 }
 /* nome da origem: "Cartão Bradesco…" (todas as faturas juntas) ou o nome da conta bancária */
 function stAcctLabel(d){
@@ -3080,7 +3005,7 @@ function stRows(){
   return out;
 }
 /* ---------- Extrato: buscar, filtrar por entradas/gastos, mês e dia ---------- */
-const APP_V='v76';
+const APP_V='v77';
 const ST_FILTERS=[['all','Tudo'],['in','Entradas'],['out','Gastos'],['fat','Faturas pagas'],['tr','Transferências']];
 function stAll(){
   const out=stRows().map(e=>Object.assign({},e,{src:'extrato'}));
@@ -3139,16 +3064,23 @@ function stListHtml(){
   });
   if(rows.length>st.lim)h+='<button class="btn sec" data-act="st-more">Mostrar mais ('+(rows.length-st.lim)+' restantes)</button>';
   /* contas, cartões e dívidas cadastrados que combinam com a busca */
-  if(q){
+  const fG=st.grps||[],fC=st.cats||[],temF=fG.length||fC.length;
+  if(q||temF){
     const hits=[];
     const gc=d=>[d.grupo,d.cat].filter(Boolean).join(' · ');
-    byKind('bill').forEach(r=>{if(stNorm(r.data.name+' '+(r.data.grupo||'')+' '+(r.data.cat||'')).indexOf(q)>=0)hits.push(['bills','Conta'+(gc(r.data)?' · '+gc(r.data):''),r.data.name,r.data.amountC]);});
-    byKind('debt').forEach(r=>{const d=r.data;if(stNorm(d.creditor+' '+(d.grupo||'')+' '+(d.cat||'')+' '+(d.kindD||'')+' '+(d.note||'')).indexOf(q)>=0)hits.push(['debts',(d.dir==='RECEBER'?'A receber de':'Dívida com')+(gc(d)?' · '+gc(d):''),d.creditor,d.balanceC]);});
-    byKind('card').forEach(r=>{if(stNorm(r.data.name).indexOf(q)>=0)hits.push(['cards','Cartão',r.data.name,null]);});
-    byKind('charge').forEach(r=>{if(stNorm(r.data.desc).indexOf(q)>=0)hits.push(['cards','Compra no cartão',r.data.desc,r.data.totalC]);});
-    ibList().forEach(r=>{if(stNorm(r.data&&r.data.text).indexOf(q)>=0)hits.push(['notes','Anotação',r.data.text,null]);});
-    pendList().forEach(r=>{if(stNorm(r.data&&r.data.text).indexOf(q)>=0)hits.push(['home','Pendente',r.data.text,null]);});
-    if(hits.length){h+='<h2>Contas, cartões, dívidas e anotações</h2>';hits.slice(0,20).forEach(x=>{h+='<button class="item" data-act="tab" data-v="'+x[0]+'"><div class="row"><span class="t">'+esc(x[2])+'</span><b>'+(x[3]==null?'':money(x[3]))+'</b></div><div class="mut">'+x[1]+' · toque para abrir</div></button>';});}
+    /* cadastros (dívidas e contas): respeitam o texto e também os filtros de Grupo e Categoria (o mês e o dia não valem aqui) */
+    const okF=d=>{if(!temF)return true;const cat=d.cat||'',grp=d.grupo||(cat?grpOf({c:cat,s:''}):'');
+      if(fC.length&&fC.indexOf(cat||'__sem')<0)return false;if(fG.length&&fG.indexOf(grp||'Sem categoria')<0)return false;return true;};
+    const okT=(txt)=>!q||stNorm(txt).indexOf(q)>=0;
+    byKind('bill').forEach(r=>{const d=r.data;if(okF(d)&&okT(d.name+' '+(d.grupo||'')+' '+(d.cat||'')))hits.push(['bills','Conta'+(gc(d)?' · '+gc(d):''),d.name,d.amountC]);});
+    byKind('debt').forEach(r=>{const d=r.data;if(okF(d)&&okT(d.creditor+' '+(d.grupo||'')+' '+(d.cat||'')+' '+(d.kindD||'')+' '+(d.note||'')))hits.push(['debts',(d.dir==='RECEBER'?'A receber de':'Dívida com')+(gc(d)?' · '+gc(d):''),d.creditor,d.balanceC]);});
+    if(!temF){
+      byKind('card').forEach(r=>{if(stNorm(r.data.name).indexOf(q)>=0)hits.push(['cards','Cartão',r.data.name,null]);});
+      byKind('charge').forEach(r=>{if(stNorm(r.data.desc).indexOf(q)>=0)hits.push(['cards','Compra no cartão',r.data.desc,r.data.totalC]);});
+      ibList().forEach(r=>{if(stNorm(r.data&&r.data.text).indexOf(q)>=0)hits.push(['notes','Anotação',r.data.text,null]);});
+      pendList().forEach(r=>{if(stNorm(r.data&&r.data.text).indexOf(q)>=0)hits.push(['home','Pendente',r.data.text,null]);});
+    }
+    if(hits.length){h+='<h2>'+(temF?'Dívidas e contas cadastradas neste filtro':'Contas, cartões, dívidas e anotações')+'</h2>';hits.slice(0,20).forEach(x=>{h+='<button class="item" data-act="tab" data-v="'+x[0]+'"><div class="row"><span class="t">'+esc(x[2])+'</span><b>'+(x[3]==null?'':money(x[3]))+'</b></div><div class="mut">'+x[1]+' · toque para abrir</div></button>';});}
   }
   return h;
 }
@@ -3171,7 +3103,7 @@ function vStmt(){
     +'<label class="fl"><span>Dia</span><input id="std" class="fsel" type="date" value="'+esc(st.day)+'" aria-label="Escolher um dia"></label></div>';
   h+='<div class="chips">'+((st.q||st.day||(st.fs||[]).length||(st.cats||[]).length||(st.grps||[]).length||(st.accts||[]).length||st.sort||st.ym!==ymOf(todayIso()))?'<button class="chip" data-act="st-clear">Limpar filtros</button>':'')+'</div>';
   h+='<div id="stlist">'+stListHtml()+'</div>';
-  h+='<button class="btn sec" data-act="stmt-pick">📥 Importar extrato do Mobills</button><p class="hint">No Mobills: Relatório de transações → exportar em Excel. Importar de novo o mesmo período não duplica. Renda, empréstimo, transferência e fatura paga não entram em “Gastos”.</p>';
+  h+='<button class="btn sec" data-act="stmt-pick">📥 Importar extrato do banco (.xlsx)</button><p class="hint">No app do Santander: extrato → exportar em Excel. Importar de novo o mesmo período não duplica. Renda, empréstimo, transferência e fatura paga não entram em “Gastos”.</p>';
   return h+'</div>';
 }
 

@@ -17,5 +17,7 @@ const r=await p.evaluate(async()=>{const wait=ms=>new Promise(r=>setTimeout(r,ms
  const inps=[...document.querySelectorAll('input')];
  return {opts,temElisa,semNovo,cats,fixCat:(()=>{const o={cat:'Carro',grupo:''};grupoFix(o);return o;})(),grupoFix:(()=>{const o={grupo:'__novo',grupoNovo:' Casa '};grupoFix(o);return o;})()};});
  S=null;
- const r2=await p.evaluate(()=>{st=stState();st.q='elisa';st.ym='';return stListHtml().replace(/<[^>]+>/g,' ').replace(/\s+/g,' ');}).catch(e=>String(e));
+ const r3=await p.evaluate(()=>{const st=stState();st.q='';st.grps=['Casa'];st.cats=['Outros'];S.recs=[{id:'d1',kind:'debt',version:1,deleted_at:null,data:{creditor:'Mercado Pago',dir:'PAGAR',cat:'Outros',balanceC:100000}},{id:'d2',kind:'debt',version:1,deleted_at:null,data:{creditor:'Tênis',dir:'PAGAR',cat:'Roupas e calçados',balanceC:5000}}];st.grps=[grpOf({c:'Outros',s:''})];return stListHtml().replace(/<[^>]+>/g,' ').replace(/\s+/g,' ');});
+console.log('FILTRO:',r3);
+const r2=await p.evaluate(()=>{st=stState();st.q='elisa';st.ym='';return stListHtml().replace(/<[^>]+>/g,' ').replace(/\s+/g,' ');}).catch(e=>String(e));
 console.log(JSON.stringify(r),'\nLUPA:',r2,'\nerros',errs);await b.close();})();
