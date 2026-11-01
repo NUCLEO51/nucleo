@@ -676,8 +676,43 @@ function sortBy(list,mode,v,d,c){
 }
 const gSortRows=(rows,mode)=>sortBy(rows,mode||'dnew',r=>r.v,r=>r.d,r=>{const k=catOf(r);return k?k.c+' '+(k.s||''):'';});
 /* janela "o que é isto?" para uma linha de extrato ou de fatura */
+/* lê a descrição do banco e diz, em palavras simples, o que é, de onde veio e para onde foi */
+function lancInfo(x){
+  const raw=String(x.t||''),parts=raw.split(' · '),h=parts[0]||'',rest=parts.slice(1).join(' · '),n=gNorm(h);
+  const cap=t=>String(t||'').replace(/\s+/g,' ').trim().replace(/(^|\s)(\S)/g,(m,a,b)=>a+b.toUpperCase());
+  const o={oque:'',de:'',para:'',compra:''};
+  if(/^compra cartao deb/.test(n)){
+    const m=/^(\d{2})\/(\d{2})\s+(.*)$/.exec(rest);
+    o.oque='Compra no cartão de débito';o.para=cap(m?m[3]:rest);
+    if(m&&x.d)o.compra=m[1]+'/'+m[2]+'/'+(m[2]>x.d.slice(5,7)&&+x.d.slice(5,7)<3?String(+x.d.slice(0,4)-1):x.d.slice(0,4));
+  }
+  else if(/^pix enviado/.test(n)){o.oque='Pix enviado';o.para=cap(rest);}
+  else if(/^pix recebido/.test(n)){o.oque='Pix recebido';o.de=cap(rest);}
+  else if(/^pix devolvido/.test(n)){o.oque='Pix devolvido';o.de=cap(rest);}
+  else if(/^dep cheque/.test(n)){o.oque='Depósito de cheque';o.de='Cheque depositado no caixa eletrônico. O banco não diz quem emitiu.';}
+  else if(/^dep dinheiro/.test(n)){o.oque='Depósito em dinheiro';o.de='Dinheiro depositado no caixa eletrônico';}
+  else if(/^saque/.test(n)){o.oque='Saque em dinheiro';o.para='Dinheiro na mão ('+(rest||'caixa eletrônico')+')';}
+  else if(/^liquido de vencimento/.test(n)){o.oque='Salário';o.de=cap(rest);}
+  else if(/beneficios do inss/.test(n)){o.oque='Benefício do INSS';o.de='INSS · '+rest;}
+  else if(/^juros saldo/.test(n)){o.oque='Juros do cheque especial';o.para='Santander, juros do limite da conta · '+rest;}
+  else if(/^iof/.test(n)){o.oque='IOF (imposto do banco)';o.para='Governo · '+rest;}
+  else if(/^tarifa/.test(n)){o.oque='Tarifa do banco';o.para='Santander · '+rest;}
+  else if(/^debito aut\. fat/.test(n)){o.oque='Pagamento automático de fatura';o.para='Fatura do cartão '+rest;}
+  else if(/^debito aut\./.test(n)){o.oque='Débito automático';o.para=cap(h.replace(/^debito aut\.\s*/i,''))+(rest?' · '+cap(rest):'');}
+  else if(/^mensalidade de seguro/.test(n)){o.oque='Parcela de seguro';o.para=cap(rest);}
+  else if(/^pagamento de boleto/.test(n)){o.oque='Pagamento de boleto';o.para=cap(rest);}
+  else if(/^credito liberado/.test(n)){o.oque='Crédito liberado pelo banco';o.de=cap(rest);}
+  else if(/^remuneracao/.test(n)){o.oque='Rendimento da aplicação automática';o.de='Santander';}
+  return o;
+}
 function detalheModal(x){
-  const rows=[['Descrição',x.t||'(sem descrição)'],['Data',x.d?brDate(x.d)+' · '+dowOf(x.d):''],['Valor',x.c==null?'':(x.c>0?'+ ':'')+money(Math.abs(x.c))],['Tipo',x.tipo||''],['Categoria',x.cat||''],['Onde',x.onde||''],['Parcela',x.parcela||''],['Quem',x.by||'']].filter(r=>r[1]);
+  const nf=lancInfo(x),fut=x.d&&x.d>todayIso();
+  const rows=[['O que é',nf.oque],['Descrição',x.t||'(sem descrição)'],
+    [x.dd||nf.compra?'Data no banco':'Data',x.d?brDate(x.d)+' · '+dowOf(x.d):''],
+    ['Depositado em',x.dd?brDate(x.dd)+' · '+dowOf(x.dd):''],['Data da compra',nf.compra],
+    ['Situação',x.dd?(fut?'Cheque ainda indisponível. Compensa em '+brDate(x.d)+'.':'Cheque compensado'):(fut?'Ainda não entrou. Previsto para '+brDate(x.d)+'.':'')],
+    ['Valor',x.c==null?'':(x.c>0?'+ ':'')+money(Math.abs(x.c))],['Tipo',x.tipo||''],['Categoria',x.cat||''],
+    ['De onde veio',nf.de],['Para quem / o que pagou',nf.para],['Onde',x.onde||''],['Parcela',x.parcela||''],['Quem',x.by||'']].filter(r=>r[1]);
   const m=modal('<h3>O que é este lançamento</h3><div class="card">'+rows.map(r=>'<div class="row" style="align-items:flex-start;gap:.8rem"><span class="mut" style="white-space:nowrap;flex:none">'+r[0]+'</span><b style="text-align:right;white-space:pre-wrap!important;word-break:break-word;min-width:0">'+esc(r[1])+'</b></div>').join('')+'</div>'
     +(x.editId?'<button class="btn" id="dt-ed">Editar este lançamento</button>':'')+(x.delFn?'<button class="btn bad" id="dt-del">Apagar este lançamento</button>':'')+'<button class="btn sec" id="no">Fechar</button>');
   m.querySelector('#no').onclick=()=>m.remove();
@@ -2715,7 +2750,7 @@ function vConta(){
   if(d.number)h+='<button class="btn sec" data-act="card-num">'+(S.showNum?'Esconder o número':'Mostrar o número')+'</button>';
   h+='<button class="btn" data-act="conta-add" data-id="'+rec.id+'">+ Novo lançamento</button>';
   h+='<h2 style="margin-left:0">Extrato da conta</h2>'+sortChips(S.aSort||'','conta-sort');
-  let lin=(d.entries||[]).map(e=>({t:e.t,d:e.d,c:e.c,i:e.i,g:e.g,tipo:ST_KIND[e.k]||e.k,onde:d.account,delFn:/^m-/.test(String(e.i))?(()=>contaDel(rec,e.i)):null}));
+  let lin=(d.entries||[]).map(e=>({t:e.t,d:e.d,dd:e.dd,k:e.k,c:e.c,i:e.i,g:e.g,tipo:ST_KIND[e.k]||e.k,onde:d.account,delFn:/^m-/.test(String(e.i))?(()=>contaDel(rec,e.i)):null}));
   lin.forEach(x=>{const kk=catOf({i:x.i,t:x.t,g:x.g});if(kk)x.cat=kk.c+(kk.s?' › '+kk.s:'');else if(x.g)x.cat=x.g;});
   lin=sortBy(lin,S.aSort||'dnew',x=>x.c,x=>x.d,x=>x.cat||'');S._ctaLin=lin;
   if(!lin.length)h+='<div class="card mut">Sem lançamentos ainda.</div>';
@@ -3006,7 +3041,7 @@ function stRows(){
   return out;
 }
 /* ---------- Extrato: buscar, filtrar por entradas/gastos, mês e dia ---------- */
-const APP_V='v70';
+const APP_V='v71';
 const ST_FILTERS=[['all','Tudo'],['in','Entradas'],['out','Gastos'],['fat','Faturas pagas'],['tr','Transferências']];
 function stAll(){
   const out=stRows().map(e=>Object.assign({},e,{src:'extrato'}));
@@ -3434,7 +3469,7 @@ document.addEventListener('click',async ev=>{
   else if(act==='st-all'){const t=stState();t.day='';t.ym=(t.ym==='all')?ymOf(todayIso()):'all';t.lim=60;render();}
   else if(act==='st-multi'){const t=stState(),k=b.dataset.k,o=(S._stOpts||{})[k]||[];const r=await multiPick({fs:'Mostrar',grps:'Grupo',cats:'Categoria',accts:'Conta ou cartão'}[k],o,t[k]);if(r){t[k]=r;t.lim=60;render();}}
   else if(act==='st-sort'){const t=stState();t.sort=(t.sort===b.dataset.v?null:b.dataset.v);t.lim=60;render();}
-  else if(act==='st-det'){const e=stSorted()[+b.dataset.ix];if(e){const k=stCat(e);detalheModal({t:e.t,d:e.d,c:e.c,tipo:(e.src==='cartao'&&e.c>0?'Estorno no cartão':stKindLabel(e)),cat:k?k.c+(k.s?' › '+k.s:''):(e.g||''),onde:e.acctFull||e.acct});}}
+  else if(act==='st-det'){const e=stSorted()[+b.dataset.ix];if(e){const k=stCat(e);detalheModal({t:e.t,d:e.d,dd:e.dd,k:e.k,c:e.c,tipo:(e.src==='cartao'&&e.c>0?'Estorno no cartão':stKindLabel(e)),cat:k?k.c+(k.s?' › '+k.s:''):(e.g||''),onde:e.acctFull||e.acct});}}
   else if(act==='st-more'){const t=stState();t.lim+=60;render();}
   else if(act==='st-clear'){const t=stState();t.q='';t.fs=[];t.day='';t.cats=[];t.grps=[];t.accts=[];t.sort=null;t.ym=ymOf(todayIso());t.lim=60;render();}
   else if(act==='logout'){if(await confirmBox('Sair do Financeiro?',['Você terá que entrar de novo.'],'Sim, sair')){Api.saveSess(null);lsSet('fin-cache','');location.reload();}}
