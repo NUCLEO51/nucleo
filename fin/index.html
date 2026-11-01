@@ -580,7 +580,7 @@ async function lerDocModal(){
 }
 
 /* ---------- gastos: para onde vai o dinheiro (categorias, subcategorias, regras e gráfico) ---------- */
-const CAT_TREE={'Mercado':['Compras da casa','Lanches e salgadinhos','Bebidas e energéticos'],'Alimentação fora':['Restaurante','Lanchonete','Café','Bar'],'Carro':['Combustível','Manutenção','Estacionamento','Pedágio'],'Casa':['Contas (luz, água, internet)','Manutenção','Móveis e utensílios'],'Saúde':['Farmácia','Consultas e exames','Plano de saúde'],'Roupas e calçados':[],'Lazer':['Passeios','Jogos e apps','Viagens'],'Filhos':['Escola','Lazer','Roupas'],'Assinaturas':[],'Presentes e doações':[],'Impostos e taxas':['IPVA','Licenciamento','Tarifas e IOF'],'Cuidados pessoais':['Barbearia','Academia'],'Seguros':[],'Juros e encargos':['Juros e multas','IOF','Tarifas'],'Dinheiro sacado':[],'Outros':[]};
+const CAT_TREE={'Mercado':['Compras da casa','Lanches e salgadinhos','Bebidas e energéticos'],'Alimentação fora':['Restaurante','Lanchonete','Café','Bar'],'Carro':['Combustível','Manutenção','Estacionamento','Pedágio'],'Casa':['Contas (luz, água, internet)','Manutenção','Móveis e utensílios'],'Saúde':['Farmácia','Consultas e exames','Plano de saúde'],'Roupas e calçados':[],'Lazer':['Passeios','Jogos e apps','Viagens'],'Filhos':['Escola','Lazer','Roupas'],'Assinaturas':[],'Presentes e doações':[],'Impostos e taxas':['IPVA','Licenciamento','Tarifas e IOF'],'Cuidados pessoais':['Barbearia','Academia'],'Seguros':[],'Juros e tarifas do banco':['Juros do cheque especial','IOF','Tarifa de pacote','Outras tarifas'],'Juros e tarifas do cartão':['Juros do cartão','IOF','Anuidade','Multa por atraso'],'Dinheiro sacado':[],'Outros':[]};
 const INC_TREE={'Salário e renda':[],'Pix recebido':[],'Depósitos e cheques':[],'Estornos e reembolsos':[],'Empréstimos':[],'Outros':[]};
 /* sugestões automáticas pelo nome do lugar (a primeira que combinar vale; o que você escolher sempre ganha) */
 const CAT_AUTO=[[/iof/,'Juros e encargos','IOF'],[/encargo|multa|mora|rotativo|juros|custo trans/,'Juros e encargos','Juros e multas'],[/tarifa|anuidade/,'Juros e encargos','Tarifas'],[/saque/,'Dinheiro sacado',''],
@@ -593,7 +593,7 @@ const CAT_AUTO=[[/iof/,'Juros e encargos','IOF'],[/encargo|multa|mora|rotativo|j
  [/infoserra|internet|\bvivo\b|\bclaro\b|copel|sanepar|enel|cpfl|sabesp/,'Casa','Contas (luz, água, internet)']];
 const INC_AUTO=[[/salario|folha|holerite/,'Salário e renda',''],[/estorno|reembolso|devolu/,'Estornos e reembolsos',''],[/emprest|credito pessoal|financiamento/,'Empréstimos',''],[/cheque|deposito/,'Depósitos e cheques',''],[/pix|transf|ted|doc/,'Pix recebido','']];
 /* grupos: onde o dinheiro vai, em poucas pastas */
-const GRP_MAP={'Mercado':'Alimentação','Alimentação fora':'Alimentação','Casa':'Casa','Carro':'Transporte','Saúde':'Saúde','Roupas e calçados':'Lazer e pessoal','Lazer':'Lazer e pessoal','Cuidados pessoais':'Lazer e pessoal','Presentes e doações':'Lazer e pessoal','Filhos':'Filhos','Juros e encargos':'Juros, taxas e saques','Impostos e taxas':'Juros, taxas e saques','Dinheiro sacado':'Juros, taxas e saques','Assinaturas':'Gastos fixos','Seguros':'Gastos fixos'};
+const GRP_MAP={'Mercado':'Alimentação','Alimentação fora':'Alimentação','Casa':'Casa','Carro':'Transporte','Saúde':'Saúde','Roupas e calçados':'Lazer e pessoal','Lazer':'Lazer e pessoal','Cuidados pessoais':'Lazer e pessoal','Presentes e doações':'Lazer e pessoal','Filhos':'Filhos','Juros e encargos':'Juros, taxas e saques','Juros e tarifas do banco':'Juros, taxas e saques','Juros e tarifas do cartão':'Juros, taxas e saques','Impostos e taxas':'Juros, taxas e saques','Dinheiro sacado':'Juros, taxas e saques','Assinaturas':'Gastos fixos','Seguros':'Gastos fixos'};
 const GRP_FIX=[['Casa','Contas (luz, água, internet)'],['Saúde','Plano de saúde'],['Cuidados pessoais','Academia'],['Impostos e taxas','IPVA'],['Impostos e taxas','Licenciamento'],['Filhos','Escola']];
 const GRP_BASE=['Alimentação','Casa','Transporte','Saúde','Lazer e pessoal','Filhos','Juros, taxas e saques','Gastos fixos','Outros'];
 const grpName=(g,d)=>((d||catData()).gren||{})[g]||g;
@@ -649,8 +649,15 @@ function catOf0(e,d){
   {const gg=catRen(e.g,d);if(e.g&&!e.inc&&catTree()[gg])return {c:gg,s:''};}
   return null;
 }
+/* “Juros e encargos” antigo: separa em banco e cartão, pelo lugar de onde veio e pelo texto */
+function jurosSplit(r,e){
+  const t=gNorm(e.t),card=!!(e.card||e.src==='cartao'||/^cart[aã]o/i.test(String(e.acct||'')));
+  if(card)return Object.assign({},r,{c:'Juros e tarifas do cartão',s:/anuidade/.test(t)?'Anuidade':/iof/.test(t)?'IOF':/multa|mora/.test(t)?'Multa por atraso':'Juros do cartão'});
+  return Object.assign({},r,{c:'Juros e tarifas do banco',s:/iof/.test(t)?'IOF':/tarifa|pacote|mensalidade/.test(t)?'Tarifa de pacote':/juros|utiliz|limite/.test(t)?'Juros do cheque especial':'Outras tarifas'});
+}
 function catOf(e){
-  const d=catData(),r=catOf0(e,d);if(!r)return null;
+  const d=catData();let r=catOf0(e,d);if(!r)return null;
+  if(r.c==='Juros e encargos')r=jurosSplit(r,e);
   const c=catRen(r.c,d);let sb=catSub(c,r.s,d);
   if(r.auto){if((d.hide||[]).indexOf(c)>=0)return null;if(sb&&((d.shide||{})[c]||[]).indexOf(sb)>=0)sb='';}
   return (c===r.c&&sb===(r.s||''))?r:Object.assign({},r,{c:c,s:sb});
@@ -754,7 +761,7 @@ function spInsights(rows,prevAgg,agg){
   const fx=rows.filter(r=>grpOf(catOf(r))==='Gastos fixos').reduce((a,r)=>a+r.v,0);
   const tot=rows.reduce((a,r)=>a+r.v,0);
   if(fx)L.push('📌 Gastos fixos: <b>'+money(fx)+'</b> ('+Math.round(100*fx/tot)+'%). Veja se algum dá para cancelar ou trocar por um mais barato.');
-  const ju=rows.filter(r=>{const k=catOf(r);return k&&k.c==='Juros e encargos';}).reduce((a,r)=>a+r.v,0);
+  const ju=rows.filter(r=>{const k=catOf(r);return k&&/^Juros e tarifas/.test(k.c);}).reduce((a,r)=>a+r.v,0);
   if(ju)L.push('🔥 Juros, multas e tarifas: <b>'+money(ju)+'</b>. É dinheiro jogado fora: pagando em dia e sem saque parcelado, esse valor some.');
   const lg=spAgg(rows,'lug').list;
   const top=lg.filter(x=>x.c!=='Sem categoria').slice(0,3);
@@ -2342,6 +2349,7 @@ function fichaDebt(rec,ymHint){
   const totalPaid=sch.filter(s=>s.paid).reduce((a,s)=>a+(s.amt||0),0);
   let h='<h3>'+esc(x.creditor)+'</h3><div class="card">';
   h+=frow('O que é',(rv?'Dinheiro a receber':'Dívida')+(x.kindD?' · '+x.kindD:''));
+  if(x.cat)h+=frow('Categoria',x.cat);
   h+=frow(rv?'Quem deve a você':'Para quem você deve',x.creditor);
   if(x.holder)h+=frow('Titular',x.holder);
   if(x.payer)h+=frow('Quem paga',x.payer);
@@ -2424,7 +2432,7 @@ function monthItems(ym){
     else if(debtAmt(x,ym)==null){state='Sem valor';cls='warn';}
     else if(date<td){if(x.status==='ATRASADA'){state='Em atraso';cls='bad';}else{state='Confirmar';cls='warn';}}
     else state=rv?'A receber':'A pagar';
-    out.push({k:'debt',id:d.id,ym,date,name:x.creditor,tipo:(rv?'A receber':'Dívida')+(x.kindD?' · '+x.kindD:''),amountC:debtAmt(x,ym),state,cls,dir:rv?'RECEBER':'PAGAR'});
+    out.push({k:'debt',id:d.id,ym,date,name:x.creditor,tipo:(rv?'A receber':'Dívida')+(x.kindD?' · '+x.kindD:'')+(x.cat?' · '+x.cat:''),amountC:debtAmt(x,ym),state,cls,dir:rv?'RECEBER':'PAGAR'});
   });
   return out.sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:(a.name<b.name?-1:1));
 }
@@ -2998,7 +3006,7 @@ function stRows(){
   return out;
 }
 /* ---------- Extrato: buscar, filtrar por entradas/gastos, mês e dia ---------- */
-const APP_V='v69';
+const APP_V='v70';
 const ST_FILTERS=[['all','Tudo'],['in','Entradas'],['out','Gastos'],['fat','Faturas pagas'],['tr','Transferências']];
 function stAll(){
   const out=stRows().map(e=>Object.assign({},e,{src:'extrato'}));
@@ -3250,10 +3258,12 @@ function render(){
 
 /* ---------- ações ---------- */
 const DAY={type:'int',min:1,max:31};
+const catOptions=()=>[['','Sem categoria']].concat(Object.keys(catTree()).map(c=>[c,c]));
 async function billForm(rec,preset){
   const d=rec?rec.data:Object.assign({recurring:true,variable:false},preset||{});
   return form(rec?'Editar conta':'Nova conta',[
     {k:'name',label:'Nome (ex.: Luz)',type:'text',req:true},
+    {k:'cat',label:'Categoria (para achar no filtro)',type:'select',opts:catOptions()},
     {k:'dueDay',label:'Vence todo dia',type:'int',min:1,max:31,req:true},
     {k:'variable',label:'O valor muda todo mês',type:'check'},
     {k:'amountC',label:'Valor fixo (se não muda)',type:'money',hint:'Deixe vazio se não souber. Vazio nunca vira zero.'},
@@ -3263,7 +3273,7 @@ async function billForm(rec,preset){
     validate:o=>o.variable?null:null,
     summary:o=>['Conta: '+o.name,'Vence dia '+o.dueDay,o.variable?'Valor muda todo mês (o app cobra)':'Valor: '+money(o.amountC),o.recurring?'Repete todo mês':'Só neste mês','Conta bancária: '+(o.account||'não informada')],
     save:async o=>{
-      const data={name:o.name,dueDay:o.dueDay,variable:o.variable,amountC:o.variable?null:o.amountC,recurring:o.recurring,account:o.account||'',startYm:rec?rec.data.startYm:((preset&&preset.startYm)||ymOf(todayIso()))};
+      const data={name:o.name,cat:o.cat||'',dueDay:o.dueDay,variable:o.variable,amountC:o.variable?null:o.amountC,recurring:o.recurring,account:o.account||'',startYm:rec?rec.data.startYm:((preset&&preset.startYm)||ymOf(todayIso()))};
       if(rec)await Api.update(rec,data);else{await Api.create('bill',data);await ensureMonth();}
     },
     onDelete:rec?async()=>{
@@ -3367,6 +3377,7 @@ async function debtForm(rec,preset){
     {k:'firstDue',label:'1ª parcela vence em (opcional)',type:'date',hint:'Só se a primeira parcela ainda não venceu. A planilha do mês começa nesta data.'},
     {k:'status',label:'Situação',type:'select',opts:[['ATIVA','Ativa'],['ATRASADA','Atrasada'],['PAGA','Paga'],['DESCONHECIDA','Não sei']]},
     {k:'kindD',label:'Tipo',type:'select',opts:[['','Não definido'],['Consignado','Consignado'],['Empréstimo','Empréstimo'],['Cartão','Cartão'],['Loja/carnê','Loja/carnê'],['Outro','Outro']]},
+    {k:'cat',label:'Categoria (para achar no filtro)',type:'select',opts:catOptions()},
     {k:'account',label:'Conta de onde sai o pagamento (opcional)',type:'text'},
     {k:'note',label:'Observação',type:'text'}
   ],Object.assign({dir:'PAGAR'},d),{
