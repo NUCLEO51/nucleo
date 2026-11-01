@@ -1797,7 +1797,9 @@ function vHome(){
   h+='<div class="up s2"><button data-act="tab" data-v="poder"><span class="nm"><b>💰 Quanto posso gastar</b></span><span class="vl mut">›</span></button><button data-act="tab" data-v="pagar"><span class="nm"><b>🧾 O que pagar no mês</b></span><span class="vl mut">›</span></button><button data-act="tab" data-v="spend"><span class="nm"><b>🩻 Raio-X financeiro</b><br><span class="mut" style="font-size:.95rem">Entradas, saídas, categorias, dias e onde reduzir</span></span><span class="vl mut">›</span></button></div>';
   {const all=monthItems(ym),fz=i=>i.state==='Paga'||i.state==='Recebida';
    const abertos=all.filter(i=>!fz(i)),feitos=all.filter(fz);
-   h+='<h2>Neste mês</h2>';
+   const aberto=lsGet('fin-hmes')!=='0';
+   h+='<button class="item" data-act="h-mes" aria-expanded="'+aberto+'" style="margin-top:1rem"><div class="row"><span class="t" style="font-size:1.35rem;font-weight:800">Neste mês</span><span class="mut">'+(aberto?'':abertos.length+(abertos.length===1?' item':' itens')+' · ')+'<span style="font-size:1.3rem">'+(aberto?'▾':'▸')+'</span></span></div></button>';
+   if(!aberto){}else
    if(!all.length)h+='<div class="card mut">Nada vence neste mês. Contas, faturas e parcelas aparecem aqui sozinhas quando você cadastrar.</div>';
    else{
      h+='<div class="tbl" role="table"><div class="tr th" role="row"><span>Dia</span><span>O que</span><span>Valor</span></div>'+abertos.map(mRow).join('')+(S.hDone?feitos.map(mRow).join(''):'')+'</div>';
@@ -3077,7 +3079,7 @@ function stRows(){
   return out;
 }
 /* ---------- Extrato: buscar, filtrar por entradas/gastos, mês e dia ---------- */
-const APP_V='v73';
+const APP_V='v74';
 const ST_FILTERS=[['all','Tudo'],['in','Entradas'],['out','Gastos'],['fat','Faturas pagas'],['tr','Transferências']];
 function stAll(){
   const out=stRows().map(e=>Object.assign({},e,{src:'extrato'}));
@@ -3576,6 +3578,7 @@ document.addEventListener('click',async ev=>{
   else if(act==='cal-today'){const c=calState();c.ym=ymOf(todayIso());c.day=todayIso();render();}
   else if(act==='cal-det'){const x=(S._calLin||[])[+b.dataset.ix];if(x)detalheModal(x);}
   else if(act==='conta'){S.contaId=id;S.showNum=false;render();window.scrollTo(0,0);}
+  else if(act==='h-mes'){lsSet('fin-hmes',lsGet('fin-hmes')==='0'?'1':'0');render();}
   else if(act==='x-tog'){S.xo=S.xo||{};S.xo[b.dataset.k]=!S.xo[b.dataset.k];render();}
   else if(act==='x-all'){S.xo=S.xo||{};const ks=[...document.querySelectorAll('.xg [data-act=x-tog]')].map(e=>e.dataset.k);const any=ks.some(k=>S.xo[k]);const keys=b.dataset.p?ks:['p-din','p-od','p-cd'];keys.forEach(k=>S.xo[k]=!any);render();}
   else if(act==='pg-prev'||act==='pg-next'){S.pm=addMonths(S.pm||ymOf(todayIso()),act==='pg-prev'?-1:1);render();}
