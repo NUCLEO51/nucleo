@@ -79,6 +79,9 @@ html.lk-on body>*:not(#lock){visibility:hidden}
 .plan-bar i{display:block;height:100%;background:var(--accent);border-radius:.3rem}
 .stq{width:100%;font-size:1.15rem;min-height:3.4rem;padding:.7rem 1rem;border-radius:1rem;border:2px solid var(--line);background:var(--surface);color:inherit;margin:.2rem 0 .5rem;box-sizing:border-box}
 .chips{display:flex;flex-wrap:wrap;gap:.5rem;margin:.4rem 0}
+.chips.seg{display:grid;grid-template-columns:repeat(auto-fit,minmax(5.6rem,1fr));gap:.45rem;margin:.3rem 0 .7rem}
+.chips.seg .chip{justify-content:center;text-align:center;border-radius:.9rem;padding:.35rem .4rem;white-space:nowrap}
+.chips.seg.c2{grid-template-columns:1fr 1fr}.chips.seg.c4{grid-template-columns:repeat(4,1fr);gap:.3rem}.chips.seg.c4 .chip{font-size:.8rem;padding:.35rem .1rem;min-width:0}.chips.seg.c3{grid-template-columns:repeat(3,1fr);gap:.35rem}.chips.seg.c3 .chip{font-size:.92rem;padding:.35rem .1rem;min-width:0}.fbox .spnav .btn{width:3.2rem}.fbox .spnav b{white-space:nowrap;text-align:center}.fbox{padding:.8rem}.fbox .lb{font-size:.8rem;color:var(--muted,#8a8a8e);font-weight:600;margin:.1rem 0 .1rem;text-transform:uppercase;letter-spacing:.03em}.fbox .orig{display:flex;justify-content:space-between;align-items:center;gap:.6rem;width:100%;text-align:left;background:transparent;border:1px solid var(--line);border-radius:.9rem;padding:.6rem .8rem;color:inherit;font:inherit;min-height:2.8rem;margin:.1rem 0 .6rem;cursor:pointer}
 .chip{border:1px solid var(--line);background:var(--surface);color:inherit;border-radius:2rem;padding:.65rem 1rem;min-height:3rem;font-size:1rem;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:.4rem}
 .chip.on{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
 .chip input{min-height:2.6rem;font-size:1rem;background:transparent;color:inherit;border:0}
@@ -901,12 +904,12 @@ function vGastos(){
   const sem=rows.filter(r=>!catOf(r));
   const allSrc=[...new Set(gastosRows().concat(incRows()).map(srcLbl))].sort();
   let h=header('Raio-X financeiro','<button class="ibtn" data-back="1" data-act="tab" data-v="home" aria-label="Voltar" title="Voltar">←</button>')+'<div class="wrap">';
-  h+='<div class="chips" role="group" aria-label="Tipo">'+[['out','Saídas (gastos)'],['in','Entradas']].map(x=>'<button class="chip'+(sp.dir===x[0]?' on':'')+'" data-act="sp-dir" data-v="'+x[0]+'">'+x[1]+'</button>').join('')+'</div>';
-  h+='<div class="chips" role="group" aria-label="Período">'+SP_PER.map(x=>'<button class="chip'+(sp.per===x[0]?' on':'')+'" data-act="sp-per" data-v="'+x[0]+'">'+x[1]+'</button>').join('')+'</div>';
-  if(sp.per==='m')h+='<div class="spnav"><button class="btn sec" data-act="sp-prev" aria-label="Mês anterior">‹</button><b>'+esc(ymLabel(sp.ym))+'</b><button class="btn sec" data-act="sp-next" aria-label="Próximo mês">›</button></div>';
-  else h+='<p class="sub" style="margin:.2rem 0">'+(sp.per==='all'?'Todo o período':'Últimos '+R.n+' meses')+'</p>';
-  h+='<button class="item" data-act="sp-src"><div class="row"><span class="t">Origem</span><b>'+esc(multiTxt(allSrc.map(x=>[x,x]),sp.src,'Tudo junto'))+'</b></div><div class="mut">Cartão, conta… Toque para ver só alguns ou deixe tudo junto.</div></button>';
-  h+='<p class="hint" style="margin:.2rem 0">Ver por:</p><div class="chips" role="group" aria-label="Ver por">'+SP_DIM.map(x=>'<button class="chip'+(sp.dim===x[0]?' on':'')+'" data-act="sp-dim" data-v="'+x[0]+'">'+x[1]+'</button>').join('')+'</div>';
+  h+='<div class="card fbox"><div class="chips seg c2" role="group" aria-label="Tipo">'+[['out','Saídas (gastos)'],['in','Entradas']].map(x=>'<button class="chip'+(sp.dir===x[0]?' on':'')+'" data-act="sp-dir" data-v="'+x[0]+'">'+x[1]+'</button>').join('')+'</div>';
+  h+='<div class="lb">Período</div><div class="chips seg c4" role="group" aria-label="Período">'+SP_PER.map(x=>'<button class="chip'+(sp.per===x[0]?' on':'')+'" data-act="sp-per" data-v="'+x[0]+'">'+x[1]+'</button>').join('')+'</div>';
+  if(sp.per==='m')h+='<div class="spnav" style="margin:.2rem 0 .7rem"><button class="btn sec" data-act="sp-prev" aria-label="Mês anterior">‹</button><b>'+esc(ymLabel(sp.ym))+'</b><button class="btn sec" data-act="sp-next" aria-label="Próximo mês">›</button></div>';
+  else h+='<p class="sub" style="margin:.2rem 0 .7rem;text-align:center">'+(sp.per==='all'?'Todo o período':'Últimos '+R.n+' meses')+'</p>';
+  h+='<div class="lb">Origem</div><button class="orig" data-act="sp-src"><span>'+esc(multiTxt(allSrc.map(x=>[x,x]),sp.src,'Tudo junto'))+'</span><span class="mut">Trocar ›</span></button>';
+  h+='<div class="lb">Ver por</div><div class="chips seg c3" style="margin-bottom:0" role="group" aria-label="Ver por">'+SP_DIM.map(x=>'<button class="chip'+(sp.dim===x[0]?' on':'')+'" data-act="sp-dim" data-v="'+x[0]+'">'+x[1]+'</button>').join('')+'</div></div>';
   if(!rows.length)return h+'<div class="card mut">Nada '+(inc?'entrou':'saiu')+' neste período'+((sp.src||[]).length?' nessa origem':'')+'. Os valores vêm dos extratos e das compras no cartão.</div></div>';
   h+='<div class="card"><div class="row"><span class="mut">'+(inc?'Total que entrou':'Total gasto')+'</span><b>'+money(agg.total)+'</b></div>'
     +'<div class="row"><span class="mut">'+(inc?'Saiu no período':'Entrou no período')+'</span><b>'+money(other)+'</b></div>'
@@ -3074,7 +3077,7 @@ function stRows(){
   return out;
 }
 /* ---------- Extrato: buscar, filtrar por entradas/gastos, mês e dia ---------- */
-const APP_V='v72';
+const APP_V='v73';
 const ST_FILTERS=[['all','Tudo'],['in','Entradas'],['out','Gastos'],['fat','Faturas pagas'],['tr','Transferências']];
 function stAll(){
   const out=stRows().map(e=>Object.assign({},e,{src:'extrato'}));
