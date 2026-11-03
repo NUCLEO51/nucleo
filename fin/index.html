@@ -2943,12 +2943,17 @@ function bankPlan(b){
   const cand=S.recs.filter(r=>r.kind==='stmt'&&!r.data.cardId&&!/fatura/i.test(r.data.account||'')&&((r.data.account||'')+' '+(r.data.number||'')).replace(/\D/g,'').indexOf(key)>=0);
   if(cand.length!==1)throw new Error(cand.length?'Achei mais de uma conta com final '+key.slice(0,4)+'-'+key.slice(4)+'.':'Não achei a conta cadastrada com final '+key.slice(0,4)+'-'+key.slice(4)+'. Cadastre em Contas e tente de novo.');
   const rec=cand[0],old=rec.data.entries||[];
-  const keep=old.filter(e=>e.d<b.from||e.d>b.to),drop=old.filter(e=>e.d>=b.from&&e.d<=b.to);
+  /* cheque ainda retido: o banco já o põe no extrato no dia do depósito, mas só libera depois (guardamos a data de depósito em "dd" e a previsão em "d") */
+  const held=old.filter(e=>e.dd&&e.d>e.dd),heldUsed=new Set();
+  const heldFor=n=>held.find(h=>!heldUsed.has(h)&&h.c===n.c&&h.dd===n.d);
+  const keep0=old.filter(e=>e.d<b.from||e.d>b.to),drop=old.filter(e=>e.d>=b.from&&e.d<=b.to);
   /* guarda a categoria que o lançamento já tinha, quando o mesmo dia e valor voltam no novo extrato */
   const pool={};drop.forEach(e=>{if(e.g){const k=e.d+'|'+e.c;(pool[k]=pool[k]||[]).push(e.g);}});
-  const ents=b.ents.map(e=>{const k=e.d+'|'+e.c,g=pool[k]&&pool[k].length?pool[k].shift():'';return Object.assign({},e,{g:g});});
+  const ents=b.ents.map(e=>{const k=e.d+'|'+e.c,g=pool[k]&&pool[k].length?pool[k].shift():'';const o=Object.assign({},e,{g:g}),h=heldFor(e);if(h){heldUsed.add(h);o.d=h.d;o.dd=h.dd;}return o;});
+  const keep=keep0.filter(e=>!heldUsed.has(e));
   const merged=keep.concat(ents).sort((a,c)=>a.d<c.d?-1:a.d>c.d?1:0);
-  let sum=0;merged.forEach(e=>{if(e.d<=b.to)sum+=e.c;});
+  /* o saldo do extrato já conta o cheque retido: entra na conta de abertura pela data de depósito */
+  let sum=0;merged.forEach(e=>{if((e.dd||e.d)<=b.to)sum+=e.c;});
   const opening=b.endBal-sum;
   return {rec:rec,keep:keep,drop:drop,ents:ents,merged:merged,opening:opening,after:keep.filter(e=>e.d>b.to),b:b};
 }
@@ -2993,7 +2998,7 @@ function stRows(){
   return out;
 }
 /* ---------- Extrato: buscar, filtrar por entradas/gastos, mês e dia ---------- */
-const APP_V='v79';
+const APP_V='v80';
 const ST_FILTERS=[['all','Tudo'],['in','Entradas'],['out','Gastos'],['fat','Faturas pagas'],['tr','Transferências']];
 function stAll(){
   const out=stRows().map(e=>Object.assign({},e,{src:'extrato'}));
