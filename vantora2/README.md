@@ -12,3 +12,6 @@ App (PWA) da esteira da Vantora 2: do produto candidato até estar à venda, com
 - A margem é calculada na tela (preço − custo − taxa % − frete). Nenhuma taxa vem pronta no código: o Marcelo informa a vigente do Seller Center.
 - Regras de interface do Marcelo: letra grande com controle A−/A+, confirmação antes de salvar, excluir ou mudar de etapa, botão Voltar em toda folha, nenhum aviso depois de salvar.
 - Só código aqui: nenhum dado de negócio, senha ou chave secreta.
+
+## Régua da Vantora 1 (v3)
+Critérios lidos do POP-PFV001 v1.1 e do Manual PFV v0.6 (Drive da Vantora 1). Cada nicho mostra 14 itens, em dois blocos: jeito do produto (preço R$ 50–79, leve, sem vidro, sem eletrônico, baixa devolução, kit, premium) e prova de mercado (5–20 vendedores comparados, demanda distribuída, recência, triangulação, avaliações, diferenciação, economia). Estados: Confirmado, Plausível, Problema, Sem dado. Sem dado não é zero e não há nota somada. O dado fica em `data.regua` do nicho (`{chave: [estado, observação]}`), escrito pelo Claude. Produto ganhou classe PFV (A–D, X), vendedores comparados e pendência crítica; PFV-A só salva com 5+ vendedores comparados e sem pendência.

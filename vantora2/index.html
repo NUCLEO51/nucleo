@@ -106,6 +106,7 @@ textarea{min-height:4.5rem;resize:vertical}
 .three{display:grid;grid-template-columns:1fr 1fr 1fr;gap:.6rem}
 @media (max-width:520px){.two,.three{grid-template-columns:1fr}}
 .err{color:var(--late);font-weight:700;min-height:1.2rem}
+.rg{list-style:none;padding:0;margin:.3rem 0 .8rem}.rg li{padding:.5rem 0;border-top:1px solid var(--line)}.rgh{display:flex;justify-content:space-between;gap:.6rem;align-items:flex-start}.rgn{color:var(--muted);font-size:.9rem;margin-top:.15rem}.rgt{font-weight:700;margin:.8rem 0 0}
 .kv{display:grid;grid-template-columns:auto 1fr;gap:.2rem .8rem;margin:0}
 .kv dt{color:var(--muted)}.kv dd{margin:0;overflow-wrap:anywhere}
 .num{font-variant-numeric:tabular-nums}
@@ -150,6 +151,20 @@ function num(v){var n=parseFloat(String(v==null?'':v).replace(/\./g,'').replace(
 function fld(v){return v?String(v).replace('.',','):''}
 function eIdx(k){for(var i=0;i<EST.length;i++)if(EST[i].k===k)return i;return 0}
 function eOf(k){return EST[eIdx(k)]}
+
+/* ---------- régua da Vantora 1 (POP-PFV001 v1.1 e Manual PFV v0.6) ---------- */
+var NV={sim:['Confirmado','ok'],prov:['Plausível','soon'],nao:['Problema','late'],desc:['Sem dado','']};
+var CLASSES={'':'Sem classe',A:'PFV-A muito forte',B:'PFV-B forte, com risco',C:'PFV-C testável',D:'PFV-D fraco',X:'PFV-X descartar'};
+var REGUA=[
+ {g:'Jeito do produto (preferências da Vantora 1)',i:[['preco','Preço de venda R$ 50 a R$ 79'],['leve','Leve e compacto'],['quebra','Resistente, sem vidro ou cerâmica'],['eletro','Sem eletrônico'],['devol','Baixa devolução'],['kit','Dá para montar kit'],['premium','Dá para premiumizar']]},
+ {g:'Prova de mercado (POP-PFV001)',i:[['bench','Comparação com 5 a 20 vendedores'],['distrib','Demanda espalhada entre vendedores'],['recencia','Demanda atual e contínua'],['triang','Shopee, Mercado Livre e Trends batendo'],['aval','Avaliações lidas (cerca de 30, em 3 vendedores)'],['dif','Espaço para diferenciar'],['econ','Economia: lucro de R$ 15 ou mais']]}];
+function reguaConta(n){var c={sim:0,prov:0,nao:0,desc:0},r=n.regua||{};
+  REGUA.forEach(function(g){g.i.forEach(function(it){var e=r[it[0]];c[e&&NV[e[0]]?e[0]:'desc']++})});return c}
+function reguaHtml(n){var r=n.regua||{},c=reguaConta(n),tot=c.sim+c.prov+c.nao+c.desc;
+  var h='<p class="rgt">Régua da Vantora 1</p><p class="muted">'+'Confirmado: '+c.sim+' · Plausível: '+c.prov+' · Problema: '+c.nao+' · <b>Sem dado: '+c.desc+'</b> (de '+tot+'). Sem dado não é zero: é o que ainda falta provar.'+(n.regua_em?' Atualizada em '+full(n.regua_em)+'.':'')+'</p>';
+  REGUA.forEach(function(g){h+='<p class="muted" style="margin:.7rem 0 0"><b>'+esc(g.g)+'</b></p><ul class="rg">'+g.i.map(function(it){var e=r[it[0]]||['desc',''],v=NV[e[0]]||NV.desc;
+    return '<li><div class="rgh"><span>'+esc(it[1])+'</span><span class="pill '+v[1]+'">'+v[0]+'</span></div>'+(e[1]?'<div class="rgn">'+esc(e[1])+'</div>':'')+'</li>'}).join('')+'</ul>'});
+  return h}
 
 /* ---------- estado e dados ---------- */
 var S={sess:null,recs:[],trashRecs:[],view:'painel',closed:{},focus:'',err:'',busy:false,ready:false};
@@ -299,10 +314,10 @@ function boxNicho(){var a=nichoAtivo(),h='<div class="group"><h2>Nicho ativo</h2
   return h+'</div></div>'}
 
 function nrow(n){var c=contaNicho(n);
-  return '<li><div class="trow'+(n.ativo?'':' col')+'"><button class="tmain" data-act="openn" data-id="'+n.id+'"><span class="tt">'+esc(n.nome)+'</span><span class="tm"><span>'+(n.nota?'Nota '+n.nota+' de 5':'Sem nota')+'</span><span>'+c.b+(c.b===1?' busca':' buscas')+'</span><span>'+c.p+(c.p===1?' produto':' produtos')+'</span></span><span class="tb">'+(n.ativo?'<span class="pill ok">Ativo</span>':'<span class="pill">Não ativo</span>')+'</span></button>'+
+  return '<li><div class="trow'+(n.ativo?'':' col')+'"><button class="tmain" data-act="openn" data-id="'+n.id+'"><span class="tt">'+esc(n.nome)+'</span><span class="tm"><span>'+(n.nota?'Nota '+n.nota+' de 5':'Sem nota')+'</span><span>'+c.b+(c.b===1?' busca':' buscas')+'</span><span>'+c.p+(c.p===1?' produto':' produtos')+'</span><span>'+reguaConta(n).desc+' de 14 sem dado</span></span><span class="tb">'+(n.ativo?'<span class="pill ok">Ativo</span>':'<span class="pill">Não ativo</span>')+'</span></button>'+
     (n.ativo?'':'<button class="btn small" data-act="activate" data-id="'+n.id+'">Ativar</button>')+'</div></li>'}
 function vNichos(){
-  var h='<p class="summary">Cada nicho tem uma nota de 1 a 5 e o motivo. Só um fica ativo por vez, e ativar pede o seu sim.</p>';
+  var h='<p class="summary">Cada nicho tem uma nota de 1 a 5, o motivo e a régua da Vantora 1. Só um fica ativo por vez, e ativar pede o seu sim.</p>';
   if(!D.nichos.length)return h+'<div class="empty">Nenhum nicho cadastrado ainda. Toque em "+ Novo nicho".</div>';
   return h+'<ul class="list">'+nichosOrd().map(nrow).join('')+'</ul>'}
 
@@ -319,14 +334,14 @@ function openNicho(id){var n=NI(id);if(!n)return;var c=contaNicho(n),blank='<spa
   openModal('<h2>'+esc(n.nome)+'</h2><div class="tb">'+(n.ativo?'<span class="pill ok">Ativo</span>':'<span class="pill">Não ativo</span>')+(n.nota?'<span class="pill gate">Nota '+n.nota+' de 5</span>':'')+'</div>'+
   '<dl class="kv"><dt>Por quê</dt><dd>'+(n.motivo?esc(n.motivo):blank)+'</dd><dt>Falta medir</dt><dd>'+(n.faltou?esc(n.faltou):blank)+'</dd>'+
   '<dt>Buscas</dt><dd class="num">'+c.b+'</dd><dt>Produtos</dt><dd class="num">'+c.p+'</dd>'+
-  '<dt>Proposto por</dt><dd>'+(n.origem==='claude'?'Claude':'Você')+(n.at?' em '+full(n.at):'')+'</dd>'+(n.ativo&&n.ativo_em?'<dt>Ativo desde</dt><dd>'+full(n.ativo_em)+'</dd>':'')+'</dl>'+
-  '<p class="note">A nota é uma estimativa, não um dado medido. Veja "Falta medir".</p>'+
+  (n.veredito?'<dt>Veredito</dt><dd>'+esc(n.veredito)+'</dd>':'')+'<dt>Proposto por</dt><dd>'+(n.origem==='claude'?'Claude':'Você')+(n.at?' em '+full(n.at):'')+'</dd>'+(n.ativo&&n.ativo_em?'<dt>Ativo desde</dt><dd>'+full(n.ativo_em)+'</dd>':'')+'</dl>'+
+  '<p class="note">A nota é uma estimativa, não um dado medido. Pelo método da Vantora 1, só a comparação de vendedores na Shopee dá o direito de chamar algo de forte.</p>'+reguaHtml(n)+
   '<div class="actions">'+(n.ativo?'<button class="btn alt" data-act="deactivate" data-id="'+id+'">Desativar</button>':'<button class="btn" data-act="activate" data-id="'+id+'">Ativar este nicho</button>')+'<button class="btn alt" data-act="editn" data-id="'+id+'">Editar</button></div>'+
   '<div class="actions"><button class="btn danger" data-act="deln" data-id="'+id+'">Excluir</button></div>')}
 
 function doAtivar(id){var n=NI(id);if(!n)return;var a=nichoAtivo();
   ask({title:'Este passo é seu',yes:'Sim, ativar',
-   body:'<p><b>'+esc(n.nome)+'</b></p>'+(a&&a.id!==id?'<p>O nicho ativo muda de <b>'+esc(a.nome)+'</b> para <b>'+esc(n.nome)+'</b>.</p>':'<p>Passa a ser o nicho ativo.</p>')+'<p class="note">Buscas e produtos novos começam com este nicho. Só confirme se você realmente decidiu.</p>'+(n.faltou?'<p class="muted">Ainda falta medir: '+esc(n.faltou)+'</p>':''),
+   body:'<p><b>'+esc(n.nome)+'</b></p>'+(a&&a.id!==id?'<p>O nicho ativo muda de <b>'+esc(a.nome)+'</b> para <b>'+esc(n.nome)+'</b>.</p>':'<p>Passa a ser o nicho ativo.</p>')+'<p class="note">Buscas e produtos novos começam com este nicho. Só confirme se você realmente decidiu.</p>'+'<p class="muted">Na régua da Vantora 1: '+reguaConta(n).desc+' de 14 itens sem dado.</p>'+(n.faltou?'<p class="muted">Ainda falta medir: '+esc(n.faltou)+'</p>':''),
    onYes:async function(){if(a&&a.id!==id)await patch(a.id,{ativo:false});await patch(id,{ativo:true,ativo_em:todayS()});closeModal()}})}
 
 function vLogin(){
@@ -372,6 +387,8 @@ function prodForm(p,pre){pre=pre||{};
   '<label for="f-nicho">Nicho<input id="f-nicho" list="nichos-dl" value="'+esc(v.nicho||'')+'" autocomplete="off" placeholder="Ex.: Organizadores de gaveta"></label>'+dl()+
   (p?'':'<label for="f-est">Em que etapa ele está<select id="f-est">'+estOpts(v.estagio)+'</select></label>')+
   '<div class="three"><label for="f-procura">Procura<select id="f-procura">'+opts(NIVEL,v.procura)+'</select></label><label for="f-devol">Devolução<select id="f-devol">'+opts(NIVEL,v.devolucao)+'</select></label><label for="f-conc">Concorrência<select id="f-conc">'+opts(NIVEL,v.concorrencia)+'</select></label></div>'+
+  '<div class="two"><label for="f-classe">Classe PFV<select id="f-classe">'+opts(CLASSES,v.classe)+'</select></label><label for="f-bench">Vendedores comparados<input id="f-bench" inputmode="numeric" value="'+esc(v.bench==null?'':v.bench)+'" placeholder="0"></label></div>'+
+  '<label for="f-pend">Pendência crítica<input id="f-pend" value="'+esc(v.pend||'')+'" autocomplete="off" placeholder="O que ainda pode derrubar o produto. Em branco se nada"></label>'+
   '<div class="two"><label for="f-custo">Custo de compra (R$)<input id="f-custo" inputmode="decimal" value="'+fld(v.custo)+'" placeholder="0,00"></label><label for="f-venda">Preço de venda (R$)<input id="f-venda" inputmode="decimal" value="'+fld(v.venda)+'" placeholder="0,00"></label></div>'+
   '<div class="two"><label for="f-taxa">Taxas da Shopee (%)<input id="f-taxa" inputmode="decimal" value="'+fld(v.taxa)+'" placeholder="Veja no Seller Center"></label><label for="f-frete">Frete e embalagem (R$)<input id="f-frete" inputmode="decimal" value="'+fld(v.frete)+'" placeholder="0,00"></label></div>'+
   '<label for="f-forn">Fornecedor<input id="f-forn" value="'+esc(v.fornecedor||'')+'" autocomplete="off" placeholder="Pode ficar em branco"></label>'+
@@ -396,7 +413,7 @@ function openProd(id){var p=PR(id);if(!p)return;var c=calc(p),nx=nextOf(p),pv=pr
   '<dt>Preço de venda</dt><dd class="num">'+(p.venda?money(p.venda):blank)+'</dd>'+
   '<dt>Taxas Shopee</dt><dd class="num">'+(p.taxa?fld(p.taxa)+'%':blank)+'</dd>'+
   '<dt>Frete e embalagem</dt><dd class="num">'+(p.frete?money(p.frete):blank)+'</dd>'+
-  '<dt>Fornecedor</dt><dd>'+(p.fornecedor?esc(p.fornecedor):blank)+'</dd>'+
+  '<dt>Classe PFV</dt><dd>'+(p.classe?esc(CLASSES[p.classe]||p.classe):blank)+'</dd><dt>Vendedores comparados</dt><dd class="num">'+(p.bench?p.bench:blank)+'</dd>'+(p.pend?'<dt>Pendência crítica</dt><dd>'+esc(p.pend)+'</dd>':'')+'<dt>Fornecedor</dt><dd>'+(p.fornecedor?esc(p.fornecedor):blank)+'</dd>'+
   '<dt>Contato</dt><dd>'+(p.contato?esc(p.contato):blank)+'</dd>'+
   (p.link?'<dt>Link</dt><dd>'+esc(p.link)+'</dd>':'')+
   (p.notas?'<dt>Anotações</dt><dd>'+esc(p.notas)+'</dd>':'')+
@@ -428,8 +445,9 @@ document.addEventListener('submit',function(e){
   if(id==='prodForm'){e.preventDefault();var f=e.target,pid=f.getAttribute('data-id'),from=f.getAttribute('data-from'),fk=f.getAttribute('data-fromkind');
     var v={nome:$('#f-nome').value.trim(),nicho:$('#f-nicho').value.trim(),procura:$('#f-procura').value,devolucao:$('#f-devol').value,concorrencia:$('#f-conc').value,
       custo:num($('#f-custo').value),venda:num($('#f-venda').value),taxa:num($('#f-taxa').value),frete:num($('#f-frete').value),
-      fornecedor:$('#f-forn').value.trim(),contato:$('#f-contato').value.trim(),link:$('#f-link').value.trim(),notas:$('#f-notas').value.trim()};
+      classe:$('#f-classe').value,bench:Math.floor(num($('#f-bench').value)),pend:$('#f-pend').value.trim(),fornecedor:$('#f-forn').value.trim(),contato:$('#f-contato').value.trim(),link:$('#f-link').value.trim(),notas:$('#f-notas').value.trim()};
     if(!v.nome){$('#f-err').textContent='Dê um nome ao produto.';$('#f-nome').focus();return}
+    if(v.classe==='A'&&(v.bench<5||v.pend)){$('#f-err').textContent='PFV-A exige comparar pelo menos 5 vendedores e nenhuma pendência crítica. Use PFV-B ou limpe a pendência.';$('#f-classe').focus();return}
     var est=pid?null:$('#f-est').value;
     ask({title:pid?'Salvar as alterações?':'Guardar este produto?',yes:'Sim, salvar',body:'<p><b>'+esc(v.nome)+'</b></p>'+(est?'<p class="muted">Etapa: '+esc(eOf(est).n)+'</p>':''),
      onYes:async function(){
