@@ -111,6 +111,7 @@ textarea{min-height:4.5rem;resize:vertical}
 .num{font-variant-numeric:tabular-nums}
 .left{color:var(--soon);font-weight:700}
 .blank{color:var(--muted);font-style:italic}
+.ativoBox{border:1.5px solid var(--neon);border-radius:12px;padding:.8rem .9rem;display:flex;flex-direction:column;gap:.5rem;background:var(--surface)}
 .login{max-width:420px;margin:0 auto;padding-top:calc(3rem + env(safe-area-inset-top,0px));display:flex;flex-direction:column;gap:1rem}
 </style>
 </head>
@@ -152,16 +153,24 @@ function eOf(k){return EST[eIdx(k)]}
 
 /* ---------- estado e dados ---------- */
 var S={sess:null,recs:[],trashRecs:[],view:'painel',closed:{},focus:'',err:'',busy:false,ready:false};
-var D={prods:[],buscas:[],inbox:[]};
+var D={prods:[],buscas:[],inbox:[],nichos:[]};
 var confCb=null;
-function derive(){D.prods=[];D.buscas=[];D.inbox=[];
+function derive(){D.prods=[];D.buscas=[];D.inbox=[];D.nichos=[];
   S.recs.forEach(function(r){var d=r.data||{},o=Object.assign({},d,{id:r.id,rec:r});
     if(r.kind==='produto')D.prods.push(o);
     else if(r.kind==='busca')D.buscas.push(o);
+    else if(r.kind==='nicho')D.nichos.push(o);
     else if(r.kind==='nota'&&!d.usada)D.inbox.push(o)})}
 function PR(id){return D.prods.filter(function(p){return p.id===id})[0]}
 function BU(id){return D.buscas.filter(function(p){return p.id===id})[0]}
 function R(id){return S.recs.filter(function(r){return r.id===id})[0]}
+function NI(id){return D.nichos.filter(function(n){return n.id===id})[0]}
+function plain(s){return String(s==null?'':s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim()}
+function nichoAtivo(){return D.nichos.filter(function(n){return n.ativo})[0]||null}
+function nichosOrd(){return D.nichos.slice().sort(function(a,b){if(!!a.ativo!==!!b.ativo)return a.ativo?-1:1;return (b.nota||0)-(a.nota||0)})}
+function contaNicho(n){var k=plain(n.nome);return{b:D.buscas.filter(function(x){return plain(x.nicho)===k}).length,p:D.prods.filter(function(x){return plain(x.nicho)===k&&!x.descartado}).length}}
+function nichoPadrao(){var a=nichoAtivo();return a?a.nome:''}
+function dl(){return '<datalist id="nichos-dl">'+nichosOrd().map(function(n){return '<option value="'+esc(n.nome)+'">'}).join('')+'</datalist>'}
 function ativos(){return D.prods.filter(function(p){return !p.descartado})}
 function noEstagio(k){return ativos().filter(function(p){return p.estagio===k}).sort(function(a,b){return (a.estagio_em||'')<(b.estagio_em||'')?-1:1})}
 function nextOf(p){var i=eIdx(p.estagio);return EST[i+1]||null}
@@ -231,6 +240,7 @@ function plist(arr,o){return arr.length?'<ul class="list">'+arr.map(function(p){
 function vPainel(){
   var at=ativos(),aval=noEstagio('avaliado'),forn=noEstagio('fornecedor'),comp=noEstagio('comprado');
   var h='<p class="summary">'+(at.length?'<b>'+at.length+'</b> '+(at.length===1?'produto na esteira':'produtos na esteira')+'.':'A esteira está vazia. Comece pelas Buscas ou cadastre um produto.')+'</p>';
+  h+=boxNicho();
   var espera=aval.length+forn.length+comp.length;
   if(espera){
     h+='<div class="group"><h2>Esperando você</h2>';
@@ -240,7 +250,8 @@ function vPainel(){
     h+='</div>'}
   h+='<div class="group"><h2>A esteira</h2><ul class="list">'+EST.map(function(e){var n=noEstagio(e.k).length;
     return '<li><button class="place" data-act="gostage" data-k="'+e.k+'"><span><span class="nm">'+esc(e.n)+'</span>'+(e.gate?' <span class="pill gate">decisão sua</span>':'')+'<br><span class="sub">'+esc(e.d)+'</span></span><span class="bub'+(n?'':' zero')+'">'+n+'</span></button></li>'}).join('')+'</ul></div>';
-  h+='<div class="actions"><button class="btn alt small" data-act="reload">Atualizar</button><button class="btn alt small" data-act="logout">Sair</button></div>';
+  var nl=trashList().length;
+  h+='<div class="actions"><button class="btn alt small" data-act="reload">Atualizar</button><button class="btn alt small" data-act="tab" data-v="lixeira">Lixeira'+(nl?' ('+nl+')':'')+'</button><button class="btn alt small" data-act="logout">Sair</button></div>';
   return h}
 
 function vEsteira(){
@@ -271,14 +282,52 @@ function vCaixa(){
 
 function trashList(){var out=[];
   S.trashRecs.forEach(function(r){var at=ymd(new Date(r.deleted_at)),left=TRASH_DAYS+diff(at);if(left<=0)return;var d=r.data||{};
-    out.push({id:r.id,kind:r.kind,label:r.kind==='produto'?d.nome:r.kind==='busca'?d.termo:d.text,at:at,left:left,ts:r.deleted_at})});
+    out.push({id:r.id,kind:r.kind,label:(r.kind==='produto'||r.kind==='nicho')?d.nome:r.kind==='busca'?d.termo:d.text,at:at,left:left,ts:r.deleted_at})});
   out.sort(function(a,b){return a.ts<b.ts?1:-1});return out}
 function vLixeira(){
   var list=trashList();
-  var h='<p class="summary">'+(list.length?'<b>'+list.length+'</b> '+(list.length===1?'item':'itens')+' na lixeira. Cada um some sozinho depois de '+TRASH_DAYS+' dias.':'A lixeira está vazia. O que você apagar fica aqui por '+TRASH_DAYS+' dias antes de sumir de vez.')+'</p>';
+  var h='<div class="actions"><button class="btn alt small" data-act="tab" data-v="painel">← Voltar</button></div><p class="summary">'+(list.length?'<b>'+list.length+'</b> '+(list.length===1?'item':'itens')+' na lixeira. Cada um some sozinho depois de '+TRASH_DAYS+' dias.':'A lixeira está vazia. O que você apagar fica aqui por '+TRASH_DAYS+' dias antes de sumir de vez.')+'</p>';
   if(list.length)h+='<ul class="list">'+list.map(function(x){
-    return '<li><div class="trow"><div class="tmain"><span class="tt">'+esc(x.label||'(sem nome)')+'</span><span class="tm"><span>'+(x.kind==='produto'?'Produto':x.kind==='busca'?'Busca':'Anotação')+'</span><span>Apagado em '+full(x.at)+'</span><span class="left">Some em '+x.left+(x.left===1?' dia':' dias')+'</span></span><div class="actions" style="margin-top:.4rem"><button class="btn small" data-act="restore" data-id="'+x.id+'">Restaurar</button></div></div></div></li>'}).join('')+'</ul>';
+    return '<li><div class="trow"><div class="tmain"><span class="tt">'+esc(x.label||'(sem nome)')+'</span><span class="tm"><span>'+(x.kind==='produto'?'Produto':x.kind==='nicho'?'Nicho':x.kind==='busca'?'Busca':'Anotação')+'</span><span>Apagado em '+full(x.at)+'</span><span class="left">Some em '+x.left+(x.left===1?' dia':' dias')+'</span></span><div class="actions" style="margin-top:.4rem"><button class="btn small" data-act="restore" data-id="'+x.id+'">Restaurar</button></div></div></div></li>'}).join('')+'</ul>';
   return h}
+
+function boxNicho(){var a=nichoAtivo(),h='<div class="group"><h2>Nicho ativo</h2><div class="ativoBox">';
+  if(a){h+='<p class="tt">'+esc(a.nome)+'</p><p class="muted">Buscas e produtos novos começam com este nicho.</p><div class="actions"><button class="btn alt small" data-act="tab" data-v="nichos">Ver nichos</button></div>'}
+  else if(D.nichos.length){var t=nichosOrd()[0];
+    h+='<p class="tt">Nenhum nicho ativo</p><p class="muted">O Claude propõe: <b>'+esc(t.nome)+'</b>'+(t.nota?' (nota '+t.nota+' de 5)':'')+'. Só vira ativo com o seu sim.</p><div class="actions"><button class="btn small" data-act="activate" data-id="'+t.id+'">Ativar este</button><button class="btn alt small" data-act="tab" data-v="nichos">Ver nichos</button></div>'}
+  else h+='<p class="tt">Nenhum nicho ainda</p><div class="actions"><button class="btn small" data-act="newnicho">+ Novo nicho</button></div>';
+  return h+'</div></div>'}
+
+function nrow(n){var c=contaNicho(n);
+  return '<li><div class="trow'+(n.ativo?'':' col')+'"><button class="tmain" data-act="openn" data-id="'+n.id+'"><span class="tt">'+esc(n.nome)+'</span><span class="tm"><span>'+(n.nota?'Nota '+n.nota+' de 5':'Sem nota')+'</span><span>'+c.b+(c.b===1?' busca':' buscas')+'</span><span>'+c.p+(c.p===1?' produto':' produtos')+'</span></span><span class="tb">'+(n.ativo?'<span class="pill ok">Ativo</span>':'<span class="pill">Não ativo</span>')+'</span></button>'+
+    (n.ativo?'':'<button class="btn small" data-act="activate" data-id="'+n.id+'">Ativar</button>')+'</div></li>'}
+function vNichos(){
+  var h='<p class="summary">Cada nicho tem uma nota de 1 a 5 e o motivo. Só um fica ativo por vez, e ativar pede o seu sim.</p>';
+  if(!D.nichos.length)return h+'<div class="empty">Nenhum nicho cadastrado ainda. Toque em "+ Novo nicho".</div>';
+  return h+'<ul class="list">'+nichosOrd().map(nrow).join('')+'</ul>'}
+
+function nichoForm(n){var v=n||{nome:'',nota:'',motivo:'',faltou:''};
+  openModal('<h2>'+(n?'Editar nicho':'Novo nicho')+'</h2><form id="nichoForm" data-id="'+(n?n.id:'')+'" novalidate>'+
+  '<label for="n-nome">Nome do nicho<input id="n-nome" value="'+esc(v.nome||'')+'" autocomplete="off" placeholder="Ex.: Organizadores de gaveta"></label><div class="err" id="n-err" role="alert"></div>'+
+  (n?'<p class="muted">Mudar o nome não muda as buscas e produtos que já usam o nome antigo.</p>':'')+
+  '<label for="n-nota">Nota<select id="n-nota"><option value="">Sem nota</option>'+[1,2,3,4,5].map(function(i){return '<option value="'+i+'"'+(+v.nota===i?' selected':'')+'>'+i+' de 5</option>'}).join('')+'</select></label>'+
+  '<label for="n-motivo">Por que este nicho<textarea id="n-motivo">'+esc(v.motivo||'')+'</textarea></label>'+
+  '<label for="n-faltou">O que ainda falta medir<textarea id="n-faltou">'+esc(v.faltou||'')+'</textarea></label>'+
+  '<div class="actions"><button class="btn" type="submit">Salvar</button><button class="btn alt" type="button" data-act="close">Cancelar</button></div></form>')}
+
+function openNicho(id){var n=NI(id);if(!n)return;var c=contaNicho(n),blank='<span class="blank">em branco</span>';
+  openModal('<h2>'+esc(n.nome)+'</h2><div class="tb">'+(n.ativo?'<span class="pill ok">Ativo</span>':'<span class="pill">Não ativo</span>')+(n.nota?'<span class="pill gate">Nota '+n.nota+' de 5</span>':'')+'</div>'+
+  '<dl class="kv"><dt>Por quê</dt><dd>'+(n.motivo?esc(n.motivo):blank)+'</dd><dt>Falta medir</dt><dd>'+(n.faltou?esc(n.faltou):blank)+'</dd>'+
+  '<dt>Buscas</dt><dd class="num">'+c.b+'</dd><dt>Produtos</dt><dd class="num">'+c.p+'</dd>'+
+  '<dt>Proposto por</dt><dd>'+(n.origem==='claude'?'Claude':'Você')+(n.at?' em '+full(n.at):'')+'</dd>'+(n.ativo&&n.ativo_em?'<dt>Ativo desde</dt><dd>'+full(n.ativo_em)+'</dd>':'')+'</dl>'+
+  '<p class="note">A nota é uma estimativa, não um dado medido. Veja "Falta medir".</p>'+
+  '<div class="actions">'+(n.ativo?'<button class="btn alt" data-act="deactivate" data-id="'+id+'">Desativar</button>':'<button class="btn" data-act="activate" data-id="'+id+'">Ativar este nicho</button>')+'<button class="btn alt" data-act="editn" data-id="'+id+'">Editar</button></div>'+
+  '<div class="actions"><button class="btn danger" data-act="deln" data-id="'+id+'">Excluir</button></div>')}
+
+function doAtivar(id){var n=NI(id);if(!n)return;var a=nichoAtivo();
+  ask({title:'Este passo é seu',yes:'Sim, ativar',
+   body:'<p><b>'+esc(n.nome)+'</b></p>'+(a&&a.id!==id?'<p>O nicho ativo muda de <b>'+esc(a.nome)+'</b> para <b>'+esc(n.nome)+'</b>.</p>':'<p>Passa a ser o nicho ativo.</p>')+'<p class="note">Buscas e produtos novos começam com este nicho. Só confirme se você realmente decidiu.</p>'+(n.faltou?'<p class="muted">Ainda falta medir: '+esc(n.faltou)+'</p>':''),
+   onYes:async function(){if(a&&a.id!==id)await patch(a.id,{ativo:false});await patch(id,{ativo:true,ativo_em:todayS()});closeModal()}})}
 
 function vLogin(){
   return '<div class="login"><h1>Vantora 2</h1><p class="muted">Entre com o mesmo email e senha do Núcleo e do Financeiro.</p>'+
@@ -290,10 +339,10 @@ function render(){
   var root=$('#root');
   if(!S.sess){root.innerHTML=vLogin();return}
   var d=new Date(),title=d.toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long'});
-  var body=S.view==='painel'?vPainel():S.view==='esteira'?vEsteira():S.view==='buscas'?vBuscas():S.view==='caixa'?vCaixa():vLixeira();
-  var nTrash=trashList().length,nCaixa=D.inbox.length;
-  var tabs=[['painel','Painel'],['esteira','Esteira'],['buscas','Buscas'],['caixa','Caixa'+(nCaixa?' ('+nCaixa+')':'')],['lixeira','Lixeira'+(nTrash?' ('+nTrash+')':'')]];
-  var fab=(S.view==='painel'||S.view==='esteira')?'<button class="btn fab" data-act="newprod">+ Novo produto</button>':S.view==='buscas'?'<button class="btn fab" data-act="newbusca">+ Nova busca</button>':'';
+  var body=S.view==='painel'?vPainel():S.view==='esteira'?vEsteira():S.view==='nichos'?vNichos():S.view==='buscas'?vBuscas():S.view==='caixa'?vCaixa():vLixeira();
+  var nCaixa=D.inbox.length;
+  var tabs=[['painel','Painel'],['esteira','Esteira'],['nichos','Nichos'],['buscas','Buscas'],['caixa','Caixa'+(nCaixa?' ('+nCaixa+')':'')]];
+  var fab=(S.view==='painel'||S.view==='esteira')?'<button class="btn fab" data-act="newprod">+ Novo produto</button>':S.view==='nichos'?'<button class="btn fab" data-act="newnicho">+ Novo nicho</button>':S.view==='buscas'?'<button class="btn fab" data-act="newbusca">+ Nova busca</button>':'';
   root.innerHTML='<header><div class="wrap hrow"><div><h1>Vantora 2</h1><p class="muted">'+esc(title)+'</p></div>'+
     '<div class="sizes" role="group" aria-label="Tamanho da letra"><button class="btn alt small" data-act="fs" data-d="-1" aria-label="Diminuir letra">A−</button><button class="btn alt small" data-act="fs" data-d="1" aria-label="Aumentar letra">A+</button></div></div></header>'+
     '<div class="wrap"><main>'+(S.err?'<div class="errbar" role="alert"><span>'+esc(S.err)+'</span><div class="actions"><button class="btn alt small" data-act="errok">Entendi</button></div></div>':'')+(S.ready?body:'<p class="muted">Carregando…</p>')+'</main></div>'+fab+
@@ -316,11 +365,11 @@ function opts(obj,sel){return Object.keys(obj).map(function(k){return '<option v
 function estOpts(sel){return EST.map(function(e){return '<option value="'+e.k+'"'+(e.k===sel?' selected':'')+'>'+esc(e.n)+'</option>'}).join('')}
 
 function prodForm(p,pre){pre=pre||{};
-  var v=p||{estagio:pre.estagio||'candidato',nome:pre.nome||'',nicho:pre.nicho||''};
+  var v=p||{estagio:pre.estagio||'candidato',nome:pre.nome||'',nicho:pre.nicho||nichoPadrao()};
   openModal('<h2>'+(p?'Editar produto':'Novo produto')+'</h2>'+
   '<form id="prodForm" data-id="'+(p?p.id:'')+'" data-from="'+esc(pre.from||'')+'" data-fromkind="'+esc(pre.fromkind||'')+'" novalidate>'+
   '<label for="f-nome">Nome do produto<input id="f-nome" value="'+esc(v.nome||'')+'" autocomplete="off"></label><div class="err" id="f-err" role="alert"></div>'+
-  '<label for="f-nicho">Nicho<input id="f-nicho" value="'+esc(v.nicho||'')+'" autocomplete="off" placeholder="Ex.: organização da casa"></label>'+
+  '<label for="f-nicho">Nicho<input id="f-nicho" list="nichos-dl" value="'+esc(v.nicho||'')+'" autocomplete="off" placeholder="Ex.: Organizadores de gaveta"></label>'+dl()+
   (p?'':'<label for="f-est">Em que etapa ele está<select id="f-est">'+estOpts(v.estagio)+'</select></label>')+
   '<div class="three"><label for="f-procura">Procura<select id="f-procura">'+opts(NIVEL,v.procura)+'</select></label><label for="f-devol">Devolução<select id="f-devol">'+opts(NIVEL,v.devolucao)+'</select></label><label for="f-conc">Concorrência<select id="f-conc">'+opts(NIVEL,v.concorrencia)+'</select></label></div>'+
   '<div class="two"><label for="f-custo">Custo de compra (R$)<input id="f-custo" inputmode="decimal" value="'+fld(v.custo)+'" placeholder="0,00"></label><label for="f-venda">Preço de venda (R$)<input id="f-venda" inputmode="decimal" value="'+fld(v.venda)+'" placeholder="0,00"></label></div>'+
@@ -330,11 +379,11 @@ function prodForm(p,pre){pre=pre||{};
   '<label for="f-notas">Anotações<textarea id="f-notas">'+esc(v.notas||'')+'</textarea></label>'+
   '<div class="actions"><button class="btn" type="submit">Salvar</button><button class="btn alt" type="button" data-act="close">Cancelar</button></div></form>')}
 
-function buscaForm(b,pre){pre=pre||{};var v=b||{termo:pre.termo||'',onde:'Google',nicho:'',nota:''};
+function buscaForm(b,pre){pre=pre||{};var v=b||{termo:pre.termo||'',onde:'Google',nicho:nichoPadrao(),nota:''};
   openModal('<h2>'+(b?'Editar busca':'Nova busca')+'</h2><form id="buscaForm" data-id="'+(b?b.id:'')+'" data-from="'+esc(pre.from||'')+'" novalidate>'+
   '<label for="b-termo">O que as pessoas digitam<input id="b-termo" value="'+esc(v.termo||'')+'" autocomplete="off" placeholder="Ex.: divisória de gaveta"></label><div class="err" id="b-err" role="alert"></div>'+
   '<label for="b-onde">Onde você viu<select id="b-onde">'+ONDE.map(function(o){return '<option'+(v.onde===o?' selected':'')+'>'+o+'</option>'}).join('')+'</select></label>'+
-  '<label for="b-nicho">Nicho<input id="b-nicho" value="'+esc(v.nicho||'')+'" autocomplete="off"></label>'+
+  '<label for="b-nicho">Nicho<input id="b-nicho" list="nichos-dl" value="'+esc(v.nicho||'')+'" autocomplete="off"></label>'+dl()+
   '<label for="b-nota">Anotações<textarea id="b-nota">'+esc(v.nota||'')+'</textarea></label>'+
   '<div class="actions"><button class="btn" type="submit">Salvar</button><button class="btn alt" type="button" data-act="close">Cancelar</button></div></form>')}
 
@@ -396,6 +445,14 @@ document.addEventListener('submit',function(e){
        if(bid){await patch(bid,bv)}
        else{bv.at=todayS();var rec=await Api.create('busca',bv);if(bfrom&&R(bfrom))await patch(bfrom,{usada:true})}
        closeModal()}});return}
+  if(id==='nichoForm'){e.preventDefault();var nid=e.target.getAttribute('data-id');
+    var nv={nome:$('#n-nome').value.trim(),nota:+$('#n-nota').value||null,motivo:$('#n-motivo').value.trim(),faltou:$('#n-faltou').value.trim()};
+    if(!nv.nome){$('#n-err').textContent='Dê um nome ao nicho.';$('#n-nome').focus();return}
+    ask({title:nid?'Salvar as alterações?':'Guardar este nicho?',yes:'Sim, salvar',body:'<p><b>'+esc(nv.nome)+'</b>'+(nv.nota?' · nota '+nv.nota+' de 5':'')+'</p>'+(nid?'':'<p class="muted">Ele entra como não ativo. Ativar é outro passo, só seu.</p>'),
+     onYes:async function(){
+       if(nid){await patch(nid,nv)}
+       else{nv.ativo=false;nv.origem='app';nv.at=todayS();await Api.create('nicho',nv)}
+       closeModal()}});return}
   if(id==='quickForm'){e.preventDefault();var qt=$('#q-text').value.trim();if(!qt)return;
     ask({title:'Guardar na caixa?',yes:'Sim, guardar',body:'<p>'+esc(qt)+'</p>',onYes:async function(){await Api.create('nota',{text:qt,source:'app',at:todayS()})}})}
 });
@@ -437,6 +494,16 @@ document.addEventListener('click',function(e){
       onYes:async function(){await Api.setDeleted([id],new Date().toISOString())}});break;
    case'restore':var it=trashList().filter(function(x){return x.id===id})[0];if(!it)break;
      ask({title:'Restaurar este item?',yes:'Sim, restaurar',body:'<p><b>'+esc(it.label||'(sem nome)')+'</b></p>',onYes:async function(){await Api.setDeleted([id],null)}});break;
+   case'newnicho':nichoForm(null);break;
+   case'openn':openNicho(id);break;
+   case'editn':nichoForm(NI(id));break;
+   case'activate':doAtivar(id);break;
+   case'deactivate':var dn2=NI(id);if(!dn2)break;
+     ask({title:'Desativar este nicho?',yes:'Sim, desativar',body:'<p><b>'+esc(dn2.nome)+'</b> deixa de ser o nicho ativo. Buscas e produtos novos não começam mais com ele.</p>',
+      onYes:async function(){await patch(id,{ativo:false});closeModal()}});break;
+   case'deln':var dn3=NI(id);if(!dn3)break;
+     ask({title:'Excluir este nicho?',danger:1,yes:'Sim, excluir',body:'<p><b>'+esc(dn3.nome)+'</b></p>'+(dn3.ativo?'<p class="note">Ele é o nicho ativo. Sem ele, fica sem nicho ativo.</p>':'')+'<p class="muted">As buscas e os produtos dele não são apagados. O nicho vai para a Lixeira e fica lá por '+TRASH_DAYS+' dias.</p>',
+      onYes:async function(){await Api.setDeleted([id],new Date().toISOString());closeModal()}});break;
    case'close':closeModal();break;
   }});
 document.addEventListener('keydown',function(e){if(e.key==='Escape'){if(!$('#confirm').hidden)closeConf();else if(!$('#modal').hidden)closeModal()}});
