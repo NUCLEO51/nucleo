@@ -2774,6 +2774,11 @@ function vConta(){
     +'<div class="row kv"><span class="mut">'+(d.openingC==null?'Movimento até hoje':'Saldo calculado hoje')+'</span><b>'+money(sd.ok)+'</b></div>'
     +(sd.fut?'<div class="row kv"><span class="mut">A entrar / sair depois de hoje</span><b>'+(sd.fut>0?'+ ':'− ')+money(Math.abs(sd.fut))+'</b></div>':'')
     +(d.openingC==null?'<div class="hint">Sem saldo inicial informado, este valor é só a soma dos lançamentos. Informe o saldo em Editar.</div>':'')+'</div>';
+  {const hd=(d.entries||[]).filter(e=>e.dd&&e.d>todayIso()),ck=d.chk;
+   h+='<div class="card"><b>Conferir com o banco</b>'
+    +(hd.length?'<div class="note">Cheque ainda retido: '+hd.map(e=>money(e.c)+' (depositado em '+brDate(e.dd)+')').join(' · ')+'. O extrato do banco já conta esse dinheiro, mas o saldo do topo do app dele ainda não. O Financeiro segue o saldo do topo.</div>':'')
+    +(ck?'<div class="mut">Última conferência: '+brDate(isoDate(new Date(ck.at)))+' às '+pad(new Date(ck.at).getHours())+':'+pad(new Date(ck.at).getMinutes())+' · banco '+(ck.c<0?'− ':'')+money(Math.abs(ck.c))+(ck.diff?' · diferença '+money(Math.abs(ck.diff)):' · bateu')+'</div>':'<div class="mut">Digite o saldo disponível do topo do app do banco e o app compara com o dele.</div>')
+    +'<button class="btn sec" data-act="conta-chk" data-id="'+rec.id+'">Conferir com o saldo do topo do app</button></div>';}
   if(d.number)h+='<button class="btn sec" data-act="card-num">'+(S.showNum?'Esconder o número':'Mostrar o número')+'</button>';
   h+='<button class="btn" data-act="conta-add" data-id="'+rec.id+'">+ Novo lançamento</button>';
   h+='<h2 style="margin-left:0">Extrato da conta</h2>'+sortChips(S.aSort||'','conta-sort');
@@ -2785,6 +2790,22 @@ function vConta(){
     lin.forEach((x,ix)=>{h+='<button class="tr" role="row" data-act="conta-det" data-ix="'+ix+'"><span class="d"><b>'+(x.d?x.d.slice(8,10):'')+'</b><i>'+(x.d?x.d.slice(5,7)+'/'+x.d.slice(2,4):'')+'</i></span><span class="w"><b>'+esc(x.t||'(sem descrição)')+'</b></span><span class="v"><b'+(x.c>0?' class="rc"':'')+'>'+(x.c>0?'+ ':'')+money(Math.abs(x.c))+'</b></span></button>';});
     h+='</div><p class="hint">Toque numa linha para ver o que é.</p>';}
   return h+'</div>';
+}
+/* Conferir com o banco: você digita o saldo disponível (o número grande do topo do app do banco) e o app compara, explica a diferença e libera o cheque retido se for o caso */
+async function contaChk(rec){
+  const d=rec.data,sd=contaSaldo(d),t=todayIso(),held=(d.entries||[]).filter(e=>e.dd&&e.d>t);
+  const calc=o=>{const B=(o.sg==='neg'?-1:1)*o.v,diff=B-sd.ok;return {B:B,diff:diff,h:diff!==0?held.find(e=>e.c===diff):null};};
+  return form('Conferir com o banco',[
+    {k:'v',label:'Saldo disponível: o número grande do topo do app do banco (digite sem o sinal)',type:'money',req:true,hint:'Ex.: se o banco mostra −R$ 8.966,55, digite 8.966,55 e marque Negativo.'},
+    {k:'sg',label:'Esse saldo é',type:'select',opts:[['neg','Negativo (−) · devo ao banco'],['pos','Positivo (+) · tenho saldo']]}
+  ],{v:null,sg:sd.ok<0?'neg':'pos'},{
+    summary:o=>{const c=calc(o);return ['No banco: '+(c.B<0?'− ':'')+money(Math.abs(c.B)),'No app: '+(sd.ok<0?'− ':'')+money(Math.abs(sd.ok)),
+      c.diff===0?'Bate com o banco.':(c.h?'O banco mostra '+money(Math.abs(c.diff))+' a mais: o cheque retido (depositado em '+brDate(c.h.dd)+') foi liberado. O app vai contar esse valor a partir de hoje.':'Diferença de '+money(Math.abs(c.diff))+' ('+(c.diff>0?'o banco mostra mais':'o banco mostra menos')+'). Importe o extrato novo para o app acertar.')];},
+    save:async o=>{const c=calc(o);
+      const ents=c.h?(d.entries||[]).map(e=>e===c.h?Object.assign({},e,{d:t}):e):d.entries;
+      await Api.update(rec,Object.assign({},d,{entries:ents,chk:{c:c.B,at:Date.now(),diff:c.diff,lib:!!c.h}}));
+      try{finToast(c.diff===0?'Bate com o banco.':c.h?'Cheque liberado. O app agora bate com o banco.':'Diferença registrada: '+money(Math.abs(c.diff)));}catch(e){}}
+  });
 }
 async function contaForm(rec){
   const d=rec?rec.data:{};
@@ -2998,7 +3019,7 @@ function stRows(){
   return out;
 }
 /* ---------- Extrato: buscar, filtrar por entradas/gastos, mês e dia ---------- */
-const APP_V='v80';
+const APP_V='v81';
 const ST_FILTERS=[['all','Tudo'],['in','Entradas'],['out','Gastos'],['fat','Faturas pagas'],['tr','Transferências']];
 function stAll(){
   const out=stRows().map(e=>Object.assign({},e,{src:'extrato'}));
@@ -3520,6 +3541,7 @@ document.addEventListener('click',async ev=>{
   else if(act==='conta-list'){S.contaId=null;render();window.scrollTo(0,0);}
   else if(act==='conta-new')contaForm(null);
   else if(act==='conta-edit')contaForm(get(id));
+  else if(act==='conta-chk')contaChk(get(id));
   else if(act==='conta-add')contaLanc(get(id));
   else if(act==='conta-sort'){S.aSort=(S.aSort===b.dataset.v?null:b.dataset.v);render();}
   else if(act==='conta-det'){const x=(S._ctaLin||[])[+b.dataset.ix];if(x)detalheModal(x);}
