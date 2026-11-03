@@ -107,6 +107,13 @@ textarea{min-height:4.5rem;resize:vertical}
 @media (max-width:520px){.two,.three{grid-template-columns:1fr}}
 .err{color:var(--late);font-weight:700;min-height:1.2rem}
 .rg{list-style:none;padding:0;margin:.3rem 0 .8rem}.rg li{padding:.5rem 0;border-top:1px solid var(--line)}.rgh{display:flex;justify-content:space-between;gap:.6rem;align-items:flex-start}.rgn{color:var(--muted);font-size:.9rem;margin-top:.15rem}.rgt{font-weight:700;margin:.8rem 0 0}
+.conta{display:grid;grid-template-columns:1fr auto;gap:.25rem .8rem;margin:0;font-variant-numeric:tabular-nums}.conta dt{color:var(--muted)}.conta dd{margin:0;text-align:right}.conta .tot{font-weight:800;border-top:1px solid var(--line);padding-top:.3rem}
+.falta{background:var(--soon-bg);border-radius:10px;padding:.6rem .8rem}.falta.ok{background:var(--ok-bg)}.falta li{padding:.15rem 0}.falta b{color:var(--soon)}.falta.ok b{color:var(--ok)}
+.sec{font-weight:700;color:var(--accent);margin:.6rem 0 0;font-size:.95rem}
+.tbl{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}.tbl td,.tbl th{border-bottom:1px solid var(--line);padding:.4rem .3rem;text-align:left}.tbl th{color:var(--muted);font-weight:400}
+.ck{display:flex;gap:.7rem;align-items:flex-start;width:100%;text-align:left;background:none;border:0;border-bottom:1px solid var(--line);padding:.75rem .9rem;cursor:pointer}.list>li:last-child .ck{border-bottom:0}
+.ck .bx{flex:none;width:1.6rem;height:1.6rem;border:2px solid var(--accent);border-radius:6px;display:flex;align-items:center;justify-content:center;font-weight:800;color:var(--accent-fg)}.ck.on .bx{background:var(--neon);border-color:var(--neon)}.ck.on .tt{color:var(--muted);text-decoration:line-through}
+.flow{counter-reset:f;display:flex;flex-direction:column;gap:.5rem}.flow li{counter-increment:f;display:flex;gap:.6rem}.flow li:before{content:counter(f);flex:none;width:1.8rem;height:1.8rem;border-radius:50%;background:var(--accent-soft);color:var(--accent);font-weight:800;display:flex;align-items:center;justify-content:center}
 .kv{display:grid;grid-template-columns:auto 1fr;gap:.2rem .8rem;margin:0}
 .kv dt{color:var(--muted)}.kv dd{margin:0;overflow-wrap:anywhere}
 .num{font-variant-numeric:tabular-nums}
@@ -152,12 +159,48 @@ function fld(v){return v?String(v).replace('.',','):''}
 function eIdx(k){for(var i=0;i<EST.length;i++)if(EST[i].k===k)return i;return 0}
 function eOf(k){return EST[eIdx(k)]}
 
+/* ---------- números oficiais (Shopee CNPJ/MEI e MEI). O Claude atualiza pelo registro "regra" no banco. ---------- */
+var REGRA_PADRAO={faixas:[{de:0,ate:79.99,pct:20,fixa:4.5},{de:80,ate:99.99,pct:14,fixa:16},{de:100,ate:199.99,pct:14,fixa:20},{de:200,ate:1e9,pct:14,fixa:26}],
+  teto:81000,das:82.05,lucro_min:15,lucro_bom:20,
+  fonte:'Tabela oficial da Shopee para vendedor CNPJ/MEI (vale desde 01/10/2026), transcrita pela AUD. Teto e DAS do MEI 2026.',em:'2026-10-06'};
+function REG(){var r=S.recs.filter(function(x){return x.kind==='regra'})[0];return Object.assign({},REGRA_PADRAO,r?r.data:{},{rec:r||null})}
+function faixa(v){var f=REG().faixas;for(var i=0;i<f.length;i++)if(v<=f[i].ate)return f[i];return f[f.length-1]}
+function taxaShopee(v){var f=faixa(v),fixa=v<8?v/2:f.fixa;return{pct:f.pct,fixa:fixa,com:v*f.pct/100,total:v*f.pct/100+fixa}}
+function lucroDe(v,c,fr){return v-c-taxaShopee(v).total-fr}
+function precoMin(c,fr,alvo){for(var v=1;v<3000;v+=0.1){if(lucroDe(v,c,fr)>=alvo-1e-9)return Math.ceil(v*10)/10}return null}
+function tomLucro(l){var R=REG();return l>=R.lucro_bom?'ok':l>=R.lucro_min?'soon':'late'}
+var AMOSTRA={'':'Ainda não decidido',pedida:'Pedida',aprovada:'Aprovada',dispensada:'Dispensada (organizador simples)'};
+/* O que falta para sair de cada etapa (resumo dos gates G0 a G11 da Vantora 1). 3º campo 1 = trava. */
+var FALTA={
+ candidato:[['nicho','Nicho'],['procura','Nível de procura'],['prova','Prova de procura (onde viu e quando)'],['devolucao','Risco de devolução'],['concorrencia','Concorrência'],['venda','Preço de venda previsto']],
+ avaliado:[['classe','Classe PFV'],['prova','Prova de procura']],
+ leao:[['fornecedor','Fornecedor'],['custo','Custo de compra']],
+ fornecedor:[['custo','Custo de compra',1],['venda','Preço de venda',1],['frete','Frete e embalagem'],['amostra','Amostra: pedida, aprovada ou dispensada']],
+ comprado:[['titulo','Título do anúncio'],['sku','SKU'],['peso','Peso embalado'],['medidas','Medidas embalado'],['fotos','Fotos próprias prontas'],['pend','Pendência crítica resolvida',1]],
+ avenda:[]};
+function faltaDe(p){var out=[];(FALTA[p.estagio]||[]).forEach(function(f){var v=p[f[0]],miss=f[0]==='pend'?!!v:(v==null||v===''||v===0||v===false);if(miss)out.push({t:f[1],trava:!!f[2]})});
+  if(p.estagio==='fornecedor'){var c=calc(p);if(c&&c.liq<REG().lucro_min)out.push({t:'Lucro abaixo de '+money(REG().lucro_min)+' por venda',trava:false})}
+  return out}
+function faltaHtml(p){if(p.descartado||p.estagio==='avenda')return '';var f=faltaDe(p),nx=nextOf(p);
+  if(!f.length)return '<div class="falta ok"><b>Pronto para '+esc(nx?nx.n:'seguir')+'.</b></div>';
+  return '<div class="falta"><b>Para seguir para '+esc(nx?nx.n:'')+' falta:</b><ul>'+f.map(function(x){return '<li>'+(x.trava?'⛔ ':'• ')+esc(x.t)+(x.trava?' (trava)':'')+'</li>'}).join('')+'</ul>'+(f.some(function(x){return !x.trava})?'<p class="muted">O que não trava pode ficar em branco e ser preenchido depois.</p>':'')+'</div>'}
+var CHECK=[
+ {g:'Empresa e fiscal',i:[['ccmei','Conferir o CNAE e a data de abertura no CCMEI (Portal do Empreendedor)'],['crt','Corrigir no Bling o CRT de 1 para 4 (MEI) antes da primeira nota'],['nota','Decidir: emitir nota pela Nota Fiscal Fácil (SP, grátis, sem certificado) ou ficar na dispensa para pessoa física']]},
+ {g:'Loja Shopee',i:[['perfil','Fazer a verificação do perfil da loja (pede a sua senha)'],['banco','Conta bancária salva na Shopee'],['envio','Revisar as Configurações de Envio']]},
+ {g:'Bling',i:[['status','Revisar o mapeamento de status Shopee → Bling antes do primeiro pedido']]},
+ {g:'Primeiro produto',i:[['pesar','Pesar e medir o produto já embalado'],['sku','Definir o SKU igual no Bling e na Shopee'],['fotos','Fotos próprias: até 9, quadradas (1:1), até 2 MB cada'],['video','Vídeo opcional: 10 a 60 s, MP4, até 30 MB']]},
+ {g:'Primeiro pedido',i:[['emb','Guardar foto ou vídeo da embalagem antes de postar'],['real','Anotar prazo de postagem, frete e repasse reais do primeiro pedido']]}];
+function CK0(){return S.recs.filter(function(x){return x.kind==='check'})[0]||null}
+function ckFeito(){var r=CK0();return (r&&r.data&&r.data.feito)||{}}
+function ckConta(){var f=ckFeito(),t=0,d=0;CHECK.forEach(function(g){g.i.forEach(function(it){t++;if(f[it[0]])d++})});return{t:t,d:d}}
+
 /* ---------- régua da Vantora 1 (POP-PFV001 v1.1 e Manual PFV v0.6) ---------- */
 var NV={sim:['Confirmado','ok'],prov:['Plausível','soon'],nao:['Problema','late'],desc:['Sem dado','']};
 var CLASSES={'':'Sem classe',A:'PFV-A muito forte',B:'PFV-B forte, com risco',C:'PFV-C testável',D:'PFV-D fraco',X:'PFV-X descartar'};
 var REGUA=[
  {g:'Jeito do produto (preferências da Vantora 1)',i:[['preco','Preço de venda R$ 50 a R$ 79'],['leve','Leve e compacto'],['quebra','Resistente, sem vidro ou cerâmica'],['eletro','Sem eletrônico'],['devol','Baixa devolução'],['kit','Dá para montar kit'],['premium','Dá para premiumizar']]},
- {g:'Prova de mercado (POP-PFV001)',i:[['bench','Comparação com 5 a 20 vendedores'],['distrib','Demanda espalhada entre vendedores'],['recencia','Demanda atual e contínua'],['triang','Shopee, Mercado Livre e Trends batendo'],['aval','Avaliações lidas (cerca de 30, em 3 vendedores)'],['dif','Espaço para diferenciar'],['econ','Economia: lucro de R$ 15 ou mais']]}];
+ {g:'Prova de mercado (regra de 27/10: procura primeiro)',i:[['procura','Procura forte e atual na internet'],['bench','Bônus: comparação com 5 a 20 vendedores na Shopee'],['distrib','Demanda espalhada entre vendedores'],['recencia','Demanda atual e contínua'],['triang','Shopee, Mercado Livre e Trends batendo'],['aval','Avaliações lidas (cerca de 30, em 3 vendedores)'],['dif','Espaço para diferenciar'],['econ','Economia: lucro de R$ 15 ou mais']]}];
+function REGUA_N(){var t=0;REGUA.forEach(function(g){t+=g.i.length});return t}
 function reguaConta(n){var c={sim:0,prov:0,nao:0,desc:0},r=n.regua||{};
   REGUA.forEach(function(g){g.i.forEach(function(it){var e=r[it[0]];c[e&&NV[e[0]]?e[0]:'desc']++})});return c}
 function reguaHtml(n){var r=n.regua||{},c=reguaConta(n),tot=c.sim+c.prov+c.nao+c.desc;
@@ -168,13 +211,14 @@ function reguaHtml(n){var r=n.regua||{},c=reguaConta(n),tot=c.sim+c.prov+c.nao+c
 
 /* ---------- estado e dados ---------- */
 var S={sess:null,recs:[],trashRecs:[],view:'painel',closed:{},focus:'',err:'',busy:false,ready:false};
-var D={prods:[],buscas:[],inbox:[],nichos:[]};
+var D={prods:[],buscas:[],inbox:[],nichos:[],pedidos:[]};
 var confCb=null;
-function derive(){D.prods=[];D.buscas=[];D.inbox=[];D.nichos=[];
+function derive(){D.prods=[];D.buscas=[];D.inbox=[];D.nichos=[];D.pedidos=[];
   S.recs.forEach(function(r){var d=r.data||{},o=Object.assign({},d,{id:r.id,rec:r});
     if(r.kind==='produto')D.prods.push(o);
     else if(r.kind==='busca')D.buscas.push(o);
     else if(r.kind==='nicho')D.nichos.push(o);
+    else if(r.kind==='pedido')D.pedidos.push(o);
     else if(r.kind==='nota'&&!d.usada)D.inbox.push(o)})}
 function PR(id){return D.prods.filter(function(p){return p.id===id})[0]}
 function BU(id){return D.buscas.filter(function(p){return p.id===id})[0]}
@@ -190,8 +234,8 @@ function ativos(){return D.prods.filter(function(p){return !p.descartado})}
 function noEstagio(k){return ativos().filter(function(p){return p.estagio===k}).sort(function(a,b){return (a.estagio_em||'')<(b.estagio_em||'')?-1:1})}
 function nextOf(p){var i=eIdx(p.estagio);return EST[i+1]||null}
 function prevOf(p){var i=eIdx(p.estagio);return i>0?EST[i-1]:null}
-function calc(p){var v=p.venda||0,c=p.custo||0;if(!v||!c)return null;
-  var liq=v-c-v*(p.taxa||0)/100-(p.frete||0);return{liq:liq,pct:liq/v*100,semTaxa:!p.taxa}}
+function calc(p){var v=p.venda||0,c=p.custo||0;if(!v||!c)return null;var fr=p.frete||0,t=taxaShopee(v);
+  var liq=v-c-t.total-fr;return{liq:liq,pct:liq/v*100,t:t,fr:fr,c:c,v:v}}
 function tom(campo,val){if(!val)return '';
   var bom=campo==='procura'?'alta':'baixa',ruim=campo==='procura'?'baixa':'alta';
   return val===bom?'ok':val===ruim?'late':'soon'}
@@ -245,7 +289,8 @@ function pills(p){var h='';
   return h}
 function prow(p,o){o=o||{};var c=calc(p),m=[],nx=nextOf(p);
   if(p.nicho)m.push('<span>'+esc(p.nicho)+'</span>');
-  if(c)m.push('<span class="num">Margem '+money(c.liq)+' ('+Math.round(c.pct)+'%)</span>');
+  if(c)m.push('<span class="num pill '+tomLucro(c.liq)+'">Lucro '+money(c.liq)+' ('+Math.round(c.pct)+'%)</span>');
+  if(p.classe)m.push('<span>PFV-'+esc(p.classe)+'</span>');
   if(p.estagio_em)m.push('<span>desde '+full(p.estagio_em)+'</span>');
   return '<li><div class="trow'+(o.move&&nx?' col':'')+'"><button class="tmain" data-act="open" data-id="'+p.id+'"><span class="tt">'+esc(p.nome)+'</span>'+
     (m.length?'<span class="tm">'+m.join('')+'</span>':'')+(pills(p)?'<span class="tb">'+pills(p)+'</span>':'')+'</button>'+
@@ -255,7 +300,6 @@ function plist(arr,o){return arr.length?'<ul class="list">'+arr.map(function(p){
 function vPainel(){
   var at=ativos(),aval=noEstagio('avaliado'),forn=noEstagio('fornecedor'),comp=noEstagio('comprado');
   var h='<p class="summary">'+(at.length?'<b>'+at.length+'</b> '+(at.length===1?'produto na esteira':'produtos na esteira')+'.':'A esteira está vazia. Comece pelas Buscas ou cadastre um produto.')+'</p>';
-  h+=boxNicho();
   var espera=aval.length+forn.length+comp.length;
   if(espera){
     h+='<div class="group"><h2>Esperando você</h2>';
@@ -263,8 +307,14 @@ function vPainel(){
     if(forn.length)h+='<p class="muted">Com fornecedor: decida a compra</p>'+plist(forn,{move:1});
     if(comp.length)h+='<p class="muted">Comprados: prontos para anunciar</p>'+plist(comp,{move:1});
     h+='</div>'}
+  h+=boxNicho()+boxPedidos();
   h+='<div class="group"><h2>A esteira</h2><ul class="list">'+EST.map(function(e){var n=noEstagio(e.k).length;
     return '<li><button class="place" data-act="gostage" data-k="'+e.k+'"><span><span class="nm">'+esc(e.n)+'</span>'+(e.gate?' <span class="pill gate">decisão sua</span>':'')+'<br><span class="sub">'+esc(e.d)+'</span></span><span class="bub'+(n?'':' zero')+'">'+n+'</span></button></li>'}).join('')+'</ul></div>';
+  var ck=ckConta();
+  h+='<div class="group"><h2>Atalhos</h2><ul class="list">'+
+    '<li><button class="place" data-act="tab" data-v="vender"><span><span class="nm">Começar a vender</span><br><span class="sub">Suas pendências na Shopee, no Bling e no fiscal</span></span><span class="bub'+(ck.d<ck.t?'':' zero')+'">'+ck.d+'/'+ck.t+'</span></button></li>'+
+    '<li><button class="place" data-act="tab" data-v="regras"><span><span class="nm">Números da Shopee e do MEI</span><br><span class="sub">Comissão oficial, teto, DAS e calculadora de lucro</span></span><span class="chev" aria-hidden="true">›</span></button></li>'+
+    '<li><button class="place" data-act="como"><span><span class="nm">Como funciona</span><br><span class="sub">O caminho do produto e quem faz cada passo</span></span><span class="chev" aria-hidden="true">›</span></button></li></ul></div>';
   var nl=trashList().length;
   h+='<div class="actions"><button class="btn alt small" data-act="reload">Atualizar</button><button class="btn alt small" data-act="tab" data-v="lixeira">Lixeira'+(nl?' ('+nl+')':'')+'</button><button class="btn alt small" data-act="logout">Sair</button></div>';
   return h}
@@ -297,14 +347,72 @@ function vCaixa(){
 
 function trashList(){var out=[];
   S.trashRecs.forEach(function(r){var at=ymd(new Date(r.deleted_at)),left=TRASH_DAYS+diff(at);if(left<=0)return;var d=r.data||{};
-    out.push({id:r.id,kind:r.kind,label:(r.kind==='produto'||r.kind==='nicho')?d.nome:r.kind==='busca'?d.termo:d.text,at:at,left:left,ts:r.deleted_at})});
+    out.push({id:r.id,kind:r.kind,label:(r.kind==='produto'||r.kind==='nicho')?d.nome:r.kind==='busca'?d.termo:r.kind==='pedido'?'Caçar: '+(d.palavra||d.nicho||''):d.text,at:at,left:left,ts:r.deleted_at})});
   out.sort(function(a,b){return a.ts<b.ts?1:-1});return out}
 function vLixeira(){
   var list=trashList();
   var h='<div class="actions"><button class="btn alt small" data-act="tab" data-v="painel">← Voltar</button></div><p class="summary">'+(list.length?'<b>'+list.length+'</b> '+(list.length===1?'item':'itens')+' na lixeira. Cada um some sozinho depois de '+TRASH_DAYS+' dias.':'A lixeira está vazia. O que você apagar fica aqui por '+TRASH_DAYS+' dias antes de sumir de vez.')+'</p>';
   if(list.length)h+='<ul class="list">'+list.map(function(x){
-    return '<li><div class="trow"><div class="tmain"><span class="tt">'+esc(x.label||'(sem nome)')+'</span><span class="tm"><span>'+(x.kind==='produto'?'Produto':x.kind==='nicho'?'Nicho':x.kind==='busca'?'Busca':'Anotação')+'</span><span>Apagado em '+full(x.at)+'</span><span class="left">Some em '+x.left+(x.left===1?' dia':' dias')+'</span></span><div class="actions" style="margin-top:.4rem"><button class="btn small" data-act="restore" data-id="'+x.id+'">Restaurar</button></div></div></div></li>'}).join('')+'</ul>';
+    return '<li><div class="trow"><div class="tmain"><span class="tt">'+esc(x.label||'(sem nome)')+'</span><span class="tm"><span>'+(x.kind==='produto'?'Produto':x.kind==='nicho'?'Nicho':x.kind==='busca'?'Busca':x.kind==='pedido'?'Pedido':'Anotação')+'</span><span>Apagado em '+full(x.at)+'</span><span class="left">Some em '+x.left+(x.left===1?' dia':' dias')+'</span></span><div class="actions" style="margin-top:.4rem"><button class="btn small" data-act="restore" data-id="'+x.id+'">Restaurar</button></div></div></div></li>'}).join('')+'</ul>';
   return h}
+
+var PST={aberto:['Esperando o Claude','soon'],fazendo:['O Claude está fazendo','gate'],feito:['Feito','ok']};
+function boxPedidos(){var ab=D.pedidos.filter(function(x){return x.status!=='feito'}),fe=D.pedidos.filter(function(x){return x.status==='feito'}).slice(-3).reverse();
+  var h='<div class="group"><h2>Pedidos ao Claude</h2>';
+  h+='<p class="muted">Peça uma caça de produtos. O Claude faz quando você abrir a conversa e disser "faça os pedidos da Vantora". O resultado aparece aqui e na esteira.</p>';
+  var arr=ab.concat(fe);
+  if(arr.length)h+='<ul class="list">'+arr.map(function(x){var st=PST[x.status]||PST.aberto;
+    return '<li><div class="trow"><button class="tmain" data-act="openped" data-id="'+x.id+'"><span class="tt">Caçar: '+esc(x.palavra||x.nicho||'nicho ativo')+'</span><span class="tm"><span>Pedido em '+full(x.at)+'</span></span><span class="tb"><span class="pill '+st[1]+'">'+st[0]+'</span></span></button></div></li>'}).join('')+'</ul>';
+  h+='<div class="actions"><button class="btn" data-act="newped">+ Pedir caça ao Claude</button></div>';
+  return h+'</div>'}
+function pedForm(){var a=nichoAtivo();
+  openModal('<h2>Pedir caça ao Claude</h2><form id="pedForm" novalidate>'+
+  '<label for="pd-palavra">Palavra ou produto (pode deixar em branco)<input id="pd-palavra" autocomplete="off" placeholder="Ex.: divisória de gaveta"></label>'+
+  '<label for="pd-nicho">Nicho<input id="pd-nicho" list="nichos-dl" value="'+esc(a?a.nome:'')+'" autocomplete="off"></label>'+dl()+
+  '<label for="pd-obs">Recado para o Claude<textarea id="pd-obs" placeholder="Ex.: quero kit até R$ 79,90"></textarea></label><div class="err" id="pd-err" role="alert"></div>'+
+  '<p class="note">O Claude vai procurar o que mais se digita agora no Google, na Amazon, no Mercado Livre e na Shopee, montar o funil 20 → 10 → 5 e trazer até 5 candidatos com a prova de procura. Nada é comprado nem publicado.</p>'+
+  '<div class="actions"><button class="btn" type="submit">Pedir</button><button class="btn alt" type="button" data-act="close">Cancelar</button></div></form>')}
+function openPed(id){var x=D.pedidos.filter(function(y){return y.id===id})[0];if(!x)return;var st=PST[x.status]||PST.aberto;
+  openModal('<h2>Caçar: '+esc(x.palavra||x.nicho||'nicho ativo')+'</h2><div class="tb"><span class="pill '+st[1]+'">'+st[0]+'</span></div>'+
+  '<dl class="kv"><dt>Nicho</dt><dd>'+esc(x.nicho||'—')+'</dd><dt>Pedido em</dt><dd>'+full(x.at)+'</dd>'+(x.obs?'<dt>Recado</dt><dd>'+esc(x.obs)+'</dd>':'')+(x.feito_em?'<dt>Feito em</dt><dd>'+full(x.feito_em)+'</dd>':'')+'</dl>'+
+  (x.resultado?'<p class="sec">Resultado</p><p>'+esc(x.resultado)+'</p>':'')+
+  (x.status==='feito'?'':'<div class="actions"><button class="btn danger" data-act="delped" data-id="'+id+'">Cancelar pedido</button></div>'))}
+
+function vRegras(){var R=REG(),f=R.faixas;
+  var h='<div class="actions"><button class="btn alt small" data-act="tab" data-v="painel">← Voltar</button></div><h2>Números da Shopee e do MEI</h2>';
+  h+='<p class="muted">Fonte: '+esc(R.fonte)+' Conferido em '+full(R.em)+'. Quem atualiza é o Claude, só com fonte oficial.</p>';
+  h+='<p class="sec">Comissão da Shopee por preço do produto</p><table class="tbl"><tr><th>Preço</th><th>Comissão</th><th>Taxa fixa</th></tr>'+f.map(function(x){return '<tr><td>'+(x.ate>=1e8?'De '+money(x.de)+' para cima':money(x.de)+' a '+money(x.ate))+'</td><td>'+x.pct+'%</td><td>'+money(x.fixa)+'</td></tr>'}).join('')+'</table>';
+  h+='<p class="muted">Abaixo de R$ 8 a taxa fixa vira metade do preço. Frete grátis, cupom e devolução variam por pedido e não entram na conta. Devolução: o cliente tem 7 dias; o frete de volta é da Shopee, exceto quando a culpa é do vendedor.</p>';
+  h+='<p class="sec">MEI</p><dl class="conta"><dt>Teto de faturamento no ano</dt><dd>'+money(R.teto)+'</dd><dt>DAS por mês (comércio)</dt><dd>'+money(R.das)+'</dd><dt>Declaração anual (DASN)</dt><dd>até 31 de maio</dd></dl>';
+  h+='<p class="sec">Metas da Vantora</p><dl class="conta"><dt>Lucro mínimo por venda</dt><dd>'+money(R.lucro_min)+'</dd><dt>Lucro bom por venda</dt><dd>'+money(R.lucro_bom)+'</dd><dt>Faixa de preço preferida</dt><dd>R$ 50 a R$ 79,90</dd></dl>';
+  h+='<p class="sec">Calculadora de lucro</p><p class="muted">Só calcula, não salva nada.</p><div class="three"><label for="cc-v">Preço de venda<input id="cc-v" inputmode="decimal" placeholder="0,00"></label><label for="cc-c">Custo<input id="cc-c" inputmode="decimal" placeholder="0,00"></label><label for="cc-f">Frete e embalagem<input id="cc-f" inputmode="decimal" placeholder="0,00"></label></div><div id="cc-out" class="note">Preencha preço e custo.</div>';
+  return h}
+function contaHtml(v,c,fr){var t=taxaShopee(v),l=v-c-t.total-fr,R=REG(),mn=precoMin(c,fr,R.lucro_min);
+  return '<dl class="conta"><dt>Preço de venda</dt><dd>'+money(v)+'</dd><dt>− Comissão Shopee '+t.pct+'%</dt><dd>'+money(t.com)+'</dd><dt>− Taxa fixa</dt><dd>'+money(t.fixa)+'</dd><dt>− Custo</dt><dd>'+money(c)+'</dd><dt>− Frete e embalagem</dt><dd>'+money(fr)+'</dd>'+
+  '<dt class="tot">= Lucro por venda</dt><dd class="tot"><span class="pill '+tomLucro(l)+'">'+money(l)+' ('+Math.round(v?l/v*100:0)+'%)</span></dd></dl>'+
+  (mn?'<p class="muted">Para lucrar '+money(R.lucro_min)+' o preço mínimo é '+money(mn)+'.</p>':'')}
+function calcLive(){var o=$('#cc-out');if(!o)return;var v=num($('#cc-v').value),c=num($('#cc-c').value),f=num($('#cc-f').value);o.innerHTML=v&&c?contaHtml(v,c,f):'Preencha preço e custo.'}
+
+function vVender(){var f=ckFeito(),c=ckConta();
+  var h='<div class="actions"><button class="btn alt small" data-act="tab" data-v="painel">← Voltar</button></div><h2>Começar a vender</h2>';
+  h+='<p class="summary"><b>'+c.d+' de '+c.t+'</b> feitos. São coisas que só você faz, nas suas contas. Toque para marcar ou desmarcar.</p>';
+  CHECK.forEach(function(g){h+='<p class="sec">'+esc(g.g)+'</p><ul class="list">'+g.i.map(function(it){var on=!!f[it[0]];
+    return '<li><button class="ck'+(on?' on':'')+'" data-act="ck" data-k="'+it[0]+'"><span class="bx" aria-hidden="true">'+(on?'✓':'')+'</span><span><span class="tt">'+esc(it[1])+'</span>'+(on?'<br><span class="sub muted">Feito em '+full(f[it[0]])+'</span>':'')+'</span></button></li>'}).join('')+'</ul>'});
+  h+='<p class="muted">Vem do retorno da AUD de 06/10/2026 e das decisões já tomadas (o plano Cobalto do Bling ficou para depois; vender pelo Seller Center).</p>';
+  return h}
+function doCk(k){var f=ckFeito(),on=!!f[k],it=null;CHECK.forEach(function(g){g.i.forEach(function(x){if(x[0]===k)it=x})});if(!it)return;
+  ask({title:on?'Desmarcar?':'Marcar como feito?',yes:on?'Sim, desmarcar':'Sim, está feito',body:'<p>'+esc(it[1])+'</p>',
+   onYes:async function(){var nf=Object.assign({},f);if(on)delete nf[k];else nf[k]=todayS();var r=CK0();if(r)await Api.update(r,Object.assign({},r.data,{feito:nf}));else await Api.create('check',{feito:nf})}})}
+function openComo(){
+  openModal('<h2>Como funciona</h2><ol class="flow">'+
+  '<li><span><b>Nicho.</b> O Claude propõe e dá nota; <b>você ativa</b>.</span></li>'+
+  '<li><span><b>Caça.</b> Você toca em "Pedir caça". O Claude busca o que mais se procura agora, faz o funil 20 → 10 → 5 e põe os candidatos na esteira com a prova.</span></li>'+
+  '<li><span><b>Avaliado.</b> Procura, devolução, concorrência e preço conferidos. Classe PFV de A a X.</span></li>'+
+  '<li><span><b>Leão.</b> <b>Você decide</b> se vale seguir.</span></li>'+
+  '<li><span><b>Fornecedor.</b> Cotação, custo e amostra. O lucro é calculado com a comissão oficial.</span></li>'+
+  '<li><span><b>Comprado.</b> <b>Você autoriza</b> o gasto. Custo e preço são obrigatórios.</span></li>'+
+  '<li><span><b>À venda.</b> Título, SKU, peso, fotos. <b>Você publica</b>. Pendência crítica trava.</span></li></ol>'+
+  '<p class="note">O Claude pesquisa, preenche e avisa o que falta. Dinheiro, compra e publicação são sempre suas. Nada some: o que você apaga fica 30 dias na Lixeira.</p>')}
 
 function boxNicho(){var a=nichoAtivo(),h='<div class="group"><h2>Nicho ativo</h2><div class="ativoBox">';
   if(a){h+='<p class="tt">'+esc(a.nome)+'</p><p class="muted">Buscas e produtos novos começam com este nicho.</p><div class="actions"><button class="btn alt small" data-act="tab" data-v="nichos">Ver nichos</button></div>'}
@@ -314,7 +422,7 @@ function boxNicho(){var a=nichoAtivo(),h='<div class="group"><h2>Nicho ativo</h2
   return h+'</div></div>'}
 
 function nrow(n){var c=contaNicho(n);
-  return '<li><div class="trow'+(n.ativo?'':' col')+'"><button class="tmain" data-act="openn" data-id="'+n.id+'"><span class="tt">'+esc(n.nome)+'</span><span class="tm"><span>'+(n.nota?'Nota '+n.nota+' de 5':'Sem nota')+'</span><span>'+c.b+(c.b===1?' busca':' buscas')+'</span><span>'+c.p+(c.p===1?' produto':' produtos')+'</span><span>'+reguaConta(n).desc+' de 14 sem dado</span></span><span class="tb">'+(n.ativo?'<span class="pill ok">Ativo</span>':'<span class="pill">Não ativo</span>')+'</span></button>'+
+  return '<li><div class="trow'+(n.ativo?'':' col')+'"><button class="tmain" data-act="openn" data-id="'+n.id+'"><span class="tt">'+esc(n.nome)+'</span><span class="tm"><span>'+(n.nota?'Nota '+n.nota+' de 5':'Sem nota')+'</span><span>'+c.b+(c.b===1?' busca':' buscas')+'</span><span>'+c.p+(c.p===1?' produto':' produtos')+'</span><span>'+reguaConta(n).desc+' de '+REGUA_N()+' sem dado</span></span><span class="tb">'+(n.ativo?'<span class="pill ok">Ativo</span>':'<span class="pill">Não ativo</span>')+'</span></button>'+
     (n.ativo?'':'<button class="btn small" data-act="activate" data-id="'+n.id+'">Ativar</button>')+'</div></li>'}
 function vNichos(){
   var h='<p class="summary">Cada nicho tem uma nota de 1 a 5, o motivo e a régua da Vantora 1. Só um fica ativo por vez, e ativar pede o seu sim.</p>';
@@ -335,13 +443,13 @@ function openNicho(id){var n=NI(id);if(!n)return;var c=contaNicho(n),blank='<spa
   '<dl class="kv"><dt>Por quê</dt><dd>'+(n.motivo?esc(n.motivo):blank)+'</dd><dt>Falta medir</dt><dd>'+(n.faltou?esc(n.faltou):blank)+'</dd>'+
   '<dt>Buscas</dt><dd class="num">'+c.b+'</dd><dt>Produtos</dt><dd class="num">'+c.p+'</dd>'+
   (n.veredito?'<dt>Veredito</dt><dd>'+esc(n.veredito)+'</dd>':'')+'<dt>Proposto por</dt><dd>'+(n.origem==='claude'?'Claude':'Você')+(n.at?' em '+full(n.at):'')+'</dd>'+(n.ativo&&n.ativo_em?'<dt>Ativo desde</dt><dd>'+full(n.ativo_em)+'</dd>':'')+'</dl>'+
-  '<p class="note">A nota é uma estimativa, não um dado medido. Pelo método da Vantora 1, só a comparação de vendedores na Shopee dá o direito de chamar algo de forte.</p>'+reguaHtml(n)+
+  '<p class="note">A nota é uma estimativa, não um dado medido. Pela regra da Vantora 1 (27/10), a prova principal é procura forte e atual na internet. Comparar vendedores na Shopee é bônus.</p>'+reguaHtml(n)+
   '<div class="actions">'+(n.ativo?'<button class="btn alt" data-act="deactivate" data-id="'+id+'">Desativar</button>':'<button class="btn" data-act="activate" data-id="'+id+'">Ativar este nicho</button>')+'<button class="btn alt" data-act="editn" data-id="'+id+'">Editar</button></div>'+
   '<div class="actions"><button class="btn danger" data-act="deln" data-id="'+id+'">Excluir</button></div>')}
 
 function doAtivar(id){var n=NI(id);if(!n)return;var a=nichoAtivo();
   ask({title:'Este passo é seu',yes:'Sim, ativar',
-   body:'<p><b>'+esc(n.nome)+'</b></p>'+(a&&a.id!==id?'<p>O nicho ativo muda de <b>'+esc(a.nome)+'</b> para <b>'+esc(n.nome)+'</b>.</p>':'<p>Passa a ser o nicho ativo.</p>')+'<p class="note">Buscas e produtos novos começam com este nicho. Só confirme se você realmente decidiu.</p>'+'<p class="muted">Na régua da Vantora 1: '+reguaConta(n).desc+' de 14 itens sem dado.</p>'+(n.faltou?'<p class="muted">Ainda falta medir: '+esc(n.faltou)+'</p>':''),
+   body:'<p><b>'+esc(n.nome)+'</b></p>'+(a&&a.id!==id?'<p>O nicho ativo muda de <b>'+esc(a.nome)+'</b> para <b>'+esc(n.nome)+'</b>.</p>':'<p>Passa a ser o nicho ativo.</p>')+'<p class="note">Buscas e produtos novos começam com este nicho. Só confirme se você realmente decidiu.</p>'+'<p class="muted">Na régua da Vantora 1: '+reguaConta(n).desc+' de '+REGUA_N()+' itens sem dado.</p>'+(n.faltou?'<p class="muted">Ainda falta medir: '+esc(n.faltou)+'</p>':''),
    onYes:async function(){if(a&&a.id!==id)await patch(a.id,{ativo:false});await patch(id,{ativo:true,ativo_em:todayS()});closeModal()}})}
 
 function vLogin(){
@@ -354,7 +462,7 @@ function render(){
   var root=$('#root');
   if(!S.sess){root.innerHTML=vLogin();return}
   var d=new Date(),title=d.toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long'});
-  var body=S.view==='painel'?vPainel():S.view==='esteira'?vEsteira():S.view==='nichos'?vNichos():S.view==='buscas'?vBuscas():S.view==='caixa'?vCaixa():vLixeira();
+  var body=S.view==='painel'?vPainel():S.view==='esteira'?vEsteira():S.view==='nichos'?vNichos():S.view==='buscas'?vBuscas():S.view==='caixa'?vCaixa():S.view==='regras'?vRegras():S.view==='vender'?vVender():vLixeira();
   var nCaixa=D.inbox.length;
   var tabs=[['painel','Painel'],['esteira','Esteira'],['nichos','Nichos'],['buscas','Buscas'],['caixa','Caixa'+(nCaixa?' ('+nCaixa+')':'')]];
   var fab=(S.view==='painel'||S.view==='esteira')?'<button class="btn fab" data-act="newprod">+ Novo produto</button>':S.view==='nichos'?'<button class="btn fab" data-act="newnicho">+ Novo nicho</button>':S.view==='buscas'?'<button class="btn fab" data-act="newbusca">+ Nova busca</button>':'';
@@ -386,13 +494,23 @@ function prodForm(p,pre){pre=pre||{};
   '<label for="f-nome">Nome do produto<input id="f-nome" value="'+esc(v.nome||'')+'" autocomplete="off"></label><div class="err" id="f-err" role="alert"></div>'+
   '<label for="f-nicho">Nicho<input id="f-nicho" list="nichos-dl" value="'+esc(v.nicho||'')+'" autocomplete="off" placeholder="Ex.: Organizadores de gaveta"></label>'+dl()+
   (p?'':'<label for="f-est">Em que etapa ele está<select id="f-est">'+estOpts(v.estagio)+'</select></label>')+
+  '<p class="sec">Procura (prova principal do leão)</p>'+
   '<div class="three"><label for="f-procura">Procura<select id="f-procura">'+opts(NIVEL,v.procura)+'</select></label><label for="f-devol">Devolução<select id="f-devol">'+opts(NIVEL,v.devolucao)+'</select></label><label for="f-conc">Concorrência<select id="f-conc">'+opts(NIVEL,v.concorrencia)+'</select></label></div>'+
-  '<div class="two"><label for="f-classe">Classe PFV<select id="f-classe">'+opts(CLASSES,v.classe)+'</select></label><label for="f-bench">Vendedores comparados<input id="f-bench" inputmode="numeric" value="'+esc(v.bench==null?'':v.bench)+'" placeholder="0"></label></div>'+
+  '<label for="f-prova">Prova de procura<textarea id="f-prova" placeholder="Onde viu e quando. Ex.: Google Trends 90 dias subindo; sugestões do Google e da Amazon">'+esc(v.prova||'')+'</textarea></label>'+
+  '<div class="two"><label for="f-classe">Classe PFV<select id="f-classe">'+opts(CLASSES,v.classe)+'</select></label><label for="f-bench">Vendedores comparados (bônus)<input id="f-bench" inputmode="numeric" value="'+esc(v.bench==null||v.bench===0?'':v.bench)+'" placeholder="0"></label></div>'+
   '<label for="f-pend">Pendência crítica<input id="f-pend" value="'+esc(v.pend||'')+'" autocomplete="off" placeholder="O que ainda pode derrubar o produto. Em branco se nada"></label>'+
-  '<div class="two"><label for="f-custo">Custo de compra (R$)<input id="f-custo" inputmode="decimal" value="'+fld(v.custo)+'" placeholder="0,00"></label><label for="f-venda">Preço de venda (R$)<input id="f-venda" inputmode="decimal" value="'+fld(v.venda)+'" placeholder="0,00"></label></div>'+
-  '<div class="two"><label for="f-taxa">Taxas da Shopee (%)<input id="f-taxa" inputmode="decimal" value="'+fld(v.taxa)+'" placeholder="Veja no Seller Center"></label><label for="f-frete">Frete e embalagem (R$)<input id="f-frete" inputmode="decimal" value="'+fld(v.frete)+'" placeholder="0,00"></label></div>'+
+  '<p class="sec">Dinheiro</p>'+
+  '<div class="three"><label for="f-custo">Custo de compra (R$)<input id="f-custo" inputmode="decimal" value="'+fld(v.custo)+'" placeholder="0,00"></label><label for="f-venda">Preço de venda (R$)<input id="f-venda" inputmode="decimal" value="'+fld(v.venda)+'" placeholder="0,00"></label><label for="f-frete">Frete e embalagem (R$)<input id="f-frete" inputmode="decimal" value="'+fld(v.frete)+'" placeholder="0,00"></label></div>'+
+  '<p class="muted">A comissão da Shopee entra sozinha, pela tabela oficial.</p>'+
+  '<p class="sec">Fornecedor e amostra</p>'+
   '<label for="f-forn">Fornecedor<input id="f-forn" value="'+esc(v.fornecedor||'')+'" autocomplete="off" placeholder="Pode ficar em branco"></label>'+
   '<div class="two"><label for="f-contato">Contato<input id="f-contato" value="'+esc(v.contato||'')+'" autocomplete="off"></label><label for="f-link">Link da loja ou anúncio<input id="f-link" value="'+esc(v.link||'')+'" autocomplete="off" autocapitalize="none"></label></div>'+
+  '<label for="f-amostra">Amostra<select id="f-amostra">'+opts(AMOSTRA,v.amostra)+'</select></label>'+
+  '<p class="sec">Anúncio</p>'+
+  '<label for="f-titulo">Título (até 120 letras)<input id="f-titulo" maxlength="120" value="'+esc(v.titulo||'')+'" autocomplete="off"></label>'+
+  '<div class="three"><label for="f-sku">SKU<input id="f-sku" maxlength="60" value="'+esc(v.sku||'')+'" autocomplete="off" autocapitalize="characters"></label><label for="f-peso">Peso embalado (g)<input id="f-peso" inputmode="numeric" value="'+esc(v.peso||'')+'"></label><label for="f-medidas">Medidas (cm)<input id="f-medidas" value="'+esc(v.medidas||'')+'" placeholder="20 x 15 x 5"></label></div>'+
+  '<label for="f-fotos">Fotos próprias<select id="f-fotos"><option value="">Ainda não</option><option value="1"'+(v.fotos?' selected':'')+'>Prontas</option></select></label>'+
+  '<p class="sec">Outros</p>'+
   '<label for="f-notas">Anotações<textarea id="f-notas">'+esc(v.notas||'')+'</textarea></label>'+
   '<div class="actions"><button class="btn" type="submit">Salvar</button><button class="btn alt" type="button" data-act="close">Cancelar</button></div></form>')}
 
@@ -405,20 +523,16 @@ function buscaForm(b,pre){pre=pre||{};var v=b||{termo:pre.termo||'',onde:'Google
   '<div class="actions"><button class="btn" type="submit">Salvar</button><button class="btn alt" type="button" data-act="close">Cancelar</button></div></form>')}
 
 function openProd(id){var p=PR(id);if(!p)return;var c=calc(p),nx=nextOf(p),pv=prevOf(p),e=eOf(p.estagio);
-  var blank='<span class="blank">em branco, você preenche depois</span>';
-  openModal('<h2>'+esc(p.nome)+'</h2><div class="tb">'+(p.descartado?'<span class="pill late">Descartado</span>':'<span class="pill gate">'+esc(e.n)+'</span>')+pills(p)+'</div>'+
-  '<dl class="kv"><dt>Nicho</dt><dd>'+(p.nicho?esc(p.nicho):blank)+'</dd>'+
-  (p.estagio_em?'<dt>Nesta etapa desde</dt><dd>'+full(p.estagio_em)+'</dd>':'')+
-  '<dt>Custo</dt><dd class="num">'+(p.custo?money(p.custo):blank)+'</dd>'+
-  '<dt>Preço de venda</dt><dd class="num">'+(p.venda?money(p.venda):blank)+'</dd>'+
-  '<dt>Taxas Shopee</dt><dd class="num">'+(p.taxa?fld(p.taxa)+'%':blank)+'</dd>'+
-  '<dt>Frete e embalagem</dt><dd class="num">'+(p.frete?money(p.frete):blank)+'</dd>'+
-  '<dt>Classe PFV</dt><dd>'+(p.classe?esc(CLASSES[p.classe]||p.classe):blank)+'</dd><dt>Vendedores comparados</dt><dd class="num">'+(p.bench?p.bench:blank)+'</dd>'+(p.pend?'<dt>Pendência crítica</dt><dd>'+esc(p.pend)+'</dd>':'')+'<dt>Fornecedor</dt><dd>'+(p.fornecedor?esc(p.fornecedor):blank)+'</dd>'+
-  '<dt>Contato</dt><dd>'+(p.contato?esc(p.contato):blank)+'</dd>'+
-  (p.link?'<dt>Link</dt><dd>'+esc(p.link)+'</dd>':'')+
-  (p.notas?'<dt>Anotações</dt><dd>'+esc(p.notas)+'</dd>':'')+
-  (p.descartado?'<dt>Motivo do descarte</dt><dd>'+esc(p.motivo||'Sem motivo anotado')+'</dd>':'')+'</dl>'+
-  (c?'<p class="note"><b>Margem líquida: '+money(c.liq)+' ('+Math.round(c.pct)+'%)</b>'+(c.semTaxa?'<br>Falta informar a taxa da Shopee. Confira o valor atual no Seller Center, senão a margem aparece maior do que é.':'')+'</p>':'<p class="muted">Preencha custo e preço de venda para ver a margem.</p>')+
+  var blank='<span class="blank">em branco</span>';
+  function kv(t,v){return '<dt>'+t+'</dt><dd>'+(v||v===0?v:blank)+'</dd>'}
+  openModal('<h2>'+esc(p.nome)+'</h2><div class="tb">'+(p.descartado?'<span class="pill late">Descartado</span>':'<span class="pill gate">'+esc(e.n)+'</span>')+(p.classe?'<span class="pill">'+esc(CLASSES[p.classe]||p.classe)+'</span>':'')+pills(p)+'</div>'+
+  faltaHtml(p)+
+  '<p class="sec">Procura</p><dl class="kv">'+kv('Nicho',p.nicho&&esc(p.nicho))+kv('Prova',p.prova&&esc(p.prova))+kv('Vendedores comparados',p.bench||'')+(p.pend?kv('Pendência crítica',esc(p.pend)):'')+(p.estagio_em?kv('Nesta etapa desde',full(p.estagio_em)):'')+'</dl>'+
+  '<p class="sec">Dinheiro</p>'+(c?contaHtml(c.v,c.c,c.fr):'<p class="muted">Preencha custo e preço de venda para ver o lucro com a comissão oficial.</p>')+
+  '<p class="sec">Fornecedor e amostra</p><dl class="kv">'+kv('Fornecedor',p.fornecedor&&esc(p.fornecedor))+kv('Contato',p.contato&&esc(p.contato))+(p.link?kv('Link',esc(p.link)):'')+kv('Amostra',p.amostra?esc(AMOSTRA[p.amostra]):'')+'</dl>'+
+  '<p class="sec">Anúncio</p><dl class="kv">'+kv('Título',p.titulo&&esc(p.titulo))+kv('SKU',p.sku&&esc(p.sku))+kv('Peso embalado',p.peso?p.peso+' g':'')+kv('Medidas',p.medidas&&esc(p.medidas)+' cm')+kv('Fotos próprias',p.fotos?'Prontas':'')+'</dl>'+
+  (p.notas?'<p class="sec">Anotações</p><p>'+esc(p.notas)+'</p>':'')+
+  (p.descartado?'<p class="sec">Motivo do descarte</p><p>'+esc(p.motivo||'Sem motivo anotado')+'</p>':'')+
   (p.descartado?'<div class="actions"><button class="btn" data-act="reactivate" data-id="'+id+'">Reativar</button></div>':
    '<div class="actions">'+(nx?'<button class="btn" data-act="move" data-id="'+id+'" data-to="'+nx.k+'">'+esc(nx.btn)+'</button>':'')+(pv?'<button class="btn alt" data-act="move" data-id="'+id+'" data-to="'+pv.k+'">Voltar uma etapa</button>':'')+'</div>')+
   '<div class="actions"><button class="btn alt" data-act="edit" data-id="'+id+'">Editar</button>'+(p.descartado?'':'<button class="btn alt" data-act="discard" data-id="'+id+'">Descartar</button>')+'</div>'+
@@ -430,8 +544,11 @@ function openBusca(id){var b=BU(id);if(!b)return;
   '<div class="actions"><button class="btn danger" data-act="delb" data-id="'+id+'">Excluir</button></div>')}
 
 function doMove(id,to){var p=PR(id);if(!p)return;var dest=eOf(to),from=eOf(p.estagio),back=eIdx(to)<eIdx(p.estagio);
+  var fl=back?[]:faltaDe(p),trv=fl.filter(function(x){return x.trava}),av=fl.filter(function(x){return !x.trava});
+  if(trv.length){ask({title:'Ainda não dá para seguir',yes:'Entendi',body:'<p><b>'+esc(p.nome)+'</b></p><p>Para ir para <b>'+esc(dest.n)+'</b> precisa de:</p><ul class="falta">'+trv.map(function(x){return '<li>⛔ '+esc(x.t)+'</li>'}).join('')+'</ul><p class="muted">Toque em Editar na ficha e preencha.</p>',onYes:async function(){}});return}
+  var extra=(to==='leao'&&!back?'<p class="note">Prova de procura: '+(p.prova?esc(p.prova):'<b>nenhuma anotada</b>')+'<br>Procura: '+esc(NIVEL[p.procura||''])+'</p>':'')+(av.length?'<p class="muted">Ainda em branco (pode seguir e preencher depois): '+esc(av.map(function(x){return x.t}).join('; '))+'.</p>':'');
   ask({title:dest.gate&&!back?'Este passo é seu':(back?'Voltar uma etapa?':'Mudar de etapa?'),yes:back?'Sim, voltar':'Sim, confirmo',
-   body:'<p><b>'+esc(p.nome)+'</b></p><p>De <b>'+esc(from.n)+'</b> para <b>'+esc(dest.n)+'</b>.</p>'+(dest.gate&&!back?'<p class="note">'+esc(dest.d)+'. Só confirme se você realmente decidiu.</p>':'')+(to==='fornecedor'&&!p.fornecedor?'<p class="muted">Fornecedor em branco não trava nada: você preenche depois.</p>':''),
+   body:'<p><b>'+esc(p.nome)+'</b></p><p>De <b>'+esc(from.n)+'</b> para <b>'+esc(dest.n)+'</b>.</p>'+extra+(dest.gate&&!back?'<p class="note">'+esc(dest.d)+'. Só confirme se você realmente decidiu.</p>':'')+(to==='fornecedor'&&!p.fornecedor?'<p class="muted">Fornecedor em branco não trava nada: você preenche depois.</p>':''),
    onYes:async function(){await patch(id,{estagio:to,estagio_em:todayS()});closeModal()}})}
 
 /* ---------- eventos ---------- */
@@ -444,10 +561,10 @@ document.addEventListener('submit',function(e){
       btn.disabled=false;btn.textContent='Entrar';$('#lg-err').textContent=(x.status===400||x.status===401)?'Email ou senha incorretos.':'Não consegui entrar agora. Veja a internet e tente de novo.'});return}
   if(id==='prodForm'){e.preventDefault();var f=e.target,pid=f.getAttribute('data-id'),from=f.getAttribute('data-from'),fk=f.getAttribute('data-fromkind');
     var v={nome:$('#f-nome').value.trim(),nicho:$('#f-nicho').value.trim(),procura:$('#f-procura').value,devolucao:$('#f-devol').value,concorrencia:$('#f-conc').value,
-      custo:num($('#f-custo').value),venda:num($('#f-venda').value),taxa:num($('#f-taxa').value),frete:num($('#f-frete').value),
+      custo:num($('#f-custo').value),venda:num($('#f-venda').value),frete:num($('#f-frete').value),prova:$('#f-prova').value.trim(),amostra:$('#f-amostra').value,titulo:$('#f-titulo').value.trim(),sku:$('#f-sku').value.trim(),peso:Math.floor(num($('#f-peso').value)),medidas:$('#f-medidas').value.trim(),fotos:$('#f-fotos').value==='1',
       classe:$('#f-classe').value,bench:Math.floor(num($('#f-bench').value)),pend:$('#f-pend').value.trim(),fornecedor:$('#f-forn').value.trim(),contato:$('#f-contato').value.trim(),link:$('#f-link').value.trim(),notas:$('#f-notas').value.trim()};
     if(!v.nome){$('#f-err').textContent='Dê um nome ao produto.';$('#f-nome').focus();return}
-    if(v.classe==='A'&&(v.bench<5||v.pend)){$('#f-err').textContent='PFV-A exige comparar pelo menos 5 vendedores e nenhuma pendência crítica. Use PFV-B ou limpe a pendência.';$('#f-classe').focus();return}
+    if(v.classe==='A'&&(v.procura!=='alta'||!v.prova||v.pend)){$('#f-err').textContent='PFV-A exige procura alta com a prova anotada e nenhuma pendência crítica. Use PFV-B ou complete.';$('#f-classe').focus();return}
     var est=pid?null:$('#f-est').value;
     ask({title:pid?'Salvar as alterações?':'Guardar este produto?',yes:'Sim, salvar',body:'<p><b>'+esc(v.nome)+'</b></p>'+(est?'<p class="muted">Etapa: '+esc(eOf(est).n)+'</p>':''),
      onYes:async function(){
@@ -471,6 +588,10 @@ document.addEventListener('submit',function(e){
        if(nid){await patch(nid,nv)}
        else{nv.ativo=false;nv.origem='app';nv.at=todayS();await Api.create('nicho',nv)}
        closeModal()}});return}
+  if(id==='pedForm'){e.preventDefault();var pv={palavra:$('#pd-palavra').value.trim(),nicho:$('#pd-nicho').value.trim(),obs:$('#pd-obs').value.trim()};
+    if(!pv.palavra&&!pv.nicho){$('#pd-err').textContent='Escreva uma palavra ou escolha um nicho.';return}
+    ask({title:'Mandar este pedido ao Claude?',yes:'Sim, pedir',body:'<p>Caçar: <b>'+esc(pv.palavra||pv.nicho)+'</b></p><p class="muted">Fica esperando até você abrir a conversa com o Claude.</p>',
+     onYes:async function(){pv.status='aberto';pv.at=todayS();await Api.create('pedido',pv);closeModal()}});return}
   if(id==='quickForm'){e.preventDefault();var qt=$('#q-text').value.trim();if(!qt)return;
     ask({title:'Guardar na caixa?',yes:'Sim, guardar',body:'<p>'+esc(qt)+'</p>',onYes:async function(){await Api.create('nota',{text:qt,source:'app',at:todayS()})}})}
 });
@@ -522,8 +643,16 @@ document.addEventListener('click',function(e){
    case'deln':var dn3=NI(id);if(!dn3)break;
      ask({title:'Excluir este nicho?',danger:1,yes:'Sim, excluir',body:'<p><b>'+esc(dn3.nome)+'</b></p>'+(dn3.ativo?'<p class="note">Ele é o nicho ativo. Sem ele, fica sem nicho ativo.</p>':'')+'<p class="muted">As buscas e os produtos dele não são apagados. O nicho vai para a Lixeira e fica lá por '+TRASH_DAYS+' dias.</p>',
       onYes:async function(){await Api.setDeleted([id],new Date().toISOString());closeModal()}});break;
+   case'newped':pedForm();break;
+   case'openped':openPed(id);break;
+   case'delped':var pd=D.pedidos.filter(function(x){return x.id===id})[0];if(!pd)break;
+     ask({title:'Cancelar este pedido?',danger:1,yes:'Sim, cancelar',body:'<p>Caçar: <b>'+esc(pd.palavra||pd.nicho||'')+'</b></p><p class="muted">Vai para a Lixeira e fica lá por '+TRASH_DAYS+' dias.</p>',
+      onYes:async function(){await Api.setDeleted([id],new Date().toISOString());closeModal()}});break;
+   case'ck':doCk(b.getAttribute('data-k'));break;
+   case'como':openComo();break;
    case'close':closeModal();break;
   }});
+document.addEventListener('input',function(e){if(e.target&&/^cc-/.test(e.target.id))calcLive()});
 document.addEventListener('keydown',function(e){if(e.key==='Escape'){if(!$('#confirm').hidden)closeConf();else if(!$('#modal').hidden)closeModal()}});
 $('#modal').addEventListener('click',function(e){if(e.target===this)closeModal()});
 
