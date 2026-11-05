@@ -2360,6 +2360,12 @@ const frow=(l,v)=>(String(v==null?'':v).length>26||String(v).indexOf('\n')>=0)
   ?'<div class="frlong"><span class="mut">'+esc(l)+'</span><b>'+esc(v)+'</b></div>'
   :'<div class="row"><span class="mut">'+esc(l)+'</span><b>'+esc(v)+'</b></div>';
 const yesNo=v=>v?'Sim':'Não';
+/* valor total da dívida: 1ª parcela + demais (se tiver nº de parcelas); senão o saldo mais o que já foi pago; senão só o saldo */
+function debtTotalC(x){
+  if(x.nInst&&x.installC!=null)return (x.firstInstC!=null?x.firstInstC:x.installC)+(x.nInst-1)*x.installC;
+  const paid=debtSchedule(x).filter(s=>s.paid).reduce((a,s)=>a+(s.amt||0),0);
+  return x.balanceC!=null?x.balanceC+paid:(paid||null);
+}
 function debtSchedule(x){
   const paidSet=new Set(x.paidYm||[]),fd=debtFd(x);let yms=[];
   if(x.nInst&&fd){for(let i=0;i<x.nInst;i++)yms.push(addMonths(fd,i));}
@@ -2384,7 +2390,8 @@ function fichaDebt(rec,ymHint){
   if(x.payer)h+=frow('Quem paga',x.payer);
   if(x.account)h+=frow('Conta de onde sai',x.account);
   h+=frow('Situação',dstTxt(x));
-  h+=frow(rv?'Falta receber':'Saldo da dívida',x.balanceC==null?'Não informado':money(x.balanceC));
+  {const tt=debtTotalC(x);if(tt!=null)h+=frow(rv?'Valor total a receber':'Valor total da dívida',money(tt));}
+  h+=frow(rv?'Falta receber (saldo)':'Saldo (o que falta pagar)',x.balanceC==null?'Não informado':money(x.balanceC));
   if(x.firstInstC!=null)h+=frow('1ª parcela',money(x.firstInstC));
   h+=frow(x.firstInstC!=null?'Demais parcelas':'Parcela',x.installC==null?'Não informado':money(x.installC));
   if(x.nInst)h+=frow('Total de parcelas',String(x.nInst));
@@ -2828,7 +2835,7 @@ const DSTR={ATIVA:'A receber',ATRASADA:'Atrasada',PAGA:'Recebida',DESCONHECIDA:'
 const dstTxt=x=>(x.dir==='RECEBER'?DSTR:DST)[x.status]||x.status;
 function debtRow(d){
   const x=d.data,rv=x.dir==='RECEBER';
-  return '<button class="item" data-act="debt-edit" data-id="'+d.id+'" data-rid="'+d.id+'"><div class="row"><span class="t">'+esc(x.creditor)+'</span><span class="tag '+(x.status==='PAGA'?'ok':(x.status==='ATRASADA'?'bad':''))+'">'+esc(dstTxt(x))+'</span></div><div class="row"><span class="mut">'+(rv?'Falta receber':'Saldo')+'</span><b'+(rv?' class="rc"':'')+'>'+money(x.balanceC)+'</b></div><div class="row"><span class="mut">Parcela</span><b'+(rv?' class="rc"':'')+'>'+money(x.installC)+'</b></div><div class="mut">'+(rv?'A receber':'Dívida')+(x.kindD?' · '+esc(x.kindD):'')+(x.rateBp!=null?' · juros '+(x.rateBp/100).toFixed(2).replace('.',',')+'% ao mês':'')+(x.account?' · conta '+esc(x.account):'')+'</div>'+(x.dueDay?'<div class="mut">Vence dia '+x.dueDay+(debtConfirm(x)?' · ⚠️ parcela de '+brDate(debtConfirm(x))+': confirme se já pagou':(debtNext(x,true)?' · próxima parcela em '+brDate(debtNext(x,true)):''))+'</div>':'')+(S.remMap&&S.remMap[d.id]?'<div class="mut">🔔 Lembrete no Núcleo: 1 dia antes, às '+REM_TIME+'</div>':'')+(x.note?'<div class="mut">'+esc(x.note)+'</div>':'')+'</button>';
+  return '<button class="item" data-act="debt-edit" data-id="'+d.id+'" data-rid="'+d.id+'"><div class="row"><span class="t">'+esc(x.creditor)+'</span><span class="tag '+(x.status==='PAGA'?'ok':(x.status==='ATRASADA'?'bad':''))+'">'+esc(dstTxt(x))+'</span></div>'+(debtTotalC(x)!=null&&debtTotalC(x)!==x.balanceC?'<div class="row"><span class="mut">Total da dívida</span><b>'+money(debtTotalC(x))+'</b></div>':'')+'<div class="row"><span class="mut">'+(rv?'Falta receber':'Saldo')+'</span><b'+(rv?' class="rc"':'')+'>'+money(x.balanceC)+'</b></div><div class="row"><span class="mut">Parcela</span><b'+(rv?' class="rc"':'')+'>'+money(x.installC)+'</b></div><div class="mut">'+(rv?'A receber':'Dívida')+(x.kindD?' · '+esc(x.kindD):'')+(x.rateBp!=null?' · juros '+(x.rateBp/100).toFixed(2).replace('.',',')+'% ao mês':'')+(x.account?' · conta '+esc(x.account):'')+'</div>'+(x.dueDay?'<div class="mut">Vence dia '+x.dueDay+(debtConfirm(x)?' · ⚠️ parcela de '+brDate(debtConfirm(x))+': confirme se já pagou':(debtNext(x,true)?' · próxima parcela em '+brDate(debtNext(x,true)):''))+'</div>':'')+(S.remMap&&S.remMap[d.id]?'<div class="mut">🔔 Lembrete no Núcleo: 1 dia antes, às '+REM_TIME+'</div>':'')+(x.note?'<div class="mut">'+esc(x.note)+'</div>':'')+'</button>';
 }
 function vDebts(){
   const ds=byKind('debt');
@@ -3000,7 +3007,7 @@ function stRows(){
   return out;
 }
 /* ---------- Extrato: buscar, filtrar por entradas/gastos, mês e dia ---------- */
-const APP_V='v82';
+const APP_V='v83';
 const ST_FILTERS=[['all','Tudo'],['in','Entradas'],['out','Gastos'],['fat','Faturas pagas'],['tr','Transferências']];
 function stAll(){
   const out=stRows().map(e=>Object.assign({},e,{src:'extrato'}));
