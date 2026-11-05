@@ -2402,7 +2402,7 @@ function fichaDebt(rec,ymHint){
   h+='</div>';
   if(sch.length){
     h+='<h2>Parcelas</h2><div class="card">'+sch.map(s=>'<div class="row"><span style="white-space:nowrap">'+(s.date?brDate(s.date):esc(ymShort(s.ym)))+'</span><span>'+(s.amt==null?'—':money(s.amt))+'</span><b>'+esc(s.st)+'</b></div>').join('')+'</div>';
-    h+='<div class="card">'+frow(rv?'Já recebidas':'Já pagas',paidN+' de '+sch.length)+frow(rv?'Total já recebido':'Total já pago',money(totalPaid))+frow('Faltam',String(sch.length-paidN))+'</div>';
+    h+='<div class="card">'+frow(rv?'Total das parcelas':'Total das parcelas',money(sch.reduce((a,s)=>a+(s.amt||0),0)))+frow(rv?'Já recebidas':'Já pagas',paidN+' de '+sch.length)+frow(rv?'Total já recebido':'Total já pago',money(totalPaid))+frow('Faltam',String(sch.length-paidN))+frow(rv?'Falta receber':'Falta pagar',money(sch.filter(s=>!s.paid).reduce((a,s)=>a+(s.amt||0),0)))+'</div>';
   }else h+='<div class="card mut">Sem parcelas a mostrar (falta o dia do vencimento ou a dívida está quitada).</div>';
   const ym=ymHint||(sch.find(s=>!s.paid)||{}).ym;
   const m=modal(h+(ym&&x.dueDay?'<button class="btn" id="fd-pay">'+((x.paidYm||[]).indexOf(ym)>=0?'Mexer na parcela de ':'Marcar paga a parcela de ')+esc(ymShort(ym))+'</button>':'')+'<button class="btn sec" id="fd-edit">Editar a dívida</button><button class="btn sec" id="fd-no">Voltar</button>');
@@ -3007,7 +3007,7 @@ function stRows(){
   return out;
 }
 /* ---------- Extrato: buscar, filtrar por entradas/gastos, mês e dia ---------- */
-const APP_V='v83';
+const APP_V='v84';
 const ST_FILTERS=[['all','Tudo'],['in','Entradas'],['out','Gastos'],['fat','Faturas pagas'],['tr','Transferências']];
 function stAll(){
   const out=stRows().map(e=>Object.assign({},e,{src:'extrato'}));
