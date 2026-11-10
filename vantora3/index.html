@@ -1,0 +1,469 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Vantora 3</title>
+<meta name="theme-color" content="#050B12">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Vantora 3">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&display=swap">
+<style>
+/* Vantora 3: três coisas na tela (Hoje, Esteira, Correio) mais "Mais". Cada tarefa mostra QUEM faz: Claude, ChatGPT ou você. */
+:root{
+  --bg:#050B12;--surface:#0C1622;--surface2:#122235;--fg:#EAF5FF;--muted:#9BB2C6;--line:#1F3650;
+  --accent:#2FD8FF;--accent-fg:#001018;--accent-soft:#0F2D3F;
+  --cl:#C9A8FF;--cl-bg:#2A1B45;--gp:#4DF0A0;--gp-bg:#0C3322;--mv:#FFC24D;--mv-bg:#3A2A08;
+  --late:#FF7A7A;--late-bg:#3A1518;--ok:#4DF0A0;--ok-bg:#0C3322;
+  --display:'Bricolage Grotesque','Atkinson Hyperlegible',system-ui,sans-serif;
+  --body:'Atkinson Hyperlegible',system-ui,-apple-system,'Segoe UI',sans-serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html{font-size:20px;-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font:1rem/1.45 var(--body);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-bottom:8rem}
+body.lock{overflow:hidden}
+h1,h2,h3{font-family:var(--display);margin:0;text-wrap:balance;line-height:1.15}
+h1{font-size:min(1.6rem,34px);font-weight:800;color:var(--accent);white-space:nowrap}
+h2{font-size:1.2rem;font-weight:600}
+p{margin:0}
+a{color:var(--accent)}
+.muted{color:var(--muted)}
+.wrap{max-width:680px;margin:0 auto}
+header{position:sticky;top:0;z-index:9;background:var(--bg);border-bottom:1px solid var(--line);padding-top:calc(.7rem + env(safe-area-inset-top,0px));padding-bottom:.7rem;
+  margin-left:calc(-1 * max(16px,env(safe-area-inset-left,0px)));margin-right:calc(-1 * max(16px,env(safe-area-inset-right,0px)));
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.hrow{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:.5rem .75rem}
+.sizes{display:flex;gap:.4rem;flex:none}
+.sizes button{min-width:2.75rem;font-size:18px}
+main{padding-top:1rem;display:flex;flex-direction:column;gap:1.1rem}
+button,input,select,textarea{font:inherit;color:inherit}
+.btn{min-height:2.75rem;padding:.45rem 1rem;border-radius:10px;border:1.5px solid var(--accent);background:var(--accent);color:var(--accent-fg);font-weight:700;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;text-align:center;text-decoration:none}
+.btn.alt{background:transparent;color:var(--accent)}
+.btn.danger{background:transparent;border-color:var(--late);color:var(--late)}
+.btn.small{min-height:2.5rem;padding:.3rem .8rem}
+.btn:disabled{opacity:.6;cursor:default}
+.btn:focus-visible,.tmain:focus-visible,.tab:focus-visible,.sh:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid var(--fg);outline-offset:2px}
+.summary{font-size:1.05rem}
+.errbar{background:var(--late-bg);color:var(--late);border-radius:10px;padding:.7rem .9rem;display:flex;flex-direction:column;gap:.5rem;font-weight:700}
+.group{display:flex;flex-direction:column;gap:.5rem}
+ul{list-style:none;margin:0;padding:0}
+.list{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.list>li{border-bottom:1px solid var(--line)}.list>li:last-child{border-bottom:0}
+.trow{display:flex;align-items:center;gap:.5rem}
+.tmain{flex:1;min-width:0;text-align:left;background:none;border:0;padding:.75rem .8rem;display:flex;flex-direction:column;gap:.3rem;cursor:pointer}
+div.tmain{cursor:default}
+.tt{font-weight:700;overflow-wrap:anywhere}
+.tm{display:flex;flex-wrap:wrap;gap:.2rem .7rem;color:var(--muted);font-size:.9rem}
+.tb{display:flex;flex-wrap:wrap;gap:.35rem;align-items:center}
+.pill{font-size:.8rem;border:1px solid var(--line);border-radius:999px;padding:.05rem .6rem;color:var(--muted)}
+.pill.ok{background:var(--ok-bg);color:var(--ok);border-color:transparent;font-weight:700}
+.pill.soon{background:var(--mv-bg);color:var(--mv);border-color:transparent;font-weight:700}
+.pill.late{background:var(--late-bg);color:var(--late);border-color:transparent;font-weight:700}
+.quem{font-size:.78rem;font-weight:800;letter-spacing:.04em;border-radius:6px;padding:.1rem .5rem;flex:none}
+.quem.cl{background:var(--cl-bg);color:var(--cl)}.quem.gp{background:var(--gp-bg);color:var(--gp)}.quem.mv{background:var(--mv-bg);color:var(--mv)}
+.bub{flex:none;min-width:2.2rem;padding:.05rem .65rem;border-radius:999px;background:var(--accent);color:#000;font-weight:800;text-align:center;font-variant-numeric:tabular-nums}
+.bub.zero{background:transparent;color:var(--muted);border:1px solid var(--line);font-weight:400}
+.sec{display:flex;align-items:center;gap:.6rem}
+.sec h2{flex:1}
+.empty{border:1.5px dashed var(--line);border-radius:12px;padding:1rem;color:var(--muted)}
+.note{background:var(--accent-soft);border-radius:10px;padding:.6rem .8rem;font-size:.95rem}
+.carteiro{border:2px solid var(--line);border-radius:14px;padding:.9rem 1rem;display:flex;flex-direction:column;gap:.5rem;background:var(--surface)}
+.carteiro.gp{border-color:var(--gp)}.carteiro.cl{border-color:var(--cl)}.carteiro.mv{border-color:var(--mv)}
+.carteiro .big{font-family:var(--display);font-weight:800;font-size:1.15rem}
+.lane{display:flex;flex-direction:column;gap:.6rem}
+.lane>h2{color:var(--accent)}
+.stg{display:flex;align-items:center;gap:.5rem;color:var(--muted);font-weight:700;margin-top:.2rem}
+.stg span:first-child{flex:1}
+.actions{display:flex;flex-wrap:wrap;gap:.5rem}
+nav{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--surface);border-top:1px solid var(--line);
+  padding:.35rem max(16px,env(safe-area-inset-right,0px)) calc(.35rem + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+nav .in{max-width:680px;margin:0 auto;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.2rem}
+.tab{min-height:3.2rem;border:0;border-radius:10px;background:none;color:var(--muted);cursor:pointer;font-size:clamp(14px,.9rem,18px);padding:0 .1rem}
+.tab[aria-current="page"]{background:var(--accent-soft);color:var(--accent);font-weight:700}
+.fab{font-size:min(1rem,19px);position:fixed;z-index:19;right:max(16px,env(safe-area-inset-right,0px));bottom:calc(4.6rem + env(safe-area-inset-bottom,0px));box-shadow:0 3px 14px rgba(47,216,255,.35)}
+.overlay{position:fixed;inset:0;z-index:30;background:rgba(0,4,8,.7);display:flex;align-items:flex-end;justify-content:center}
+.overlay.top{z-index:40}
+.sheet{background:var(--surface);border:1px solid var(--line);width:100%;max-width:560px;max-height:92dvh;overflow:auto;border-radius:16px 16px 0 0;
+  padding:1.1rem 1.1rem calc(1.1rem + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:.8rem}
+@media (min-width:700px){.overlay{align-items:center}.sheet{border-radius:16px}}
+form{display:flex;flex-direction:column;gap:.75rem}
+label{display:flex;flex-direction:column;gap:.25rem;font-weight:700;font-size:.95rem}
+input,select,textarea{width:100%;min-height:2.75rem;padding:.45rem .65rem;border:1.5px solid var(--line);border-radius:10px;background:var(--bg);font-weight:400}
+textarea{min-height:4.5rem;resize:vertical}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:.6rem}
+.three{display:grid;grid-template-columns:1fr 1fr 1fr;gap:.6rem}
+@media (max-width:520px){.three{grid-template-columns:1fr}}
+.err{color:var(--late);font-weight:700;min-height:1.2rem}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:.2rem .8rem;margin:0}
+.kv dt{color:var(--muted)}.kv dd{margin:0;overflow-wrap:anywhere}
+.conta{display:grid;grid-template-columns:1fr auto;gap:.25rem .8rem;margin:0;font-variant-numeric:tabular-nums}.conta dt{color:var(--muted)}.conta dd{margin:0;text-align:right}.conta .tot{font-weight:800;border-top:1px solid var(--line);padding-top:.3rem}
+.falta{background:var(--mv-bg);border-radius:10px;padding:.6rem .8rem}.falta b{color:var(--mv)}
+.flow{counter-reset:f;display:flex;flex-direction:column;gap:.5rem}.flow li{counter-increment:f;display:flex;gap:.6rem}.flow li:before{content:counter(f);flex:none;width:1.8rem;height:1.8rem;border-radius:50%;background:var(--accent-soft);color:var(--accent);font-weight:800;display:flex;align-items:center;justify-content:center}
+.blank{color:var(--muted);font-style:italic}
+.login{max-width:420px;margin:0 auto;padding-top:calc(3rem + env(safe-area-inset-top,0px));display:flex;flex-direction:column;gap:1rem}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<div class="overlay" id="modal" hidden></div>
+<div class="overlay top" id="confirm" hidden></div>
+<script>
+(function(){
+'use strict';
+var CFG={url:'https://cptvxfzgimeawheqrhvz.supabase.co',key:'sb_publishable_Q7W8ptGAqUBvHFhCxbhXOw_aLjfC186'};
+var SK='van3-sess',CK='van3-cache',FSK='van3-fs',SIZES=[16,18,20,22,24,28],DEF=2,TRASH_DAYS=30,TABLE='van3_records';
+var DRIVE='https://drive.google.com/drive/folders/1BF6lJD8YLg4T6uCi-iXP6u7fgnycQS80';
+
+/* Quem faz. Claude = fica aqui. ChatGPT = vai para o ChatGPT (robôs e navegação em sites). Você = decisão sua. */
+var QUEM={claude:{n:'CLAUDE',c:'cl',full:'Claude'},chatgpt:{n:'CHATGPT',c:'gp',full:'ChatGPT'},marcelo:{n:'VOCÊ',c:'mv',full:'Você'}};
+/* A esteira inteira. e=1: PFV (achar o leão). e=2: MAQ (G0 a G11). q=quem faz a etapa. r=robô do ChatGPT. Só a G4 trava (custo e preço). */
+var PIPE=[
+ {k:'busca',e:1,n:'Busca',d:'Palavra que as pessoas digitam agora',q:'chatgpt',r:'PFV: olhar os sites'},
+ {k:'candidato',e:1,n:'Candidato',d:'Produto achado, conferindo se vale',q:'claude',r:'PFV: análise'},
+ {k:'leao',e:1,n:'Leão',d:'Você aprova: vale seguir',q:'marcelo'},
+ {k:'g0',e:2,n:'G0',q:'claude'},{k:'g1',e:2,n:'G1',q:'claude'},
+ {k:'g2',e:2,n:'G2 Mercado',q:'chatgpt',r:'ECRRAD001'},
+ {k:'g3',e:2,n:'G3 Fornecedor',q:'chatgpt',r:'ECRSRC001'},
+ {k:'g4',e:2,n:'G4 Economia',q:'claude',r:'ECRECO001',lock:1,d:'Aqui trava: precisa de custo e preço de venda'},
+ {k:'g5',e:2,n:'G5',q:'claude'},
+ {k:'g6',e:2,n:'G6 Oferta e título',q:'chatgpt',r:'ECRSEO001'},
+ {k:'g7',e:2,n:'G7 Fotos e vídeo',q:'chatgpt',r:'ECRPHT001 / ECRVID001'},
+ {k:'g8',e:2,n:'G8 Conferência',q:'chatgpt',r:'ECRQA001'},
+ {k:'g9',e:2,n:'G9',q:'claude'},{k:'g10',e:2,n:'G10',q:'claude'},{k:'g11',e:2,n:'G11',q:'claude'},
+ {k:'fim',e:2,n:'Pronto',d:'Passou pelos 12 gates. Comprar e vender é decisão sua.',q:'marcelo'}
+];
+var STT={pendente:['Falta enviar','soon'],enviado:['Enviado, esperando','soon'],respondido:['Respondido','ok'],feito:['Feito','ok']};
+/* Shopee CNPJ/MEI: tabela anotada na Vantora 2; o ChatGPT (REG512) vai conferir na fonte oficial. */
+var FAIXAS=[{ate:79.99,pct:20,fixa:4.5},{ate:99.99,pct:14,fixa:16},{ate:199.99,pct:14,fixa:20},{ate:1e9,pct:14,fixa:26}],LUCRO_MIN=15,LUCRO_BOM=20;
+
+var S={sess:null,recs:[],trash:[],ready:false,view:'hoje',err:'',busy:false};
+var D={prods:[],tars:[],msgs:[],cfg:null};
+var confCb=null;
+
+function $(s){return document.querySelector(s)}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
+function lsGet(k){try{return localStorage.getItem(k)}catch(e){return null}}
+function lsSet(k,v){try{localStorage.setItem(k,v)}catch(e){}}
+function pad(n){return String(n).padStart(2,'0')}
+function ymd(d){return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())}
+function todayS(){return ymd(new Date())}
+function full(s){if(!s)return '';var p=String(s).slice(0,10).split('-');return p[2]+'/'+p[1]+'/'+p[0]}
+function money(v){return (v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}
+function num(v){var n=parseFloat(String(v==null?'':v).replace(/\./g,'').replace(',','.'));return isNaN(n)||n<0?0:n}
+function fld(v){return v?String(v).replace('.',','):''}
+function pIdx(k){for(var i=0;i<PIPE.length;i++)if(PIPE[i].k===k)return i;return 0}
+function stepOf(k){return PIPE[pIdx(k)]}
+function badge(q){var x=QUEM[q]||QUEM.claude;return '<span class="quem '+x.c+'">'+x.n+'</span>'}
+
+/* ---------- conta de lucro ---------- */
+function faixa(v){for(var i=0;i<FAIXAS.length;i++)if(v<=FAIXAS[i].ate)return FAIXAS[i];return FAIXAS[FAIXAS.length-1]}
+function taxa(v){var f=faixa(v),fixa=v<8?v/2:f.fixa;return{pct:f.pct,fixa:fixa,com:v*f.pct/100,total:v*f.pct/100+fixa}}
+function lucroDe(v,c,fr){return v-c-taxa(v).total-fr}
+function precoMin(c,fr,alvo){for(var v=1;v<3000;v+=0.1){if(lucroDe(v,c,fr)>=alvo-1e-9)return Math.ceil(v*10)/10}return null}
+function tomLucro(l){return l>=LUCRO_BOM?'ok':l>=LUCRO_MIN?'soon':'late'}
+function contaHtml(v,c,fr){var t=taxa(v),l=v-c-t.total-fr,mn=precoMin(c,fr,LUCRO_MIN);
+  return '<dl class="conta"><dt>Preço de venda</dt><dd>'+money(v)+'</dd><dt>Custo</dt><dd>− '+money(c)+'</dd><dt>Comissão Shopee ('+t.pct+'%)</dt><dd>− '+money(t.com)+'</dd><dt>Taxa fixa</dt><dd>− '+money(t.fixa)+'</dd>'+(fr?'<dt>Frete</dt><dd>− '+money(fr)+'</dd>':'')+
+  '<dt class="tot">Sobra</dt><dd class="tot"><span class="pill '+tomLucro(l)+'">'+money(l)+'</span></dd></dl>'+(mn?'<p class="muted">Para sobrar '+money(LUCRO_MIN)+' o preço mínimo é '+money(mn)+'.</p>':'')}
+function calc(p){if(!(p.venda>0&&p.custo>0))return null;return lucroDe(p.venda,p.custo,p.frete||0)}
+
+/* ---------- dados ---------- */
+function derive(){D.prods=[];D.tars=[];D.msgs=[];D.cfg=null;
+  S.recs.forEach(function(r){var d=Object.assign({},r.data||{},{id:r.id,_v:r.version,_at:r.created_at});
+    if(r.kind==='produto')D.prods.push(d);else if(r.kind==='tarefa')D.tars.push(d);else if(r.kind==='msg')D.msgs.push(d);else if(r.kind==='config')D.cfg=d});
+  D.msgs.sort(function(a,b){return String(b.em||b._at)<String(a.em||a._at)?-1:1})}
+function R(id){return S.recs.filter(function(r){return r.id===id})[0]}
+function PR(id){return D.prods.filter(function(p){return p.id===id})[0]}
+function TA(id){return D.tars.filter(function(p){return p.id===id})[0]}
+function MS(id){return D.msgs.filter(function(p){return p.id===id})[0]}
+function nichoAtivo(){return (D.cfg&&D.cfg.nicho)||''}
+function ativos(){return D.prods.filter(function(p){return !p.descartado})}
+function noEtapa(k){return ativos().filter(function(p){return p.etapa===k})}
+function cacheSave(){lsSet(CK,JSON.stringify({recs:S.recs,trash:S.trash}))}
+function cacheLoad(){try{var c=JSON.parse(lsGet(CK)||'null');if(c){S.recs=c.recs||[];S.trash=c.trash||[];derive();return true}}catch(e){}return false}
+
+var Api={
+  async auth(p,body){
+    var r=await fetch(CFG.url+'/auth/v1/'+p,{method:'POST',headers:{apikey:CFG.key,'Content-Type':'application/json'},body:JSON.stringify(body)});
+    var j=await r.json().catch(function(){return{}});
+    if(!r.ok)throw Object.assign(new Error(j.msg||j.error_description||'erro'),{status:r.status});
+    return{access:j.access_token,refresh:j.refresh_token,exp:Date.now()+(j.expires_in||3600)*1000}},
+  saveSess(s){S.sess=s;lsSet(SK,s?JSON.stringify(s):'')},
+  async token(){
+    if(!S.sess)throw Object.assign(new Error('login'),{status:401});
+    if(S.sess.exp-Date.now()<60000){
+      try{this.saveSess(await this.auth('token?grant_type=refresh_token',{refresh_token:S.sess.refresh}))}
+      catch(e){if(e.status>=400&&e.status<500){this.saveSess(null);throw Object.assign(e,{status:401})}throw e}}
+    return S.sess.access},
+  async rest(p,opt){
+    var t=await this.token();
+    var h=Object.assign({apikey:CFG.key,Authorization:'Bearer '+t,'Content-Type':'application/json'},(opt&&opt.headers)||{});
+    return fetch(CFG.url+'/rest/v1/'+p,Object.assign({},opt,{headers:h}))},
+  async load(){
+    var a=await this.rest(TABLE+'?select=*&deleted_at=is.null&order=created_at.asc&limit=5000');
+    var b=await this.rest(TABLE+'?select=*&deleted_at=not.is.null&order=deleted_at.desc&limit=2000');
+    if(!a.ok||!b.ok)throw Object.assign(new Error('Não consegui carregar ('+(a.ok?b.status:a.status)+').'),{status:a.ok?b.status:a.status});
+    S.recs=await a.json();S.trash=await b.json();derive();cacheSave()},
+  async create(kind,data){
+    var r=await this.rest(TABLE,{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify({kind:kind,data:data})});
+    if(!r.ok)throw new Error('Não consegui salvar ('+r.status+').');
+    var j=await r.json();S.recs.push(j[0]);derive();cacheSave();return j[0]},
+  async update(rec,data){
+    var r=await this.rest(TABLE+'?id=eq.'+rec.id+'&version=eq.'+rec.version,{method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify({data:data})});
+    if(!r.ok)throw new Error('Não consegui salvar ('+r.status+').');
+    var j=await r.json();
+    if(!j.length){await this.load();throw new Error('Este item mudou em outro aparelho ou pelo Claude. Atualizei a tela. Tente de novo.')}
+    var i=S.recs.findIndex(function(x){return x.id===rec.id});if(i>=0)S.recs[i]=j[0];derive();cacheSave();return j[0]},
+  async setDeleted(ids,ts){
+    var r=await this.rest(TABLE+'?id=in.('+ids.join(',')+')',{method:'PATCH',body:JSON.stringify({deleted_at:ts,updated_by:'app'})});
+    if(!r.ok)throw new Error('Não consegui '+(ts?'apagar':'restaurar')+' ('+r.status+').');
+    await this.load()}
+};
+function patch(id,p){var r=R(id);if(!r)throw new Error('Item não encontrado. Atualize a tela.');return Api.update(r,Object.assign({},r.data,p))}
+
+/* ---------- peças de tela ---------- */
+function prodRow(p,opts){opts=opts||{};var st=stepOf(p.etapa),l=calc(p);
+  return '<li><div class="trow"><button class="tmain" data-act="open" data-id="'+p.id+'"><span class="tb">'+badge(st.q)+'<span class="tt">'+esc(p.nome)+'</span></span>'+
+   '<span class="tm"><span>'+esc(st.n)+'</span>'+(p.nicho?'<span>'+esc(p.nicho)+'</span>':'')+(l!==null?'<span class="pill '+tomLucro(l)+'">Sobra '+money(l)+'</span>':'')+'</span></button></div></li>'}
+
+/* Tudo que está andando, separado por quem faz. */
+function itens(){var out=[];
+  ativos().forEach(function(p){var st=stepOf(p.etapa);if(p.etapa==='fim')return;
+    out.push({t:'prod',id:p.id,q:st.q,titulo:p.nome,sub:st.n+(st.r&&st.q==='chatgpt'?' · '+st.r:'')});});
+  D.tars.filter(function(t){return t.status!=='feito'}).forEach(function(t){
+    out.push({t:'tar',id:t.id,q:t.quem||'claude',titulo:t.titulo,sub:'Tarefa',st:t.status})});
+  D.msgs.filter(function(m){return m.status==='AGUARDANDO_MARCELO'}).forEach(function(m){
+    out.push({t:'msg',id:m.id,q:'marcelo',titulo:m.titulo,sub:'Recado esperando você'})});
+  return out}
+function stLab(q,s){var x=STT[s]||STT.pendente;return(q!=='chatgpt'&&s==='pendente')?['Pendente','soon']:x}
+function itemRow(i){var st=i.st?stLab(i.q,i.st):null;
+  return '<li><div class="trow"><button class="tmain" data-act="item" data-t="'+i.t+'" data-id="'+i.id+'"><span class="tb">'+badge(i.q)+'<span class="tt">'+esc(i.titulo)+'</span></span><span class="tm"><span>'+esc(i.sub)+'</span></span>'+(st?'<span class="tb"><span class="pill '+st[1]+'">'+st[0]+'</span></span>':'')+'</button></div></li>'}
+
+function carteiro(){
+  var n={ChatGPT:0,Claude:0,Marcelo:0};D.msgs.forEach(function(m){if(m.status==='NOVO'&&n[m.para]!==undefined)n[m.para]++});
+  var c='',big='',sub='';
+  if(n.ChatGPT){c='gp';big='📬 '+n.ChatGPT+(n.ChatGPT===1?' recado novo':' recados novos')+' para o ChatGPT';sub='Abra o chat do ChatGPT e escreva: <b>LER CORREIO</b>'}
+  else if(n.Claude){c='cl';big='📬 '+n.Claude+(n.Claude===1?' recado novo':' recados novos')+' para o Claude';sub='Aqui no Claude, escreva: <b>LER CORREIO</b>'}
+  else if(n.Marcelo){c='mv';big='📬 Recado para você';sub='Veja na aba Correio.'}
+  else{big='📭 Nenhum recado esperando';sub='Claude e ChatGPT estão em dia.'}
+  return '<div class="carteiro '+c+'"><div class="big">'+big+'</div><p class="muted">'+sub+'</p></div>'}
+function nCorreio(){var n=0;D.msgs.forEach(function(m){if(m.status==='NOVO'||m.status==='AGUARDANDO_MARCELO')n++});return n}
+
+function vHoje(){
+  var it=itens(),g={marcelo:[],claude:[],chatgpt:[]};it.forEach(function(i){(g[i.q]||g.claude).push(i)});
+  var h='<p class="summary">'+(it.length?'<b>'+it.length+'</b> '+(it.length===1?'coisa andando':'coisas andando')+'. Cada uma mostra quem faz.':'Nada andando ainda. Toque em <b>+ Nova busca</b> para começar a achar o leão.')+'</p>'+carteiro();
+  [['marcelo','Com você'],['claude','Fica com o Claude'],['chatgpt','Vai para o ChatGPT']].forEach(function(s){var a=g[s[0]];
+    h+='<div class="group"><div class="sec">'+badge(s[0])+'<h2>'+s[1]+'</h2><span class="bub'+(a.length?'':' zero')+'">'+a.length+'</span></div>'+
+      (a.length?'<ul class="list">'+a.map(itemRow).join('')+'</ul>':'<div class="empty">Nada por aqui.</div>')+'</div>'});
+  return h}
+
+function vEsteira(){
+  var h='<p class="summary">Esteira 1 acha o leão. Esteira 2 leva até o fim. Toque num produto para avançar.</p>';
+  [[1,'Esteira 1 · PFV','Achar o leão'],[2,'Esteira 2 · MAQ','G0 a G11']].forEach(function(L){
+    var tot=ativos().filter(function(p){return stepOf(p.etapa).e===L[0]}).length;
+    h+='<div class="lane"><div class="sec"><h2>'+L[1]+'</h2><span class="bub'+(tot?'':' zero')+'">'+tot+'</span></div><p class="muted">'+L[2]+'</p>';
+    var any=false;
+    PIPE.filter(function(s){return s.e===L[0]}).forEach(function(s){var a=noEtapa(s.k);if(!a.length)return;any=true;
+      h+='<div class="stg"><span>'+esc(s.n)+'</span>'+badge(s.q)+'</div><ul class="list">'+a.map(prodRow).join('')+'</ul>'});
+    if(!any)h+='<div class="empty">'+(L[0]===1?'Nenhuma busca ainda. Toque em + Nova busca.':'Nada aqui. O que você aprovar como leão entra nesta esteira.')+'</div>';
+    h+='</div>'});
+  var dc=D.prods.filter(function(p){return p.descartado});
+  if(dc.length)h+='<div class="group"><h2>Descartados ('+dc.length+')</h2><ul class="list">'+dc.map(function(p){return '<li><div class="trow"><button class="tmain" data-act="open" data-id="'+p.id+'"><span class="tt">'+esc(p.nome)+'</span><span class="tm"><span>'+esc(p.motivo||'Sem motivo anotado')+'</span></span></button></div></li>'}).join('')+'</ul></div>';
+  return h}
+
+function vCorreio(){
+  var h=carteiro()+'<div class="actions"><a class="btn alt small" href="'+DRIVE+'" target="_blank" rel="noopener">Abrir a pasta do correio</a></div>';
+  h+='<p class="muted">Aqui você só lê. As mensagens oficiais ficam no Drive. Cada uma tem número, data, de quem, para quem e situação.</p>';
+  if(!D.msgs.length)return h+'<div class="empty">Nenhuma mensagem ainda.</div>';
+  var cls={NOVO:'soon',LIDO:'',RESPONDIDO:'ok',FECHADO:'',AGUARDANDO_MARCELO:'late'};
+  return h+'<ul class="list">'+D.msgs.map(function(m){
+    return '<li><div class="trow"><button class="tmain" data-act="openmsg" data-id="'+m.id+'"><span class="tt">'+esc(m.titulo)+'</span><span class="tm"><span>'+esc(m.de)+' → '+esc(m.para)+'</span><span>'+esc(m.tipo||'')+'</span><span>'+esc(full(m.em))+'</span></span><span class="tb"><span class="pill '+(cls[m.status]||'')+'">'+esc(String(m.status||'').replace('_',' '))+'</span><span class="pill">'+esc(m.mid||'')+'</span></span></button></div></li>'}).join('')+'</ul>'}
+
+function openMsg(id){var m=MS(id);if(!m)return;
+  openModal('<h2>'+esc(m.titulo)+'</h2><dl class="kv"><dt>Número</dt><dd>'+esc(m.mid||'')+'</dd><dt>Data</dt><dd>'+esc(m.quando||full(m.em))+'</dd><dt>De → para</dt><dd>'+esc(m.de)+' → '+esc(m.para)+'</dd><dt>Tipo</dt><dd>'+esc(m.tipo||'')+'</dd><dt>Situação</dt><dd>'+esc(m.status||'')+'</dd>'+(m.responde?'<dt>Responde a</dt><dd>'+esc(m.responde)+'</dd>':'')+'</dl><p style="white-space:pre-wrap">'+esc(m.corpo||'')+'</p>')}
+
+function vMais(){var a=nichoAtivo(),nl=trashList().length;
+  return '<div class="group"><h2>Nicho ativo</h2><div class="carteiro"><div class="big">'+(a?esc(a):'<span class="blank">nenhum</span>')+'</div><p class="muted">Buscas novas começam com este nicho.</p><div class="actions"><button class="btn small" data-act="nicho">'+(a?'Trocar nicho':'Definir nicho')+'</button></div></div></div>'+
+   '<div class="group"><h2>Calculadora de lucro</h2><div class="three"><label for="cc-v">Preço de venda<input id="cc-v" inputmode="decimal" placeholder="0,00"></label><label for="cc-c">Custo<input id="cc-c" inputmode="decimal" placeholder="0,00"></label><label for="cc-f">Frete<input id="cc-f" inputmode="decimal" placeholder="0,00"></label></div><div id="cc-out" class="note">Preencha preço e custo.</div></div>'+
+   '<div class="group"><h2>Atalhos</h2><div class="actions"><button class="btn alt" data-act="como">Como funciona</button><button class="btn alt" data-act="lixeira">Lixeira'+(nl?' ('+nl+')':'')+'</button><button class="btn alt" data-act="reload">Atualizar</button><button class="btn alt" data-act="logout">Sair</button></div></div>'+
+   '<p class="muted">Vantora 3 · a Vantora 1 está aposentada e a Vantora 2 fica só para consulta.</p>'}
+function calcLive(){var o=$('#cc-out');if(!o)return;var v=num($('#cc-v').value),c=num($('#cc-c').value),f=num($('#cc-f').value);o.innerHTML=(v&&c)?contaHtml(v,c,f):'Preencha preço e custo.'}
+
+function trashList(){var out=[];
+  S.trash.forEach(function(r){var at=ymd(new Date(r.deleted_at)),left=TRASH_DAYS-Math.floor((Date.now()-new Date(r.deleted_at))/86400000);if(left<=0)return;var d=r.data||{};
+    out.push({id:r.id,label:d.nome||d.titulo||d.nicho||'(sem nome)',kind:r.kind,at:at,left:left})});return out}
+function openLixeira(){var l=trashList();
+  openModal('<h2>Lixeira</h2><p class="muted">'+(l.length?'Cada item some sozinho depois de '+TRASH_DAYS+' dias.':'Vazia. O que você apagar fica aqui por '+TRASH_DAYS+' dias.')+'</p>'+
+   (l.length?'<ul class="list">'+l.map(function(x){return '<li><div class="trow"><div class="tmain"><span class="tt">'+esc(x.label)+'</span><span class="tm"><span>Apagado em '+full(x.at)+'</span><span>Some em '+x.left+' dias</span></span><div class="actions"><button class="btn small" data-act="restore" data-id="'+x.id+'">Restaurar</button></div></div></div></li>'}).join('')+'</ul>':''))}
+
+function openComo(){
+  openModal('<h2>Como funciona</h2><ol class="flow"><li><span><b>Esteira 1 · PFV</b>: a palavra que as pessoas digitam vira busca, depois candidato. Você aprova o <b>leão</b>.</span></li>'+
+   '<li><span><b>Esteira 2 · MAQ</b>: o leão passa pelos gates G0 a G11. Só o G4 trava: precisa de custo e preço de venda. O resto pode ficar em branco.</span></li>'+
+   '<li><span>Cada etapa mostra quem faz: '+badge('claude')+' fica aqui no Claude; '+badge('chatgpt')+' vai para o ChatGPT (navegar em sites e robôs); '+badge('marcelo')+' é decisão sua.</span></li>'+
+   '<li><span>Claude e ChatGPT conversam pelo <b>Correio</b> no Drive. O carteiro avisa na tela de Hoje quem tem recado esperando.</span></li>'+
+   '<li><span>Comprar, pagar, anunciar e vender: só com a sua ordem. Nada é feito sozinho.</span></li></ol><p class="muted">Os nomes dos gates sem título (G0, G1, G5, G9 a G11) estão provisórios, até o ChatGPT confirmar os nomes oficiais.</p>')}
+
+function vLogin(){
+  return '<div class="login"><h1>Vantora 3</h1><p class="muted">Entre com o mesmo email e senha do Núcleo e do Financeiro.</p>'+
+  '<form id="loginForm" novalidate><label for="lg-email">Email<input id="lg-email" type="email" autocomplete="username" autocapitalize="none" autocorrect="off"></label>'+
+  '<label for="lg-pass">Senha<input id="lg-pass" type="password" autocomplete="current-password"></label><div class="err" id="lg-err" role="alert"></div>'+
+  '<button class="btn" type="submit">Entrar</button></form></div>'}
+
+function render(){
+  var root=$('#root');
+  if(!S.sess){root.innerHTML=vLogin();return}
+  var title=new Date().toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long'});
+  var body=S.view==='hoje'?vHoje():S.view==='esteira'?vEsteira():S.view==='correio'?vCorreio():vMais();
+  var nc=nCorreio();
+  var tabs=[['hoje','Hoje'],['esteira','Esteira'],['correio','Correio'+(nc?' ('+nc+')':'')],['mais','Mais']];
+  var fab=(S.view==='hoje'||S.view==='esteira')?'<button class="btn fab" data-act="newbusca">+ Nova busca</button>':'';
+  root.innerHTML='<header><div class="wrap hrow"><div><h1>Vantora 3</h1><p class="muted">'+esc(title)+'</p></div>'+
+    '<div class="sizes" role="group" aria-label="Tamanho da letra"><button class="btn alt small" data-act="fs" data-d="-1" aria-label="Diminuir letra">A−</button><button class="btn alt small" data-act="fs" data-d="1" aria-label="Aumentar letra">A+</button></div></div></header>'+
+    '<div class="wrap"><main>'+(S.err?'<div class="errbar" role="alert"><span>'+esc(S.err)+'</span><div class="actions"><button class="btn alt small" data-act="errok">Entendi</button></div></div>':'')+(S.ready?body:'<p class="muted">Carregando…</p>')+'</main></div>'+fab+
+    '<nav aria-label="Telas"><div class="in">'+tabs.map(function(t){return '<button class="tab" data-act="tab" data-v="'+t[0]+'"'+(S.view===t[0]?' aria-current="page"':'')+'>'+t[1]+'</button>'}).join('')+'</div></nav>'}
+
+/* ---------- folhas e confirmações ---------- */
+function lock(){document.body.classList.toggle('lock',!$('#modal').hidden||!$('#confirm').hidden)}
+function openModal(h){$('#modal').innerHTML='<div class="sheet" role="dialog" aria-modal="true"><div class="actions"><button class="btn alt small" type="button" data-act="close">← Voltar</button></div>'+h+'</div>';$('#modal').hidden=false;lock()}
+function closeModal(){$('#modal').hidden=true;$('#modal').innerHTML='';lock()}
+function ask(o){confCb=o.onYes;$('#confirm').innerHTML='<div class="sheet" role="alertdialog" aria-modal="true"><h2>'+esc(o.title)+'</h2>'+(o.body||'')+'<div class="actions">'+(o.noNo?'':'<button class="btn alt" data-c="no">← Voltar</button>')+'<button class="btn'+(o.danger?' danger':'')+'" data-c="yes">'+esc(o.yes||'Sim')+'</button></div></div>';$('#confirm').hidden=false;lock()}
+function closeConf(){confCb=null;$('#confirm').hidden=true;$('#confirm').innerHTML='';lock()}
+async function runConfirm(btn){
+  var cb=confCb;if(!cb){closeConf();return}
+  if(S.busy)return;S.busy=true;btn.disabled=true;btn.textContent='Aguarde…';
+  try{await cb()}catch(e){S.err=(e&&e.status===401)?'Sua sessão acabou. Entre de novo.':(e&&e.message)||'Algo deu errado.';if(e&&e.status===401){Api.saveSess(null)}closeModal()}
+  closeConf();S.busy=false;render()}
+
+/* ---------- formulários e fichas ---------- */
+function buscaForm(p){var v=p||{nome:'',nicho:nichoAtivo(),custo:0,venda:0,frete:0,notas:''};
+  openModal('<h2>'+(p?'Editar':'Nova busca')+'</h2><form id="prodForm" novalidate'+(p?' data-id="'+p.id+'"':'')+'>'+
+   '<label for="f-nome">'+(p?'Nome':'O que as pessoas estão digitando?')+'<input id="f-nome" value="'+esc(v.nome)+'" autocomplete="off"></label>'+
+   '<label for="f-nicho">Nicho<input id="f-nicho" value="'+esc(v.nicho)+'" autocomplete="off"></label>'+
+   '<div class="three"><label for="f-custo">Custo<input id="f-custo" inputmode="decimal" value="'+fld(v.custo)+'"></label><label for="f-venda">Preço de venda<input id="f-venda" inputmode="decimal" value="'+fld(v.venda)+'"></label><label for="f-frete">Frete<input id="f-frete" inputmode="decimal" value="'+fld(v.frete)+'"></label></div>'+
+   '<label for="f-notas">Anotações<textarea id="f-notas">'+esc(v.notas)+'</textarea></label><div class="err" id="f-err" role="alert"></div>'+
+   '<div class="actions"><button class="btn" type="submit">Salvar</button></div></form>')}
+
+function openProd(id){var p=PR(id);if(!p)return;var st=stepOf(p.etapa),i=pIdx(p.etapa),nx=PIPE[i+1],pv=i>0?PIPE[i-1]:null,l=calc(p);
+  var h='<h2>'+esc(p.nome)+'</h2><div class="tb">'+badge(st.q)+'<span class="pill">'+esc(st.n)+'</span>'+(p.descartado?'<span class="pill late">descartado</span>':'')+'</div>';
+  if(st.d)h+='<p class="muted">'+esc(st.d)+'</p>';
+  if(st.q==='chatgpt'&&st.r)h+='<p class="muted">Robô do ChatGPT: '+esc(st.r)+'</p>';
+  h+='<dl class="kv"><dt>Nicho</dt><dd>'+(p.nicho?esc(p.nicho):'<span class="blank">em branco</span>')+'</dd><dt>Custo</dt><dd>'+(p.custo?money(p.custo):'<span class="blank">em branco</span>')+'</dd><dt>Preço</dt><dd>'+(p.venda?money(p.venda):'<span class="blank">em branco</span>')+'</dd>'+(p.notas?'<dt>Notas</dt><dd>'+esc(p.notas)+'</dd>':'')+'</dl>';
+  if(l!==null)h+=contaHtml(p.venda,p.custo,p.frete||0);
+  if(st.lock&&!(p.custo>0&&p.venda>0))h+='<div class="falta"><b>Falta para passar do G4:</b> custo e preço de venda.</div>';
+  var a='<div class="actions">';
+  if(!p.descartado){
+    if(nx)a+='<button class="btn" data-act="move" data-id="'+id+'" data-to="'+nx.k+'">'+(p.etapa==='leao'?'Aprovar leão':'Avançar para '+esc(nx.n))+'</button>';
+    if(pv)a+='<button class="btn alt" data-act="move" data-id="'+id+'" data-to="'+pv.k+'">Voltar para '+esc(pv.n)+'</button>';
+    if(st.q!=='marcelo')a+='<button class="btn alt" data-act="pedir" data-id="'+id+'">Pedir ao '+QUEM[st.q].full+'</button>';
+    a+='<button class="btn alt" data-act="edit" data-id="'+id+'">Editar</button><button class="btn danger" data-act="discard" data-id="'+id+'">Descartar</button>';
+  }else a+='<button class="btn" data-act="reactivate" data-id="'+id+'">Reativar</button>';
+  a+='<button class="btn danger" data-act="del" data-id="'+id+'">Excluir</button></div>';
+  openModal(h+a)}
+
+function doMove(id,to){var p=PR(id);if(!p)return;var from=stepOf(p.etapa),dest=stepOf(to),fwd=pIdx(to)>pIdx(p.etapa);
+  if(fwd&&from.lock&&!(p.custo>0&&p.venda>0)){
+    ask({title:'Ainda não dá para passar',yes:'Entendi',noNo:1,body:'<p>No <b>G4 Economia</b> precisa ter o <b>custo</b> e o <b>preço de venda</b>. Toque em Editar e preencha.</p>',onYes:async function(){}});return}
+  ask({title:p.etapa==='leao'&&fwd?'Aprovar este leão?':(fwd?'Avançar este produto?':'Voltar este produto?'),yes:'Sim',
+   body:'<p><b>'+esc(p.nome)+'</b></p><p class="muted">De '+esc(from.n)+' para <b>'+esc(dest.n)+'</b> · quem faz: '+QUEM[dest.q].full+'</p>'+(p.etapa==='leao'&&fwd?'<p class="note">Aprovar o leão é decisão sua. Isso não compra nada.</p>':''),
+   onYes:async function(){await patch(id,{etapa:to,etapa_em:todayS()});closeModal()}})}
+
+function openItem(t,id){
+  if(t==='prod')return openProd(id);
+  if(t==='msg')return openMsg(id);
+  var x=TA(id);if(!x)return;var st=stLab(x.quem,x.status);
+  var h='<h2>'+esc(x.titulo)+'</h2><div class="tb">'+badge(x.quem)+'<span class="pill '+st[1]+'">'+st[0]+'</span></div>'+(x.obs?'<p style="white-space:pre-wrap">'+esc(x.obs)+'</p>':'');
+  if(x.quem==='chatgpt'&&x.status!=='feito')h+='<p class="note">'+(x.status==='pendente'?'O Claude escreve o pedido no Correio quando você disser "LER CORREIO" aqui.':'Abra o ChatGPT e escreva: <b>LER CORREIO</b>')+'</p>';
+  h+='<div class="actions"><button class="btn" data-act="tardone" data-id="'+id+'">Marcar como feito</button><button class="btn danger" data-act="deltar" data-id="'+id+'">Excluir</button></div>';
+  openModal(h)}
+
+function tarForm(pre){pre=pre||{};
+  var opts=ativos().map(function(p){return '<option value="'+p.id+'"'+(p.id===pre.produto?' selected':'')+'>'+esc(p.nome)+'</option>'}).join('');
+  openModal('<h2>Nova tarefa</h2><form id="tarForm" novalidate><label for="t-titulo">O que precisa ser feito?<input id="t-titulo" value="'+esc(pre.titulo||'')+'" autocomplete="off"></label>'+
+   '<label for="t-quem">Quem faz<select id="t-quem"><option value="claude">Claude</option><option value="chatgpt">ChatGPT</option><option value="marcelo">Você</option></select></label>'+
+   '<label for="t-prod">Produto (opcional)<select id="t-prod"><option value="">Nenhum</option>'+opts+'</select></label><label for="t-obs">Detalhes<textarea id="t-obs"></textarea></label><div class="err" id="t-err" role="alert"></div>'+
+   '<div class="actions"><button class="btn" type="submit">Salvar</button></div></form>')}
+
+document.addEventListener('submit',function(e){var id=e.target.id;
+  if(id==='loginForm'){e.preventDefault();var em=$('#lg-email').value.trim(),pw=$('#lg-pass').value,btn=e.target.querySelector('button');
+    if(!em||!pw){$('#lg-err').textContent='Preencha email e senha.';return}
+    btn.disabled=true;btn.textContent='Entrando…';
+    Api.auth('token?grant_type=password',{email:em,password:pw}).then(function(s){Api.saveSess(s);return start()}).catch(function(x){
+      btn.disabled=false;btn.textContent='Entrar';$('#lg-err').textContent=(x.status===400||x.status===401)?'Email ou senha incorretos.':'Não consegui entrar agora. Veja a internet e tente de novo.'});return}
+  if(id==='prodForm'){e.preventDefault();var pid=e.target.getAttribute('data-id');
+    var v={nome:$('#f-nome').value.trim(),nicho:$('#f-nicho').value.trim(),custo:num($('#f-custo').value),venda:num($('#f-venda').value),frete:num($('#f-frete').value),notas:$('#f-notas').value.trim()};
+    if(!v.nome){$('#f-err').textContent='Escreva um nome.';$('#f-nome').focus();return}
+    ask({title:pid?'Salvar as alterações?':'Guardar esta busca?',yes:'Sim, salvar',body:'<p><b>'+esc(v.nome)+'</b></p>',
+     onYes:async function(){if(pid){await patch(pid,v)}else{v.etapa='busca';v.etapa_em=todayS();await Api.create('produto',v)}closeModal()}});return}
+  if(id==='tarForm'){e.preventDefault();var tv={titulo:$('#t-titulo').value.trim(),quem:$('#t-quem').value,produto:$('#t-prod').value,obs:$('#t-obs').value.trim()};
+    if(!tv.titulo){$('#t-err').textContent='Escreva o que precisa ser feito.';return}
+    ask({title:'Guardar esta tarefa?',yes:'Sim, guardar',body:'<p>'+badge(tv.quem)+' <b>'+esc(tv.titulo)+'</b></p>',
+     onYes:async function(){tv.status='pendente';tv.at=todayS();await Api.create('tarefa',tv);closeModal()}});return}
+  if(id==='nichoForm'){e.preventDefault();var nv=$('#n-nome').value.trim();
+    ask({title:'Salvar o nicho ativo?',yes:'Sim, salvar',body:'<p><b>'+esc(nv||'(nenhum)')+'</b></p>',
+     onYes:async function(){if(D.cfg){await patch(D.cfg.id,{nicho:nv})}else{await Api.create('config',{nicho:nv})}closeModal()}})}
+});
+document.addEventListener('click',function(e){
+  var c=e.target.closest('[data-c]');if(c){if(c.getAttribute('data-c')==='yes')runConfirm(c);else closeConf();return}
+  var b=e.target.closest('[data-act]');if(!b)return;var a=b.getAttribute('data-act'),id=b.getAttribute('data-id');
+  switch(a){
+   case'tab':S.view=b.getAttribute('data-v');window.scrollTo(0,0);render();break;
+   case'errok':S.err='';render();break;
+   case'reload':reload();break;
+   case'logout':ask({title:'Sair do app?',yes:'Sim, sair',body:'<p>Para voltar, você entra de novo com email e senha.</p>',onYes:async function(){Api.saveSess(null);S.recs=[];S.trash=[];lsSet(CK,'');derive();S.ready=false}});break;
+   case'fs':var i=SIZES.indexOf(parseInt(document.documentElement.style.fontSize,10));if(i<0)i=DEF;i=Math.max(0,Math.min(SIZES.length-1,i+ +b.getAttribute('data-d')));document.documentElement.style.fontSize=SIZES[i]+'px';lsSet(FSK,i);break;
+   case'newbusca':buscaForm(null);break;
+   case'open':openProd(id);break;
+   case'item':openItem(b.getAttribute('data-t'),id);break;
+   case'openmsg':openMsg(id);break;
+   case'edit':var ep=PR(id);if(ep)buscaForm(ep);break;
+   case'move':doMove(id,b.getAttribute('data-to'));break;
+   case'pedir':var pp=PR(id);if(!pp)break;var ps=stepOf(pp.etapa);
+     ask({title:'Pedir ao '+QUEM[ps.q].full+'?',yes:'Sim, pedir',body:'<p>'+badge(ps.q)+' <b>'+esc(ps.n)+'</b>: '+esc(pp.nome)+'</p><p class="muted">'+(ps.q==='chatgpt'?'O Claude escreve o pedido no Correio e avisa o carteiro.':'O Claude faz quando você abrir a conversa e pedir.')+'</p>',
+      onYes:async function(){await Api.create('tarefa',{titulo:ps.n+': '+pp.nome,quem:ps.q,produto:id,status:'pendente',at:todayS()});closeModal()}});break;
+   case'discard':var dp=PR(id);if(!dp)break;
+     ask({title:'Descartar este produto?',danger:1,yes:'Sim, descartar',body:'<p><b>'+esc(dp.nome)+'</b></p><label for="d-why">Por que descartar?<textarea id="d-why" placeholder="Fica anotado para você não repetir o erro"></textarea></label>',
+      onYes:async function(){await patch(id,{descartado:true,motivo:$('#d-why').value.trim()});closeModal()}});break;
+   case'reactivate':var rp=PR(id);if(!rp)break;
+     ask({title:'Reativar este produto?',yes:'Sim, reativar',body:'<p><b>'+esc(rp.nome)+'</b> volta para '+esc(stepOf(rp.etapa).n)+'.</p>',onYes:async function(){await patch(id,{descartado:false,motivo:''});closeModal()}});break;
+   case'del':var dd=PR(id);if(!dd)break;
+     ask({title:'Excluir este produto?',danger:1,yes:'Sim, excluir',body:'<p><b>'+esc(dd.nome)+'</b></p><p class="muted">Vai para a Lixeira e fica lá por '+TRASH_DAYS+' dias.</p>',onYes:async function(){await Api.setDeleted([id],new Date().toISOString());closeModal()}});break;
+   case'tardone':var td=TA(id);if(!td)break;
+     ask({title:'Marcar como feito?',yes:'Sim, feito',body:'<p><b>'+esc(td.titulo)+'</b></p>',onYes:async function(){await patch(id,{status:'feito'});closeModal()}});break;
+   case'deltar':var dt=TA(id);if(!dt)break;
+     ask({title:'Excluir esta tarefa?',danger:1,yes:'Sim, excluir',body:'<p><b>'+esc(dt.titulo)+'</b></p><p class="muted">Vai para a Lixeira e fica lá por '+TRASH_DAYS+' dias.</p>',onYes:async function(){await Api.setDeleted([id],new Date().toISOString());closeModal()}});break;
+   case'nicho':openModal('<h2>Nicho ativo</h2><form id="nichoForm" novalidate><label for="n-nome">Nome do nicho<input id="n-nome" value="'+esc(nichoAtivo())+'" autocomplete="off"></label><div class="actions"><button class="btn" type="submit">Salvar</button></div></form>');break;
+   case'lixeira':openLixeira();break;
+   case'restore':var it=trashList().filter(function(x){return x.id===id})[0];if(!it)break;
+     ask({title:'Restaurar este item?',yes:'Sim, restaurar',body:'<p><b>'+esc(it.label)+'</b></p>',onYes:async function(){await Api.setDeleted([id],null);closeModal()}});break;
+   case'como':openComo();break;
+   case'close':closeModal();break;
+  }});
+document.addEventListener('input',function(e){if(e.target&&/^cc-/.test(e.target.id))calcLive()});
+document.addEventListener('keydown',function(e){if(e.key==='Escape'){if(!$('#confirm').hidden)closeConf();else if(!$('#modal').hidden)closeModal()}});
+$('#modal').addEventListener('click',function(e){if(e.target===this)closeModal()});
+
+/* ---------- partida ---------- */
+async function reload(){
+  try{await Api.load();S.ready=true;if(S.err&&/conex|carregar/i.test(S.err))S.err=''}
+  catch(e){if(e.status===401){Api.saveSess(null);S.err='Sua sessão acabou. Entre de novo.'}else{S.ready=true;S.err=S.recs.length?'Sem conexão agora. Mostrando a última cópia guardada neste aparelho.':'Não consegui carregar. Veja a internet e toque em Atualizar.'}}
+  if(!$('#modal').hidden||!$('#confirm').hidden)return;
+  render()}
+async function start(){S.ready=false;cacheLoad();render();await reload()}
+try{var fi=parseInt(lsGet(FSK),10);document.documentElement.style.fontSize=(SIZES[isNaN(fi)?DEF:fi]||SIZES[DEF])+'px'}catch(e){document.documentElement.style.fontSize=SIZES[DEF]+'px'}
+try{S.sess=JSON.parse(lsGet(SK)||'null')}catch(e){S.sess=null}
+if(S.sess){start()}else{render()}
+document.addEventListener('visibilitychange',function(){if(!document.hidden&&S.sess&&!S.busy)reload()});
+setInterval(function(){if(!document.hidden&&S.sess&&!S.busy&&$('#modal').hidden&&$('#confirm').hidden)reload()},60000);
+if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(function(){})}
+})();
+</script>
+</body>
+</html>
