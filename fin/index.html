@@ -1595,7 +1595,7 @@ const bestDay=c=>c.closeDay>=dim(todayIso().slice(0,7))?1:c.closeDay+1;
 function header(t,extra,cls){return '<header class="hd'+(cls?' '+cls:'')+'"><h1>'+esc(t)+'</h1><div>'+(extra||'')+'</div></header>';}
 function tabs(){
   const T=[['home','🏠','Início'],['bills','📅','Mês'],['contas','🏦','Contas'],['cards','💳','Cartões'],['debts','📉','Dívidas'],['recv','💵','Receber']];
-  return '<nav class="tabs">'+T.map(t=>'<button data-act="tab" data-v="'+t[0]+'" class="'+(S.tab===t[0]?'on':'')+'"><span class="e">'+t[1]+'</span>'+t[2]+'</button>').join('')+'</nav>';
+  return '<nav class="tabs">'+T.map(t=>'<button data-act="tab" data-v="'+t[0]+'" class="'+((S.tab===t[0]||(t[0]==='debts'&&S.tab==='loans'))?'on':'')+'"><span class="e">'+t[1]+'</span>'+t[2]+'</button>').join('')+'</nav>';
 }
 
 /* ---------- plano de quitação (simulação, não é promessa) ---------- */
@@ -2917,10 +2917,40 @@ function vRecv(){
   }
   return h+'</div>';
 }
+/* ---------- Empréstimos: visão própria, ligada às mesmas dívidas (baixa, saldo e extrato) ---------- */
+const isLoan=x=>x.dir!=='RECEBER'&&(/empr[eé]stimo|consignado/i.test((x.kindD||'')+' '+(x.cat||'')+' '+(x.grupo||'')));
+function loanExtrato(x,ym){
+  const key=stNorm(x.match||String(x.creditor||'').split(/[·\-–(]/).pop()||'');if(!key||key.length<4)return null;
+  return stRows().find(e=>e.k==='EXPENSE'&&e.c<0&&e.d&&e.d.slice(0,7)===ym&&stNorm(e.t).indexOf(key)>=0&&(x.installC==null||Math.abs(e.c)===x.installC))||null;
+}
+function vLoans(){
+  const ls=byKind('debt').filter(d=>isLoan(d.data)),ab=ls.filter(d=>d.data.status!=='PAGA'),fe=ls.filter(d=>d.data.status==='PAGA');
+  let h=header('Empréstimos',rbtn('debt-new-loan','+','Novo empréstimo'))+'<div class="wrap"><button class="bk" data-back="1" data-act="tab" data-v="debts" aria-label="Voltar">← Voltar</button>';
+  const sal=ab.reduce((a,d)=>a+(d.data.balanceC||0),0),par=ab.reduce((a,d)=>a+(d.data.installC||0),0),tot=ls.reduce((a,d)=>a+(debtTotalC(d.data)||0),0),pg=ls.reduce((a,d)=>a+Math.max(0,(debtTotalC(d.data)||0)-(d.data.balanceC||0)),0);
+  h+='<div class="card"><div class="row"><span class="mut">Total a pagar nos contratos</span><b>'+money(tot)+'</b></div><div class="row"><span class="mut">Já pago</span><b>'+money(pg)+'</b></div><div class="row"><span class="mut">Falta pagar</span><b>'+money(sal)+'</b></div><div class="row"><span class="mut">Parcelas por mês</span><b>'+money(par)+'</b></div></div>';
+  h+='<h2>Em andamento ('+ab.length+')</h2>';
+  if(!ab.length)h+='<div class="card mut">Nenhum empréstimo em aberto. Use o + para cadastrar um novo. Ele passa a aparecer no Mês, no Calendário e em Dívidas.</div>';
+  ab.forEach(d=>{
+    const x=d.data,pagas=(x.paidYm||[]).slice().sort(),ult=pagas[pagas.length-1];
+    h+=debtRow(d);
+    let ex='';
+    if(x.liberadoC!=null)ex+='<div class="row"><span class="mut">Valor que entrou na conta</span><b class="rc">'+money(x.liberadoC)+'</b></div>';
+    if(x.contratadoC!=null)ex+='<div class="row"><span class="mut">Valor contratado</span><b>'+money(x.contratadoC)+'</b></div>';
+    ex+='<div class="row"><span class="mut">Parcelas pagas</span><b>'+pagas.length+(x.nInst?' de '+x.nInst:'')+'</b></div>';
+    pagas.slice(-3).forEach(ym=>{const e=loanExtrato(x,ym);ex+='<div class="mut">'+esc(ymShort(ym))+': '+(e?'✔ saiu no extrato em '+brDate(e.d).slice(0,5):'⚠️ marcada paga, mas não achei no extrato')+'</div>';});
+    h+='<div class="card" style="margin-top:-.4rem">'+ex+'</div>';
+  });
+  const ent=stRows().filter(e=>e.k==='LOAN_DISBURSEMENT'&&e.c>0).sort((a,b)=>a.d<b.d?1:-1),te=ent.reduce((a,e)=>a+e.c,0);
+  h+='<h2>Dinheiro de empréstimo que entrou ('+ent.length+')</h2>';
+  if(ent.length){h+='<div class="card"><div class="row"><span class="mut">Total que entrou nas contas</span><b class="rc">'+money(te)+'</b></div></div>'+ent.map(e=>'<div class="item"><div class="row"><span class="t">'+brDate(e.d).slice(0,5)+' · '+esc(e.t)+'</span><b class="rc">'+money(e.c)+'</b></div><div class="mut">'+esc(e.acct)+'</div></div>').join('');}
+  else h+='<div class="card mut">Nenhuma entrada de empréstimo nos extratos.</div>';
+  if(fe.length)h+='<h2>Quitados ('+fe.length+')</h2><div>'+fe.map(debtRow).join('')+'</div>';
+  return h+'<p class="hint">Dar baixa aqui, no Mês, no Calendário ou em Dívidas é a mesma coisa: todos usam o mesmo registro.</p></div>';
+}
 function vDebts(){
   const ds=byKind('debt');
   const abertas=ds.filter(d=>d.data.status!=='PAGA'),pagar=abertas.filter(d=>d.data.dir!=='RECEBER'),receber=abertas.filter(d=>d.data.dir==='RECEBER'),feitas=ds.filter(d=>d.data.status==='PAGA'&&d.data.dir!=='RECEBER');
-  let h=header('Dívidas',rbtn('debt-new','+','Nova dívida ou parcela')+sortBtn())+'<div class="wrap"><button class="btn sec" data-act="tab" data-v="plan">🎯 Plano para quitar as dívidas (simulação)</button>';
+  let h=header('Dívidas',rbtn('debt-new','+','Nova dívida ou parcela')+sortBtn())+'<div class="wrap"><button class="btn sec" data-act="tab" data-v="plan">🎯 Plano para quitar as dívidas (simulação)</button><button class="btn sec" data-act="tab" data-v="loans">🏦 Empréstimos ('+ds.filter(d=>isLoan(d.data)&&d.data.status!=='PAGA').length+')</button>';
   if(!ds.length)h+='<div class="card mut">Nada cadastrado. Use “Nova dívida ou parcela” para o que você deve e também para o que te devem.</div>';
   if(pagar.length){
     const sum=pagar.reduce((a,d)=>a+(d.data.balanceC||0),0),inst=pagar.reduce((a,d)=>a+(d.data.installC||0),0),miss=pagar.some(d=>d.data.balanceC==null);
@@ -3084,7 +3114,7 @@ function stRows(){
   return out;
 }
 /* ---------- Extrato: buscar, filtrar por entradas/gastos, mês e dia ---------- */
-const APP_V='v94';
+const APP_V='v95';
 const ST_FILTERS=[['all','Tudo'],['in','Entradas'],['out','Gastos'],['fat','Faturas pagas'],['tr','Transferências']];
 function stAll(){
   const out=stRows().map(e=>Object.assign({},e,{src:'extrato'}));
@@ -3337,7 +3367,7 @@ function render(){
   if(!S.sess||!S.ready){return;}
   RO.reg={};
   let body;
-  if(S.tab==='home')body=vHome();else if(S.tab==='bills')body=vMonth();else if(S.tab==='cal')body=vCal();else if(S.tab==='contas')body=S.contaId?vConta():vContas();else if(S.tab==='cards')body=S.cardId?(S.cardDados?vCardDados():vCard()):vCards();else if(S.tab==='debts')body=vDebts();else if(S.tab==='rem')body=vRem();else if(S.tab==='recv')body=vRecv();else if(S.tab==='notes')body=vNotes();else if(S.tab==='plan')body=vPlan();else if(S.tab==='stmt')body=vStmt();else if(S.tab==='spend')body=vGastos();else if(S.tab==='poder')body=vPoder();else if(S.tab==='pagar')body=vPagar();else if(S.tab==='prev')body=vPrev();else if(S.tab==='trash')body=vTrash();else if(S.tab==='cats')body=vCats();else if(S.tab==='cfg')body=vCfg();else body=vHome();
+  if(S.tab==='home')body=vHome();else if(S.tab==='bills')body=vMonth();else if(S.tab==='cal')body=vCal();else if(S.tab==='contas')body=S.contaId?vConta():vContas();else if(S.tab==='cards')body=S.cardId?(S.cardDados?vCardDados():vCard()):vCards();else if(S.tab==='debts')body=vDebts();else if(S.tab==='rem')body=vRem();else if(S.tab==='recv')body=vRecv();else if(S.tab==='loans')body=vLoans();else if(S.tab==='notes')body=vNotes();else if(S.tab==='plan')body=vPlan();else if(S.tab==='stmt')body=vStmt();else if(S.tab==='spend')body=vGastos();else if(S.tab==='poder')body=vPoder();else if(S.tab==='pagar')body=vPagar();else if(S.tab==='prev')body=vPrev();else if(S.tab==='trash')body=vTrash();else if(S.tab==='cats')body=vCats();else if(S.tab==='cfg')body=vCfg();else body=vHome();
   if(S.tab!=='home'&&body.indexOf('data-back')<0)body='<div class="bkrow"><button class="bk" data-back="1" data-act="tab" data-v="home" aria-label="Voltar">← Voltar</button></div>'+body;
   a.innerHTML=body+(S.msg?'<div class="wrap"><div class="err">'+esc(S.msg)+'</div></div>':'')+tabs();
   roAfterRender();
@@ -3462,6 +3492,7 @@ async function debtForm(rec,preset){
     {k:'dir',label:'Esta parcela é…',type:'select',opts:[['PAGAR','A pagar (eu devo)'],['RECEBER','A receber (me devem)']]},
     {k:'creditor',label:'Nome (a quem você deve ou quem te deve)',type:'text',req:true},
     {k:'balanceC',label:'Saldo (quanto falta pagar ou receber)',type:'money',hint:'Vazio = Não informado.'},
+    {k:'liberadoC',label:'Se for empréstimo: valor que entrou na conta (opcional)',type:'money',hint:'Aparece na tela Empréstimos. Vazio = não informado.'},
     {k:'firstInstC',label:'Valor da 1ª parcela (só se for diferente)',type:'money',hint:'Ex.: a 1ª é R$ 120,00 e as outras são R$ 100,00. Vazio = igual às outras.'},
     {k:'installC',label:'Valor das próximas parcelas',type:'money'},
     {k:'nInst',label:'Quantas parcelas no total (opcional)',type:'int',min:1,max:120,hint:'Ex.: 6. Com isso eu calculo o saldo e paro de cobrar depois da última.'},
@@ -3629,6 +3660,7 @@ document.addEventListener('click',async ev=>{
       try{if(ex)await Api.remove(ex);else await Api.create('invpay',{cardId:cr.id,ym});}catch(e){S.msg=e.message;}render();}
   }
   else if(act==='debt-new')debtForm(null);
+  else if(act==='debt-new-loan')debtForm(null,{kindD:'Empréstimo',grupo:'Empréstimo',cat:'Empréstimo'});
   else if(act==='recv-new')debtForm(null,{dir:'RECEBER',status:'ATIVA'});
   else if(act==='debt-edit')fichaDebt(get(id));
 });
