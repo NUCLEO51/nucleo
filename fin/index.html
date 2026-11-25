@@ -2859,6 +2859,33 @@ function recvRecorrentes(){
     return {label:key,acct:last.acct||'',lastD:last.d,lastC:last.c,done,nextD:dateOf(ny,day)};
   }).filter(Boolean).sort((a,b)=>a.nextD<b.nextD?-1:1);
 }
+/* auditoria do que já foi recebido (INSS e Funcesp) desde 07/2026; o INSS cai no Mercantil e é repassado por Pix ao Santander no mesmo dia */
+function audRecebidos(){
+  const td=todayIso(),cur=ymOf(td),all=stRows(),isI=t=>/inss|beneficio/i.test(t||''),isF=t=>/funcesp|funvest|vivest/i.test(t||'');
+  const earliest=all.reduce((m,e)=>e.d&&e.d<m?e.d:m,'9999-99-99');
+  const meses=[];for(let m='2026-07';m<=cur;m=addMonths(m,1))meses.push(m);
+  const inc=all.filter(e=>e.k==='INCOME'&&e.c>0&&e.d>='2026-07-01');
+  const linha=e=>{
+    const o={d:e.d,c:e.c,conta:e.acct,t:e.t,desc:0,rep:null,chegou:null,caminho:''};
+    if(isI(e.t)){
+      const mesmo=all.filter(x=>x.acctFull===e.acctFull&&x.d===e.d&&x!==e);
+      o.desc=-mesmo.filter(x=>x.k==='EXPENSE'&&x.c<0).reduce((a,x)=>a+x.c,0);
+      const pix=mesmo.find(x=>x.k==='TRANSFER'&&x.c<0&&/marlene/i.test(x.t||''));
+      if(pix){o.rep=-pix.c;const ch=all.find(x=>x.acctFull!==e.acctFull&&x.d===e.d&&x.c===-pix.c&&x.k==='TRANSFER');o.chegou=ch?ch.acct:false;o.caminho='Mercantil → Pix → '+(ch?ch.acct:'?');}
+      else o.caminho=/mercantil/i.test(e.acctFull)?'Ficou no Mercantil (não achei o Pix de repasse)':'Caiu direto no Santander';
+    }
+    return o;
+  };
+  const res=meses.map(m=>{
+    const I=inc.filter(e=>e.d.slice(0,7)===m&&isI(e.t)).map(linha).sort((a,b)=>a.d<b.d?-1:1);
+    const F=inc.filter(e=>e.d.slice(0,7)===m&&isF(e.t)).map(linha).sort((a,b)=>a.d<b.d?-1:1);
+    const cobre=earliest<=dateOf(m,5),passou=m<cur||td>=dateOf(m,10);
+    return {m:m,I:I,F:F,cobre:cobre,passou:passou};
+  });
+  /* aviso de valor diferente: compara cada INSS com o anterior */
+  let prev=null;res.forEach(r=>r.I.forEach(i=>{i.dif=prev!=null&&i.c!==prev?i.c-prev:null;prev=i.c;}));
+  return res;
+}
 function vRecv(){
   const td=todayIso(),ds=byKind('debt').filter(d=>d.data.dir==='RECEBER'),abertas=ds.filter(d=>d.data.status!=='PAGA'),feitas=ds.filter(d=>d.data.status==='PAGA');
   let h=header('Receber',rbtn('recv-new','+','Novo valor a receber'))+'<div class="wrap">';
@@ -2873,6 +2900,19 @@ function vRecv(){
     h+='<p class="hint">Previsão feita com os meses anteriores do extrato. Não é promessa de pagamento.</p>';
   }
   if(feitas.length)h+='<h2>Já recebidas ('+feitas.length+')</h2><div>'+feitas.map(debtRow).join('')+'</div>';
+  {const A=audRecebidos(),tI=A.reduce((a,r)=>a+r.I.reduce((x,i)=>x+i.c,0),0),tF=A.reduce((a,r)=>a+r.F.reduce((x,i)=>x+i.c,0),0);
+   h+='<h2>Recebido desde 07/2026</h2><div class="card"><div class="row"><span class="mut">INSS (soma)</span><b class="rc">'+money(tI)+'</b></div><div class="row"><span class="mut">Funcesp (soma)</span><b class="rc">'+money(tF)+'</b></div><div class="mut">O INSS cai no Mercantil e é repassado por Pix ao Santander no mesmo dia. Só aparece aqui uma vez.</div></div>';
+   A.slice().reverse().forEach(r=>{
+     const tot=r.I.concat(r.F).reduce((a,i)=>a+i.c,0);
+     h+='<div class="card"><div class="row"><span class="t"><b>'+esc(ymLabel(r.m))+'</b></span><b class="rc">'+money(tot)+'</b></div>';
+     h+='<div class="mut"><b>INSS</b></div>';
+     if(r.I.length)h+=r.I.map(i=>'<div class="row"><span>'+brDate(i.d).slice(0,5)+' · '+esc(i.conta)+'</span><b class="rc">'+money(i.c)+'</b></div><div class="mut">'+esc(i.caminho)+(i.desc?' · descontos no banco '+money(i.desc):'')+(i.rep!=null?' · repasse '+money(i.rep):'')+(i.chegou===false?' · ⚠️ não achei a entrada no Santander':'')+(i.dif!=null?' · ⚠️ valor diferente do mês anterior ('+(i.dif>0?'+ ':'− ')+money(Math.abs(i.dif))+')':'')+'</div>').join('');
+     else h+='<div class="mut">'+(!r.cobre?'Os extratos que tenho começam depois deste pagamento. Não dá para conferir.':(r.passou?'⚠️ Não achei INSS neste mês nos extratos.':'Ainda não é dia de cair.'))+'</div>';
+     h+='<div class="mut" style="margin-top:.4rem"><b>Funcesp</b></div>';
+     if(r.F.length)h+=r.F.map(i=>'<div class="row"><span>'+brDate(i.d).slice(0,5)+' · '+esc(i.conta)+'</span><b class="rc">'+money(i.c)+'</b></div>').join('');
+     else h+='<div class="mut">'+(r.cobre?'Nenhuma entrada neste mês.':'Fora do período dos extratos.')+'</div>';
+     h+='</div>';});
+  }
   return h+'</div>';
 }
 function vDebts(){
@@ -3042,7 +3082,7 @@ function stRows(){
   return out;
 }
 /* ---------- Extrato: buscar, filtrar por entradas/gastos, mês e dia ---------- */
-const APP_V='v91';
+const APP_V='v92';
 const ST_FILTERS=[['all','Tudo'],['in','Entradas'],['out','Gastos'],['fat','Faturas pagas'],['tr','Transferências']];
 function stAll(){
   const out=stRows().map(e=>Object.assign({},e,{src:'extrato'}));
