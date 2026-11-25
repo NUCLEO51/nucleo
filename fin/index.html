@@ -1792,6 +1792,8 @@ function vHome(){
   const sem=open.filter(i=>i.amountC==null).length;
   const late=open.filter(i=>i.date<td).length;
   let h=header('Financeiro',undoBtn()+rbtn('tab','🔎','Buscar tudo','stmt')+rbtn('tab','📝','Anotações','notes')+rbtn('chat','💬','Chat financeiro')+rbtn('tab','⚙️','Ajustes','cfg'),'home')+'<p class="sub">'+esc(ymLabel(ym))+'</p><div class="wrap">';
+  {const P0=poderCalc(),usando=P0.L.od.filter(x=>!x.unk&&/já usando/.test(x.note));
+   h+='<button class="card" data-act="tab" data-v="poder" style="width:100%;text-align:left"><div class="mut">🏦 Cheque especial que ainda posso usar</div><div class="big" style="font-size:2rem">'+money(P0.od)+'</div><div class="mut">'+(usando.length?usando.map(x=>esc(x.note)).join(' · ')+' · ':'')+'Dinheiro seu: '+money(P0.din)+'. Toque para ver tudo que posso usar.</div></button>';}
   const ibn=ibList();
   if(ibn.length)h+='<button class="item" data-act="tab" data-v="notes"><div class="row"><span class="t">📝 Anotações para decidir</span><span class="cnt">'+ibn.length+'</span></div><div class="mut">Siri ou digitadas: toque para dizer se é cartão, conta, dívida ou lembrete.</div></button>';
   const pend=pendList();
@@ -2783,6 +2785,7 @@ function vConta(){
     +(d.agency?'<div class="row kv"><span class="mut">Agência</span><b>'+esc(d.agency)+'</b></div>':'')
     +'<div class="row kv"><span class="mut">Conta</span><b>'+esc(num)+'</b></div>'
     +(d.overdraftC!=null?'<div class="row kv"><span class="mut">Cheque especial (limite)</span><b>'+money(d.overdraftC)+'</b></div>':'')
+    +(d.overdraftC!=null?'<div class="row kv"><span class="mut">Cheque especial que ainda posso usar</span><b>'+money(Math.max(0,d.overdraftC-Math.max(0,-sd.ok)))+'</b></div>':'')
     +'<div class="row kv"><span class="mut">'+(d.openingC==null?'Movimento até hoje':'Saldo calculado hoje')+'</span><b>'+money(sd.ok)+'</b></div>'
     +(sd.fut?'<div class="row kv"><span class="mut">A entrar / sair depois de hoje</span><b>'+(sd.fut>0?'+ ':'− ')+money(Math.abs(sd.fut))+'</b></div>':'')
     +(d.openingC==null?'<div class="hint">Sem saldo inicial informado, este valor é só a soma dos lançamentos. Informe o saldo em Editar.</div>':'')+'</div>';
@@ -3040,7 +3043,7 @@ function stRows(){
   return out;
 }
 /* ---------- Extrato: buscar, filtrar por entradas/gastos, mês e dia ---------- */
-const APP_V='v87';
+const APP_V='v88';
 const ST_FILTERS=[['all','Tudo'],['in','Entradas'],['out','Gastos'],['fat','Faturas pagas'],['tr','Transferências']];
 function stAll(){
   const out=stRows().map(e=>Object.assign({},e,{src:'extrato'}));

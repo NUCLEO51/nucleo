@@ -1,0 +1,23 @@
+// Dar baixa na parcela pela tela Mês tem de aparecer em Dívidas, Calendário e Início (e o inverso). Cheque especial visível no Início.
+const { chromium } = require('playwright');
+(async()=>{const b=await chromium.launch({executablePath:process.env.CHROME_PATH||undefined});const p=await b.newPage({viewport:{width:390,height:900}});const errs=[];p.on('pageerror',e=>errs.push(String(e)));
+await p.route('**/*',r=>r.request().url().startsWith('http://localhost:8099')?r.continue():r.abort());
+await p.addInitScript(()=>localStorage.setItem('fin-confirm','1'));await p.goto('http://localhost:8099/fin/index.html');
+const r=await p.evaluate(async()=>{S.sess={access:'x',refresh:'y',exp:Date.now()+3600000};S.ready=true;
+ const cur=ymOf(todayIso());
+ const mp={id:'d1',kind:'debt',version:1,deleted_at:null,data:{creditor:'Mercado Pago da Elisa',dir:'PAGAR',status:'ATIVA',kindD:'Empréstimo',balanceC:681528,firstInstC:56794,installC:56794,nInst:12,dueDay:16,firstDue:cur+'-16',paidYm:[]}};
+ const st={id:'s1',kind:'stmt',version:1,deleted_at:null,data:{account:'Santander · Conta Corrente (final 2450-3)',bank:'Santander',tipo:'conta_corrente',openingC:-514645,overdraftC:986300,entries:[{i:'a',d:'2026-11-03',c:-436273,k:'EXPENSE',t:'x',g:''}]}};
+ S.recs=[mp,st];S.fr=[];S.frLoaded=true;
+ Api.update=async(rec,data)=>{const i=S.recs.findIndex(x=>x.id===rec.id);S.recs[i]=Object.assign({},rec,{data:data,version:rec.version+1});return S.recs[i];};
+ const o={};
+ S.tab='home';render();const hv=document.body.innerText.replace(/\s+/g,' ');o.homeCheque=/Cheque especial que ainda posso usar R\$ 353,82/.test(hv);
+ S.tab='bills';render();o.mesAntes=!!document.querySelector('[data-act="m-open"][data-k="debt"]');
+ document.querySelector('[data-act="m-open"][data-k="debt"]').click();await new Promise(r=>setTimeout(r,50));
+ document.querySelector('#fd-pay').click();await new Promise(r=>setTimeout(r,50));document.querySelector('#d-pay').click();await new Promise(r=>setTimeout(r,50));
+ const ok=document.querySelector('#cf-ok');o.confirm=!!ok;if(ok)ok.click();await new Promise(r=>setTimeout(r,200));
+ o.paidYm=S.recs[0].data.paidYm;
+ S.tab='debts';render();o.dividasSaldo=document.body.innerText.replace(/\s+/g,' ').includes('6.247,34');
+ S.tab='bills';render();o.mesPaga=document.body.innerText.includes('Paga');
+ o.calPaga=calEvents(cur).some(e=>e.kind==='paid'&&e.it&&e.it.id==='d1');
+ return o;});
+console.log(JSON.stringify(r,null,1));console.log('erros',errs);await b.close();})();
