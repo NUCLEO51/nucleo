@@ -709,12 +709,18 @@ function lancInfo(x){
   else if(/^remuneracao/.test(n)){o.oque='Rendimento da aplicação automática';o.de='Santander';}
   return o;
 }
+function chequeSt(x){
+  if(!(x.c>0)||!/cheq/i.test(x.t||''))return null;
+  if(x.dd&&x.d>todayIso())return {ok:false,t:'Retido · libera '+brDate(x.d).slice(0,5)};
+  return {ok:true,t:'Compensado'};
+}
+const chequeTag=x=>{const q=chequeSt(x);return q?' <span class="tag '+(q.ok?'ok':'bad')+'">'+(q.ok?'✔ ':'⏳ ')+q.t+'</span>':'';};
 function detalheModal(x){
   const nf=lancInfo(x),fut=x.d&&x.d>todayIso();
   const rows=[['O que é',nf.oque],['Descrição',x.t||'(sem descrição)'],
     [x.dd||nf.compra?'Data no banco':'Data',x.d?brDate(x.d)+' · '+dowOf(x.d):''],
     ['Depositado em',x.dd?brDate(x.dd)+' · '+dowOf(x.dd):''],['Data da compra',nf.compra],
-    ['Situação',x.dd?(fut?'Cheque ainda indisponível. Compensa em '+brDate(x.d)+'.':'Cheque compensado'):(fut?'Ainda não entrou. Previsto para '+brDate(x.d)+'.':'')],
+    ['Situação',chequeSt(x)?(chequeSt(x).ok?'✔ Cheque compensado: o dinheiro já está na conta.':'⏳ Cheque ainda indisponível. Compensa em '+brDate(x.d)+'.'):(fut?'Ainda não entrou. Previsto para '+brDate(x.d)+'.':'')],
     ['Valor',x.c==null?'':(x.c>0?'+ ':'')+money(Math.abs(x.c))],['Tipo',x.tipo||''],['Categoria',x.cat||''],
     ['De onde veio',nf.de],['Para quem / o que pagou',nf.para],['Onde',x.onde||''],['Parcela',x.parcela||''],['Quem',x.by||'']].filter(r=>r[1]);
   const m=modal('<h3>O que é este lançamento</h3><div class="card">'+rows.map(r=>'<div class="row" style="align-items:flex-start;gap:.8rem"><span class="mut" style="white-space:nowrap;flex:none">'+r[0]+'</span><b style="text-align:right;white-space:pre-wrap!important;word-break:break-word;min-width:0">'+esc(r[1])+'</b></div>').join('')+'</div>'
@@ -2509,7 +2515,7 @@ function calEvents(ym){
   const hoje=todayIso();
   stAll().forEach(e=>{if(!e.d||e.d.slice(0,7)!==ym)return;
     const fut=e.d>hoje;
-    ev.push({kind:fut?(e.c>0?'rec':'due'):(e.c>0?'in':'sai'),d:e.d,t:e.t,c:e.c,tipo:(e.src==='cartao'&&e.c>0?'Estorno no cartão':stKindLabel(e)),cat:e.g||'',onde:e.acct});});
+    ev.push({kind:fut?(e.c>0?'rec':'due'):(e.c>0?'in':'sai'),d:e.d,t:e.t,c:e.c,tipo:(e.src==='cartao'&&e.c>0?'Estorno no cartão':stKindLabel(e)),cat:e.g||'',onde:e.acct,dd:e.dd});});
   recvRecorrentes().forEach(r=>{if(r.nextD.slice(0,7)===ym)ev.push({kind:'rec',d:r.nextD,t:r.label,c:r.lastC,tipo:'Previsão pelos meses anteriores',cat:'',onde:r.acct});});
   monthItems(ym).forEach(it=>{if(!it.date)return;
     const paid=it.cls==='ok',rec=it.dir==='RECEBER';
@@ -2542,8 +2548,8 @@ function vCal(){
     const g=dl.filter(e=>e.kind===kd);if(!g.length)return;
     h+='<h2 class="stday" style="margin-left:0">'+CAL_L[kd]+' ('+g.length+')</h2>';
     const mv=g.filter(e=>!e.it).sort((a,b)=>Math.abs(b.c)-Math.abs(a.c)),ob=g.filter(e=>e.it);
-    mv.forEach(e=>{const ix=S._calLin.push({t:e.t,d:e.d,c:e.c,tipo:e.tipo,cat:e.cat,onde:e.onde})-1;
-      h+='<button class="item" data-act="cal-det" data-ix="'+ix+'"><div class="row"><span class="t">'+esc(e.t||'(sem descrição)')+'</span><b class="'+(e.c>0?'rc':'')+'">'+(e.c>0?'+ ':'')+money(Math.abs(e.c))+'</b></div><div class="mut">'+esc(e.tipo)+(e.onde?' · '+esc(e.onde):'')+'</div></button>';});
+    mv.forEach(e=>{const ix=S._calLin.push({t:e.t,d:e.d,dd:e.dd,c:e.c,tipo:e.tipo,cat:e.cat,onde:e.onde})-1;
+      h+='<button class="item" data-act="cal-det" data-ix="'+ix+'"><div class="row"><span class="t">'+esc(e.t||'(sem descrição)')+chequeTag(e)+'</span><b class="'+(e.c>0?'rc':'')+'">'+(e.c>0?'+ ':'')+money(Math.abs(e.c))+'</b></div><div class="mut">'+esc(e.tipo)+(e.onde?' · '+esc(e.onde):'')+'</div></button>';});
     if(ob.length)h+='<div class="tbl" role="table">'+ob.map(e=>mRow(e.it)).join('')+'</div>';
   });
   return h+'</div>';
@@ -2639,7 +2645,7 @@ function vCard(){
   if(!lin.length)h+='<div class="card mut">Nada lançado nesta fatura.</div>';
   else{
     h+='<div class="tbl" role="table"><div class="tr th" role="row"><span>Dia</span><span>Descrição</span><span style="text-align:right">Valor</span></div>';
-    lin.forEach((x,ix)=>{h+='<button class="tr" role="row" data-act="inv-det" data-ix="'+ix+'"><span class="d"><b>'+(x.d?x.d.slice(8,10):'')+'</b><i>'+(x.d?x.d.slice(5,7)+'/'+x.d.slice(2,4):'')+'</i></span><span class="w"><b>'+esc(x.t||'(sem descrição)')+'</b></span><span class="v"><b'+(x.c>0?' class="rc"':'')+'>'+(x.c>0?'+ ':'')+money(Math.abs(x.c))+'</b></span></button>';});
+    lin.forEach((x,ix)=>{h+='<button class="tr" role="row" data-act="inv-det" data-ix="'+ix+'"><span class="d"><b>'+(x.d?x.d.slice(8,10):'')+'</b><i>'+(x.d?x.d.slice(5,7)+'/'+x.d.slice(2,4):'')+'</i></span><span class="w"><b>'+esc(x.t||'(sem descrição)')+'</b>'+chequeTag(x)+'</span><span class="v"><b'+(x.c>0?' class="rc"':'')+'>'+(x.c>0?'+ ':'')+money(Math.abs(x.c))+'</b></span></button>';});
     h+='</div><p class="hint">Toque numa linha para ver o que é.</p>';
   }
   h+='<button class="btn sec" data-act="inv-pay" data-ym="'+S.invYm+'">'+(v.paid?'Desfazer “fatura paga”':'Marcar esta fatura como paga')+'</button>';
@@ -2800,7 +2806,7 @@ function vConta(){
   lin=sortBy(lin,S.aSort||'dnew',x=>x.c,x=>x.d,x=>x.cat||'');S._ctaLin=lin;
   if(!lin.length)h+='<div class="card mut">Sem lançamentos ainda.</div>';
   else{h+='<div class="tbl" role="table"><div class="tr th" role="row"><span>Dia</span><span>Descrição</span><span style="text-align:right">Valor</span></div>';
-    lin.forEach((x,ix)=>{h+='<button class="tr" role="row" data-act="conta-det" data-ix="'+ix+'"><span class="d"><b>'+(x.d?x.d.slice(8,10):'')+'</b><i>'+(x.d?x.d.slice(5,7)+'/'+x.d.slice(2,4):'')+'</i></span><span class="w"><b>'+esc(x.t||'(sem descrição)')+'</b></span><span class="v"><b'+(x.c>0?' class="rc"':'')+'>'+(x.c>0?'+ ':'')+money(Math.abs(x.c))+'</b></span></button>';});
+    lin.forEach((x,ix)=>{h+='<button class="tr" role="row" data-act="conta-det" data-ix="'+ix+'"><span class="d"><b>'+(x.d?x.d.slice(8,10):'')+'</b><i>'+(x.d?x.d.slice(5,7)+'/'+x.d.slice(2,4):'')+'</i></span><span class="w"><b>'+esc(x.t||'(sem descrição)')+'</b>'+chequeTag(x)+'</span><span class="v"><b'+(x.c>0?' class="rc"':'')+'>'+(x.c>0?'+ ':'')+money(Math.abs(x.c))+'</b></span></button>';});
     h+='</div><p class="hint">Toque numa linha para ver o que é.</p>';}
   return h+'</div>';
 }
@@ -3114,7 +3120,7 @@ function stRows(){
   return out;
 }
 /* ---------- Extrato: buscar, filtrar por entradas/gastos, mês e dia ---------- */
-const APP_V='v95';
+const APP_V='v96';
 const ST_FILTERS=[['all','Tudo'],['in','Entradas'],['out','Gastos'],['fat','Faturas pagas'],['tr','Transferências']];
 function stAll(){
   const out=stRows().map(e=>Object.assign({},e,{src:'extrato'}));
@@ -3169,7 +3175,7 @@ function stListHtml(){
   rows.slice(0,st.lim).forEach((e,ix)=>{
     if(porData&&e.d!==last){last=e.d;h+='<h2 class="stday">'+brDate(e.d).slice(0,5)+' · '+dowOf(e.d)+'</h2>';}
     const ent=e.c>0;
-    h+='<button class="item" data-act="st-det" data-ix="'+ix+'"><div class="row"><span class="t">'+esc(e.t||'(sem descrição)')+'</span><b class="'+(ent?'rc':'')+'">'+(ent?'+ ':'')+money(Math.abs(e.c))+'</b></div><div class="mut">'+(e.src==='cartao'&&e.c>0?'Estorno no cartão':stKindLabel(e))+(e.g?' · '+esc(e.g):'')+' · '+esc(e.acct||'')+(porData?'':' · '+brDate(e.d))+'</div></button>';
+    h+='<button class="item" data-act="st-det" data-ix="'+ix+'"><div class="row"><span class="t">'+esc(e.t||'(sem descrição)')+chequeTag(e)+'</span><b class="'+(ent?'rc':'')+'">'+(ent?'+ ':'')+money(Math.abs(e.c))+'</b></div><div class="mut">'+(e.src==='cartao'&&e.c>0?'Estorno no cartão':stKindLabel(e))+(e.g?' · '+esc(e.g):'')+' · '+esc(e.acct||'')+(porData?'':' · '+brDate(e.d))+'</div></button>';
   });
   if(rows.length>st.lim)h+='<button class="btn sec" data-act="st-more">Mostrar mais ('+(rows.length-st.lim)+' restantes)</button>';
   /* contas, cartões e dívidas cadastrados que combinam com a busca */
