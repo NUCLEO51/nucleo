@@ -10,7 +10,7 @@ const r=await p.evaluate(async()=>{S.sess={access:'x',refresh:'y',exp:Date.now()
  S.recs=[mp,st];S.fr=[];S.frLoaded=true;
  Api.update=async(rec,data)=>{const i=S.recs.findIndex(x=>x.id===rec.id);S.recs[i]=Object.assign({},rec,{data:data,version:rec.version+1});return S.recs[i];};
  const o={};
- S.tab='home';render();const hv=document.body.innerText.replace(/\s+/g,' ');o.homeCheque=/Cheque especial que ainda posso usar R\$ 353,82/.test(hv);
+ BK.checked=true;BK.last=new Date(Date.now()-3600000).toISOString();S.tab='home';render();const hv=document.body.innerText.replace(/\s+/g,' ');o.homeSemCartaoCheque=!/Cheque especial que ainda posso usar/.test(hv);o.semAvisoCopia=!/última cópia/.test(hv);BK.last=new Date(Date.now()-30*86400000).toISOString();render();o.avisoAos30=/Faz 30 dias/.test(document.body.innerText.replace(/\s+/g,' '));
  S.tab='bills';render();o.mesAntes=!!document.querySelector('[data-act="m-open"][data-k="debt"]');
  document.querySelector('[data-act="m-open"][data-k="debt"]').click();await new Promise(r=>setTimeout(r,50));
  document.querySelector('#fd-pay').click();await new Promise(r=>setTimeout(r,50));document.querySelector('#d-pay').click();await new Promise(r=>setTimeout(r,50));

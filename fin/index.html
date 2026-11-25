@@ -1792,8 +1792,6 @@ function vHome(){
   const sem=open.filter(i=>i.amountC==null).length;
   const late=open.filter(i=>i.date<td).length;
   let h=header('Financeiro',undoBtn()+rbtn('tab','🔎','Buscar tudo','stmt')+rbtn('tab','📝','Anotações','notes')+rbtn('chat','💬','Chat financeiro')+rbtn('tab','⚙️','Ajustes','cfg'),'home')+'<p class="sub">'+esc(ymLabel(ym))+'</p><div class="wrap">';
-  {const P0=poderCalc(),usando=P0.L.od.filter(x=>!x.unk&&/já usando/.test(x.note));
-   h+='<button class="card" data-act="tab" data-v="poder" style="width:100%;text-align:left"><div class="mut">🏦 Cheque especial que ainda posso usar</div><div class="big" style="font-size:2rem">'+money(P0.od)+'</div><div class="mut">'+(usando.length?usando.map(x=>esc(x.note)).join(' · ')+' · ':'')+'Dinheiro seu: '+money(P0.din)+'. Toque para ver tudo que posso usar.</div></button>';}
   const ibn=ibList();
   if(ibn.length)h+='<button class="item" data-act="tab" data-v="notes"><div class="row"><span class="t">📝 Anotações para decidir</span><span class="cnt">'+ibn.length+'</span></div><div class="mut">Siri ou digitadas: toque para dizer se é cartão, conta, dívida ou lembrete.</div></button>';
   const pend=pendList();
@@ -1808,7 +1806,8 @@ function vHome(){
   const nxD=debts.map(d=>{const dt=debtNext(d.data,true);return {c:(dt&&debtAmt(d.data,dt.slice(0,7)))||0,dt};}).filter(x=>x.dt).sort((a,b)=>a.dt<b.dt?-1:1)[0];
   const g=gastosMes(ym);
   const entM=stRows().filter(e=>e.d&&e.d.slice(0,7)===ym&&(e.k==='INCOME'||e.k==='LOAN_DISBURSEMENT')).reduce((a,e)=>a+e.c,0);
-  {const bd=backupDays();
+  {if(!BK.checked&&S.ready){BK.checked=true;bkRefresh().then(()=>{if(S.tab==='home'&&!document.querySelector('.modal'))render();});}
+   const bd=(!BK.checked&&!BK.last&&!lsGet(BKP_KEY))?0:backupDays();
    if(bd===null||bd>=7)h+='<button class="note bkn" data-act="backup" aria-label="Baixar uma cópia dos dados">💾 '+(bd===null?'Você ainda não baixou uma cópia dos seus dados.':'Faz '+bd+' dias desde a última cópia dos seus dados.')+' Toque para baixar.</button>';}
   /* Início calmo: sem número gigante. Uma tabela simples do que vence neste mês + atalhos sem valores em destaque */
   h+='<div class="up s2"><button data-act="tab" data-v="poder"><span class="nm"><b>💰 Quanto posso gastar</b></span><span class="vl mut">›</span></button><button data-act="tab" data-v="pagar"><span class="nm"><b>🧾 O que pagar no mês</b></span><span class="vl mut">›</span></button><button data-act="tab" data-v="spend"><span class="nm"><b>🩻 Raio-X financeiro</b><br><span class="mut" style="font-size:.95rem">Entradas, saídas, categorias, dias e onde reduzir</span></span><span class="vl mut">›</span></button></div>';
@@ -3043,7 +3042,7 @@ function stRows(){
   return out;
 }
 /* ---------- Extrato: buscar, filtrar por entradas/gastos, mês e dia ---------- */
-const APP_V='v88';
+const APP_V='v89';
 const ST_FILTERS=[['all','Tudo'],['in','Entradas'],['out','Gastos'],['fat','Faturas pagas'],['tr','Transferências']];
 function stAll(){
   const out=stRows().map(e=>Object.assign({},e,{src:'extrato'}));
@@ -3188,19 +3187,20 @@ function backupJson(recs,now){
   return JSON.stringify({app:'Financeiro',formato:1,geradoEm:now.toISOString(),total:recs.length,registros:recs},null,1);
 }
 function backupDays(){
-  const t=lsGet(BKP_KEY); if(!t)return null;
-  const ms=Date.now()-new Date(t).getTime(); if(isNaN(ms))return null;
+  const a=lsGet(BKP_KEY),b=BK&&BK.last,ts=[a,b].filter(Boolean).map(x=>new Date(x).getTime()).filter(x=>!isNaN(x));
+  if(!ts.length)return null;
+  const ms=Date.now()-Math.max.apply(null,ts);
   return Math.max(0,Math.floor(ms/86400000));
 }
 /* ---- backup automático (o servidor faz todo dia às 3h; aqui só mostra, faz na hora e baixa) ---- */
-const BK={msg:'Conferindo o backup automático…'};
+var BK={msg:'Conferindo o backup automático…'};
 const bkWhen=iso=>{const d=new Date(iso),p2=x=>String(x).padStart(2,'0');return (isoDate(d)===isoDate(new Date())?'hoje':p2(d.getDate())+'/'+p2(d.getMonth()+1))+' às '+p2(d.getHours())+':'+p2(d.getMinutes());};
 async function bkRefresh(){
   try{
     const r=await Api.rest('backups?select=id,taken_at,n_items,motivo&order=taken_at.desc&limit=1');
     if(!r.ok)throw new Error('erro '+r.status);
     const l=(await r.json())[0];
-    BK.msg=l?'Último backup automático: '+bkWhen(l.taken_at)+' ('+l.n_items+' itens).':'Ainda não há backup automático. O primeiro é feito de madrugada.';
+    BK.last=l?l.taken_at:null;BK.msg=l?'Último backup automático: '+bkWhen(l.taken_at)+' ('+l.n_items+' itens).':'Ainda não há backup automático. O primeiro é feito de madrugada.';
   }catch(e){BK.msg='Não consegui conferir o backup agora. Veja a internet.';}
   const el=document.getElementById('bkAuto');if(el)el.textContent=BK.msg;
 }
