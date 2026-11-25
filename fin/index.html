@@ -1791,7 +1791,7 @@ function vHome(){
   const known=open.filter(i=>i.amountC!=null).reduce((a,i)=>a+i.amountC,0);
   const sem=open.filter(i=>i.amountC==null).length;
   const late=open.filter(i=>i.date<td).length;
-  let h=header('Financeiro',undoBtn()+rbtn('tab','🔎','Buscar tudo','stmt')+rbtn('tab','📝','Anotações','notes')+rbtn('chat','💬','Chat financeiro')+rbtn('tab','⚙️','Ajustes','cfg'),'home')+'<p class="sub">'+esc(ymLabel(ym))+'</p><div class="wrap">';
+  let h=header('Financeiro',undoBtn()+rbtn('tab','🔎','Buscar tudo','stmt')+rbtn('sheet','📊','Abrir a planilha')+rbtn('tab','📝','Anotações','notes')+rbtn('chat','💬','Chat financeiro')+rbtn('tab','⚙️','Ajustes','cfg'),'home')+'<p class="sub">'+esc(ymLabel(ym))+'</p><div class="wrap">';
   const ibn=ibList();
   if(ibn.length)h+='<button class="item" data-act="tab" data-v="notes"><div class="row"><span class="t">📝 Anotações para decidir</span><span class="cnt">'+ibn.length+'</span></div><div class="mut">Siri ou digitadas: toque para dizer se é cartão, conta, dívida ou lembrete.</div></button>';
   const pend=pendList();
@@ -3082,7 +3082,7 @@ function stRows(){
   return out;
 }
 /* ---------- Extrato: buscar, filtrar por entradas/gastos, mês e dia ---------- */
-const APP_V='v92';
+const APP_V='v93';
 const ST_FILTERS=[['all','Tudo'],['in','Entradas'],['out','Gastos'],['fat','Faturas pagas'],['tr','Transferências']];
 function stAll(){
   const out=stRows().map(e=>Object.assign({},e,{src:'extrato'}));
@@ -3540,6 +3540,7 @@ document.addEventListener('click',async ev=>{
     if(await confirmBox('Apagar os exemplos de teste?',['Só some o que tem “(teste)”.','Seus dados de verdade não são mexidos.'],'Sim, apagar',true)){
       b.disabled=true;b.textContent='Apagando…';
       try{await clearDemo();S.msg='';}catch(e){S.msg='Não consegui apagar tudo: '+e.message;try{await Api.load();}catch(x){}}render();}}
+  else if(act==='sheet')window.open('https://docs.google.com/spreadsheets/d/1elQL0O-3QRLn8JdR2Yv5u3ccIBCkeQi1fnnURJ6jthE/edit','_blank','noopener');
   else if(act==='chat')chatMenu();
   else if(act==='backup')baixarCopia();
   else if(act==='stmt-pick'){const f=$('stfile');if(f)f.click();}
