@@ -127,7 +127,8 @@ h2.stday{font-size:1rem;margin:1rem 0 .1rem;color:var(--muted)}
 
 .big{font-size:1.5rem;font-weight:800}
 .mut{color:var(--muted);font-size:.9rem}
-.tag{display:inline-block;border-radius:.5rem;padding:.1rem .5rem;font-size:.85rem;font-weight:700;background:var(--surface-2)}
+.tag{display:inline-block;border-radius:.5rem;padding:.1rem .5rem;font-size:.85rem;font-weight:700;background:var(--surface-2);white-space:nowrap;flex-shrink:0}
+.item .row .t{min-width:0;overflow-wrap:anywhere}
 .tag.ok{background:var(--accent-soft);color:var(--accent)}
 .tag.warn{background:var(--warn-soft);color:var(--warn)}
 .tag.bad{background:var(--danger-soft);color:var(--danger)}
@@ -2844,13 +2845,15 @@ function vDebts(){
   if(!ds.length)h+='<div class="card mut">Nada cadastrado. Use “Nova dívida ou parcela” para o que você deve e também para o que te devem.</div>';
   if(pagar.length){
     const sum=pagar.reduce((a,d)=>a+(d.data.balanceC||0),0),inst=pagar.reduce((a,d)=>a+(d.data.installC||0),0),miss=pagar.some(d=>d.data.balanceC==null);
+    h+='<h2>A pagar ('+pagar.length+')</h2>';
     h+='<div class="card"><div class="row"><span class="mut">Saldo a pagar ('+pagar.length+' em aberto)</span><b>'+money(sum)+'</b></div><div class="row"><span class="mut">Parcelas por mês (a pagar)</span><b>'+money(inst)+'</b></div>'+(miss?'<div class="mut">Algum saldo está “Não informado”.</div>':'')+'</div>';
-    h+='<h2>A pagar ('+pagar.length+')</h2>'+(ordRecs('debts:pagar',pagar,GD),sortBarFor('debts:pagar'))+'<div'+ordAttr('debts:pagar',true)+'>'+ordRecs('debts:pagar',pagar,GD).map(debtRow).join('')+'</div>';
+    h+=(ordRecs('debts:pagar',pagar,GD),sortBarFor('debts:pagar'))+'<div'+ordAttr('debts:pagar',true)+'>'+ordRecs('debts:pagar',pagar,GD).map(debtRow).join('')+'</div>';
   }
   if(receber.length){
     const sum=receber.reduce((a,d)=>a+(d.data.balanceC||0),0),inst=receber.reduce((a,d)=>a+(d.data.installC||0),0);
+    h+='<h2>A receber ('+receber.length+')</h2>';
     h+='<div class="card"><div class="row"><span class="mut">Saldo a receber ('+receber.length+')</span><b class="rc">'+money(sum)+'</b></div><div class="row"><span class="mut">Parcelas por mês (a receber)</span><b class="rc">'+money(inst)+'</b></div></div>';
-    h+='<h2>A receber ('+receber.length+')</h2>'+(ordRecs('debts:receber',receber,GD),sortBarFor('debts:receber'))+'<div'+ordAttr('debts:receber',true)+'>'+ordRecs('debts:receber',receber,GD).map(debtRow).join('')+'</div>';
+    h+=(ordRecs('debts:receber',receber,GD),sortBarFor('debts:receber'))+'<div'+ordAttr('debts:receber',true)+'>'+ordRecs('debts:receber',receber,GD).map(debtRow).join('')+'</div>';
   }
   if(feitas.length)h+='<h2>Pagas e recebidas ('+feitas.length+')</h2>'+(ordRecs('debts:feitas',feitas,GD),sortBarFor('debts:feitas'))+'<div'+ordAttr('debts:feitas',true)+'>'+ordRecs('debts:feitas',feitas,GD).map(debtRow).join('')+'</div>';
   return h+'</div>';
@@ -3007,7 +3010,7 @@ function stRows(){
   return out;
 }
 /* ---------- Extrato: buscar, filtrar por entradas/gastos, mês e dia ---------- */
-const APP_V='v84';
+const APP_V='v85';
 const ST_FILTERS=[['all','Tudo'],['in','Entradas'],['out','Gastos'],['fat','Faturas pagas'],['tr','Transferências']];
 function stAll(){
   const out=stRows().map(e=>Object.assign({},e,{src:'extrato'}));
