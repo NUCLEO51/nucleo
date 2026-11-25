@@ -2785,7 +2785,7 @@ function vConta(){
   const rec=S.recs.find(r=>r.id===S.contaId);
   if(!rec||!isConta(rec)){S.contaId=null;return vContas();}
   const d=rec.data,sd=contaSaldo(d);
-  const num=d.number?(S.showNum?String(d.number):'•••• '+String(d.number).slice(-3)):'Não informado';
+  const num=d.number?String(d.number):'Não informado';
   let h=header('Conta bancária','<button class="tag" data-act="conta-edit" data-id="'+rec.id+'" style="border:0;min-height:2.4rem;font-size:1rem">Editar</button>')
     +'<div class="wrap"><button class="bk" data-back="1" data-act="conta-list" aria-label="Voltar">← Voltar</button>';
   h+='<div class="card"><div class="row kv wrapv"><span class="mut">Nome</span><b>'+esc(d.account)+'</b></div>'+(d.bank?'<div class="row kv"><span class="mut">Banco</span><b>'+esc(d.bank)+'</b></div>':'')
@@ -2798,7 +2798,6 @@ function vConta(){
     +(d.openingC==null?'<div class="hint">Sem saldo inicial informado, este valor é só a soma dos lançamentos. Informe o saldo em Editar.</div>':'')+'</div>';
   {const hd=(d.entries||[]).filter(e=>e.dd&&e.d>todayIso());
    if(hd.length)h+='<div class="note">Cheque ainda retido: '+hd.map(e=>money(e.c)+' (depositado em '+brDate(e.dd)+')').join(' · ')+'. O extrato do banco já conta esse dinheiro, mas o saldo do topo do app dele ainda não. O Financeiro segue o saldo do topo.</div>';}
-  if(d.number)h+='<button class="btn sec" data-act="card-num">'+(S.showNum?'Esconder o número':'Mostrar o número')+'</button>';
   h+='<button class="btn" data-act="conta-add" data-id="'+rec.id+'">+ Novo lançamento</button>';
   h+='<h2 style="margin-left:0">Extrato da conta</h2>'+sortChips(S.aSort||'','conta-sort');
   let lin=(d.entries||[]).map(e=>({t:e.t,d:e.d,dd:e.dd,k:e.k,c:e.c,i:e.i,g:e.g,tipo:ST_KIND[e.k]||e.k,onde:d.account,delFn:/^m-/.test(String(e.i))?(()=>contaDel(rec,e.i)):null}));
@@ -3120,7 +3119,7 @@ function stRows(){
   return out;
 }
 /* ---------- Extrato: buscar, filtrar por entradas/gastos, mês e dia ---------- */
-const APP_V='v96';
+const APP_V='v97';
 const ST_FILTERS=[['all','Tudo'],['in','Entradas'],['out','Gastos'],['fat','Faturas pagas'],['tr','Transferências']];
 function stAll(){
   const out=stRows().map(e=>Object.assign({},e,{src:'extrato'}));
