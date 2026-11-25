@@ -1826,7 +1826,9 @@ function vHome(){
   }
   {if(!S.frLoaded&&!S.frBusy){S.frBusy=true;loadFinRems().finally(()=>{S.frBusy=false;});}
    const lim=plusDays(td,7),pr=frOpen().filter(r=>r.data.date&&r.data.date<=lim).slice(0,5);
-   h+='<h2>🔔 Lembretes</h2>'+(!S.frLoaded?'<p class="mut">Carregando…</p>':(pr.length?pr.map(r=>frRow(r,true)).join(''):'<div class="card mut">Nenhum lembrete atrasado, de hoje ou dos próximos 7 dias.</div>'))+'<button class="btn sec" data-act="tab" data-v="rem">Ver todos os lembretes</button>';}
+   const aberto=lsGet('fin-hr-aberto')!=='0';
+   h+='<button class="item" data-act="hr-toggle" aria-expanded="'+aberto+'"><div class="row"><span class="t">🔔 Lembretes</span><span><span class="cnt">'+(S.frLoaded?pr.length:'…')+'</span> <span class="mut" style="font-size:1.3rem">'+(aberto?'▾':'▸')+'</span></span></div></button>';
+   if(aberto)h+=(!S.frLoaded?'<p class="mut">Carregando…</p>':(pr.length?pr.map(r=>frRow(r,true)).join(''):'<div class="card mut">Nenhum lembrete atrasado, de hoje ou dos próximos 7 dias.</div>'))+'<button class="btn sec" data-act="tab" data-v="rem">Ver todos os lembretes</button>';}
   {const ob=overdueBefore();
    if(ob.length){h+='<button class="note bkn" data-act="m-old" data-v="'+ob[0].mm+'">⚠️ Há '+ob.length+(ob.length===1?' item atrasado':' itens atrasados')+' de meses anteriores. Toque para ver.</button>';}}
   if(g.semN>0)h+='<button class="note bkn" data-act="home-sem" data-ym="'+ym+'">📝 '+g.semN+(g.semN===1?' gasto esperando categoria':' gastos esperando categoria')+' em '+esc(ymLabel(ym))+'. Toque para classificar.</button>';
@@ -3082,7 +3084,7 @@ function stRows(){
   return out;
 }
 /* ---------- Extrato: buscar, filtrar por entradas/gastos, mês e dia ---------- */
-const APP_V='v93';
+const APP_V='v94';
 const ST_FILTERS=[['all','Tudo'],['in','Entradas'],['out','Gastos'],['fat','Faturas pagas'],['tr','Transferências']];
 function stAll(){
   const out=stRows().map(e=>Object.assign({},e,{src:'extrato'}));
@@ -3561,6 +3563,7 @@ document.addEventListener('click',async ev=>{
   else if(act==='sp-prev'){S.sp=S.sp||{ym:ymOf(todayIso()),cat:null,all:false};S.sp.ym=addMonths(S.sp.ym,-1);S.sp.cat=null;render();}
   else if(act==='sp-next'){S.sp=S.sp||{ym:ymOf(todayIso()),cat:null,all:false};S.sp.ym=addMonths(S.sp.ym,1);S.sp.cat=null;render();}
   else if(act==='sp-cat'){S.sp.cat=(S.sp.cat===b.dataset.c?null:b.dataset.c);render();}
+  else if(act==='hr-toggle'){lsSet('fin-hr-aberto',lsGet('fin-hr-aberto')==='0'?'1':'0');render();}
   else if(act==='hp-toggle'){S.hp=!S.hp;render();}
   else if(act==='sp-sort'){S.sp=S.sp||{ym:ymOf(todayIso()),cat:null,all:false};S.sp.sort=(S.sp.sort===b.dataset.v?null:b.dataset.v);render();}
   else if(act==='rx-tot'){const rec=get(id);if(rec){const d=rec.data;form('Total da fatura no banco',[{k:'statementTotalC',label:'Total da fatura (como está no PDF ou app do banco)',type:'money',req:true,hint:'É o “total a pagar” impresso na fatura, já com o saldo anterior.'},{k:'futureInstallmentsC',label:'Parcelas para as próximas faturas (opcional)',type:'money'}],{statementTotalC:d.statementTotalC,futureInstallmentsC:d.futureInstallmentsC},{summary:o=>[d.account,'Total: '+money(o.statementTotalC),'Parcelas futuras: '+(o.futureInstallmentsC==null?'—':money(o.futureInstallmentsC))],save:async o=>{await Api.update(rec,Object.assign({},d,{statementTotalC:o.statementTotalC,futureInstallmentsC:o.futureInstallmentsC==null?(d.futureInstallmentsC==null?null:d.futureInstallmentsC):o.futureInstallmentsC}));}});}}
